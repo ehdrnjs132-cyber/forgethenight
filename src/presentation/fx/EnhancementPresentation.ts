@@ -24,7 +24,7 @@ export interface PlayHooks {
   onImpact: () => void;
 }
 
-export const HAMMER_IDLE = 20;
+export const HAMMER_IDLE = 32;
 const HAMMER_RAISED = 58;
 
 export class EnhancementPresentation {

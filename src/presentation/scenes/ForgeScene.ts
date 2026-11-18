@@ -11,7 +11,7 @@ import { START_LIVES } from '../../config/rules';
 import { C, DISPLAY, H, W, css, label, panel } from '../theme';
 import { Button } from '../ui/button';
 import { WeaponView } from '../ui/weaponView';
-import { drawWeapon } from '../weaponArt';
+import { drawWeapon, glowStrength, weaponTexture } from '../weaponArt';
 import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
@@ -313,8 +313,18 @@ export class ForgeScene extends Phaser.Scene {
       bg.strokeRoundedRect(0.5, 0.5, LIST.w - 25, LIST.cardH - 1, 8);
       bg.fillStyle(ELEMENT_INFO[w.element].color, 1);
       bg.fillRect(0, 10, 4, LIST.cardH - 20);
-      const art = this.add.graphics({ x: 72, y: LIST.cardH / 2 });
-      drawWeapon(art, w, 118);
+      const tex = weaponTexture(w.cls, w.element);
+      let art: Phaser.GameObjects.GameObject;
+      if (this.textures.exists(tex)) {
+        const img = this.add.image(72, LIST.cardH / 2, tex);
+        img.setScale(Math.min(118 / img.width, (LIST.cardH - 12) / img.height));
+        if (glowStrength(w.level) > 0) img.preFX?.addGlow(ELEMENT_INFO[w.element].glow, Math.min(4, glowStrength(w.level) * 0.5), 0, false, 0.1, 8);
+        art = img;
+      } else {
+        const g = this.add.graphics({ x: 72, y: LIST.cardH / 2 });
+        drawWeapon(g, w, 118);
+        art = g;
+      }
       const nm = label(this, 140, 14, weaponName(w), 16, C.text, { weight: 700 });
       const sub = label(this, 140, 38, eq ? '장착 중' : `DAY ${w.bornDay} 지급`, 12, eq ? C.gold : C.dim, { weight: 700 });
       const lv = label(this, LIST.w - 40, LIST.cardH / 2, `+${w.level}`, 24, w.level >= 10 ? C.goldHi : C.text, { display: true, weight: 900, origin: [1, 0.5] });

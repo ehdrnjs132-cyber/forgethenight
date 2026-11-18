@@ -1,9 +1,27 @@
 import Phaser from 'phaser';
+import { ELEMENTS, WEAPON_CLASSES } from '../../config/weapons';
+import { weaponImagePath, weaponTexture } from '../weaponArt';
 
-/** Generates the small textures the effects use, then opens the forge. */
+/** Loads weapon art, generates the small effect textures, then opens the forge. */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot');
+  }
+
+  preload() {
+    const bar = this.add.graphics();
+    this.load.on('progress', (p: number) => {
+      bar.clear();
+      bar.fillStyle(0x3b2d1e, 1);
+      bar.fillRect(440, 356, 400, 8);
+      bar.fillStyle(0xe9b65c, 1);
+      bar.fillRect(440, 356, 400 * p, 8);
+    });
+    // A missing image is fine: WeaponView falls back to the placeholder drawing.
+    this.load.on('loaderror', (file: Phaser.Loader.File) => console.warn(`art missing: ${file.src}`));
+    for (const cls of WEAPON_CLASSES) {
+      for (const el of ELEMENTS) this.load.image(weaponTexture(cls, el), weaponImagePath(cls, el));
+    }
   }
 
   create() {

@@ -12,6 +12,24 @@ export interface WeaponLook {
   level: number;
 }
 
+/** Texture key of the Higgsfield base image for a class/element pair (public/assets/weapons). */
+export function weaponTexture(cls: WeaponClass, element: Element): string {
+  return `weapon-${cls}-${element}`;
+}
+
+export function weaponImagePath(cls: WeaponClass, element: Element): string {
+  return `assets/weapons/${cls}_${element}.png`;
+}
+
+/**
+ * Glow strength for a level: nothing at +0/+1, then rising with each appearance stage (§9 "강화 단계별 발광").
+ * Returned as the outer strength of Phaser's glow effect.
+ */
+export function glowStrength(level: number): number {
+  const stage = appearanceStage(level);
+  return stage <= 0 ? 0 : 0.5 + stage * 0.34;
+}
+
 type Pt = [number, number];
 
 function poly(g: Phaser.GameObjects.Graphics, pts: Pt[], k: number, color: number, alpha = 1) {
