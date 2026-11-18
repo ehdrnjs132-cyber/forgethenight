@@ -1,6 +1,6 @@
 # 강화 확률 시뮬레이션 리포트
 
-- 확률표 상태: **pending-confirmation** (src/config/enhancement-table.json)
+- 확률표 상태: **confirmed** (src/config/enhancement-table.json)
 - 방법: 새 +0 무기를 파괴되거나 +50이 될 때까지 계속 강화. 정확해(마르코프)와 몬테카를로 200,000회
 - 강화 1회 연출 820ms 기준으로 시간 환산. 토템·스킬·아이템 보정 없음
 - 한 판(50일) 지급 무기 150자루 기준 기대 개수는 "모든 무기를 끝까지 민다"는 가정의 상한

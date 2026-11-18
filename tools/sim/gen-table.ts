@@ -16,7 +16,7 @@ export interface CurveParams {
   destroy: [number, number, number];
 }
 
-/** Placeholder curve, pending the user's confirmation (DECISIONS.md #5). */
+/** Confirmed curve (DECISIONS.md #5, 2026-11-18). Regenerating keeps the confirmed status; changing PARAMS is a design change. */
 // Tuned so that pushing a fresh weapon until it breaks reaches roughly
 // +10: 72%, +20: 39%, +30: 13%, +40: 2.4%, +50: 0.2%  (see docs/sim/enhance-report.md).
 export const PARAMS: CurveParams = {
@@ -47,8 +47,9 @@ export function generateTable(p: CurveParams): EnhanceRow[] {
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const rows = generateTable(PARAMS);
   const out = {
-    note: 'Placeholder enhancement table (+0..+49). Percent per outcome; each row sums to 100. Edit freely; tests verify the sums.',
-    status: 'pending-confirmation',
+    note: 'Enhancement table (+0..+49), confirmed by the user on 2026-11-18. Percent per outcome; each row sums to 100. Tests verify the sums.',
+    status: 'confirmed',
+    confirmedAt: '2026-11-18',
     params: PARAMS,
     rows,
   };
