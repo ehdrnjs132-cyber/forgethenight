@@ -44,7 +44,7 @@ export function nightPlan(day: number): NightPlan {
   return {
     count: Math.min(8, 3 + Math.floor((d - 1) / 5)),
     attemptBudget: Math.round(14 + d * 9),
-    expectedLevel: Math.round(4 + d * 0.55),
+    expectedLevel: Math.round(5 + d * 0.7),
     weapons: Math.min(12, 3 * d),
     weights: {
       stable: Math.max(1, 6 - d * 0.12),
@@ -72,14 +72,21 @@ export const CLASS_WORD: Record<WeaponClass, string> = { sword: 'SWORD', spear: 
  * When the hidden level is revealed (spec §3.5): its first heavy attack, or when it drops below this HP
  * fraction, or when it has been fighting for this many seconds.
  */
-export const REVEAL = { hpBelow: 0.5, afterSeconds: 25 };
+export const REVEAL = {
+  /** User decision 2026-11-18: show every rival's level from the moment it arrives (no hidden +??). */
+  openFromStart: true,
+  hpBelow: 0.5,
+  afterSeconds: 25,
+};
 
 /** Combat scaling for doppelgangers (PROVISIONAL). */
 export const DOPPEL_COMBAT = {
-  /** HP = base × growth^(day-1) × (1 + level × perLevel). */
-  hp: { base: 1400, growth: 1.22, perLevel: 0.05 },
+  // 2026-11-18 user feedback "밤 대장장이들 훨씬 세게": HP now grows exponentially with the rival's level
+  // (was linear 1 + level × 0.05) and hits harder (was base 7, ×1.1 per level, heavy ×2.2).
+  /** HP = base × growth^(day-1) × levelGrowth^level. */
+  hp: { base: 2400, growth: 1.22, levelGrowth: 1.18 },
   /** Hit damage to the player = base × growth^level (a heavy attack ×heavyMul). Avoidable by design. */
-  damage: { base: 7, growth: 1.1, heavyMul: 2.2 },
+  damage: { base: 12, growth: 1.12, heavyMul: 2.5 },
   /** Telegraph (wind-up) seconds before a strike lands: always readable (spec §3.4, §4.5). */
   windup: { light: 0.45, heavy: 0.85 },
   xp: 40,

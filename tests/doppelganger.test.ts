@@ -53,7 +53,8 @@ describe('doppelganger forging (spec §3.3)', () => {
     };
     const stable = stats('stable');
     const allIn = stats('allIn');
-    expect(allIn.p90).toBeGreaterThan(stable.p90);
+    // Since the destroy odds went up (2026-11-18) an all-in smith usually ends low after shattering its
+    // weapons, so only its peak and its losses are higher, not its 90th percentile.
     expect(allIn.max).toBeGreaterThan(stable.max);
     expect(allIn.lost).toBeGreaterThan(stable.lost);
   });

@@ -17,13 +17,13 @@ export interface CurveParams {
 }
 
 /** Confirmed curve (DECISIONS.md #5, 2026-11-18). Regenerating keeps the confirmed status; changing PARAMS is a design change. */
-// Tuned so that pushing a fresh weapon until it breaks reaches roughly
-// +10: 72%, +20: 39%, +30: 13%, +40: 2.4%, +50: 0.2%  (see docs/sim/enhance-report.md).
+// 2026-11-18 user feedback: destroy chance raised (was [2, 20, 1.7]: +10 3.2%, +20 5.9%, +30 9.8%, +49 20%).
+// Now roughly +10 5.7%, +20 10%, +30 15.6%, +40 21.7%, +49 28%. Run `npm run sim` for reach rates.
 export const PARAMS: CurveParams = {
   great: [10, 6, 1],
   success: [56, 52, 1],
   down: [3, 7, 1],
-  destroy: [2, 20, 1.7],
+  destroy: [3, 28, 1.4],
 };
 
 const round1 = (v: number) => Math.round(v * 10) / 10;

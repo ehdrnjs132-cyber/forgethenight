@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runWith, seedFor } from './helpers';
+import { SALE_MULTIPLIER } from '../src/config/economy';
 import { keyPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
 import { effectiveRow, enhance } from '../src/core/systems/enhancement';
 import { ENHANCE_TABLE } from '../src/config/enhancement';
@@ -23,7 +24,7 @@ describe('selling (QA 6, 7)', () => {
     const r = sell(s, 'w1');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.gold).toBe(s.gold + 150);
+    expect(r.state.gold).toBe(s.gold + 150 * SALE_MULTIPLIER);
     expect(r.state.weapons.map((w) => w.id)).toEqual(['w2']);
     expect(r.state.equippedId).toBeNull();
     expect(r.state.stats.sold).toBe(1);
@@ -44,9 +45,9 @@ describe('selling (QA 6, 7)', () => {
     game.dispatch({ type: 'EQUIP', weaponId: b.id });
     game.dispatch({ type: 'START_NIGHT' });
     game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 5 });
-    expect(game.state.gold).toBe(START_GOLD + 10);
+    expect(game.state.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);
     expect(game.state.weapons).toHaveLength(2);
-    expect(new GameCore(storage).state.gold).toBe(START_GOLD + 10);
+    expect(new GameCore(storage).state.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);
   });
 
   it('the sale is on disk immediately (§25: closing mid-sale cannot duplicate gold)', () => {
@@ -54,7 +55,7 @@ describe('selling (QA 6, 7)', () => {
     const game = new GameCore(storage, 3);
     game.dispatch({ type: 'SELL', weaponId: game.state.weapons[0].id });
     const saved = new SaveManager(storage).loadRun().state!;
-    expect(saved.gold).toBe(START_GOLD + 10);
+    expect(saved.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);
     expect(saved.weapons).toHaveLength(2);
   });
 });

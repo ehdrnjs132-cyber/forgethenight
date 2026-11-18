@@ -15,6 +15,13 @@ export const SALE_PRICES: readonly [number, number][] = [
   [50, 1_500_000],
 ];
 
+/**
+ * Selling pays this multiple of SALE_PRICES (user feedback 2026-11-18: selling and re-enhancing went
+ * round in circles at ~+11 with the gold always running out). Enhancement cost stays on the base table,
+ * so a weapon pushed a few levels and sold now clearly pays for the next one.
+ */
+export const SALE_MULTIPLIER = 3;
+
 /** Selling a weapon at or above this level asks for confirmation. */
 export const SALE_CONFIRM_LEVEL = 10;
 

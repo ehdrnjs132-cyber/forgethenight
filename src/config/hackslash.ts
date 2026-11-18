@@ -50,13 +50,14 @@ export const COMBO_COUNTER_WINDOW = 2.2;
 
 /** Doppelganger AI movement (px/s) and spacing. */
 export const DOPPEL_AI = {
-  approach: 165,
-  strafe: 115,
+  // 2026-11-18: faster and pushier (was approach 165, strafe 115, 2 wind-ups, recover 0.55, heavy 0.3).
+  approach: 190,
+  strafe: 130,
   keepDistance: 0.85,
   /** At most this many rivals may be winding up an attack at the same time (fairness). */
-  maxSimultaneousWindups: 2,
-  recover: 0.55,
-  heavyChance: 0.3,
+  maxSimultaneousWindups: 3,
+  recover: 0.4,
+  heavyChance: 0.35,
   dodgeCooldown: 2.2,
   dash: 200,
   /** Seconds between rivals coming through the rift. */

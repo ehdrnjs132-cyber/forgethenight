@@ -36,6 +36,8 @@ interface Rival {
   aura: Phaser.GameObjects.Graphics;
   telegraph: Phaser.GameObjects.Graphics;
   plate: Phaser.GameObjects.Text;
+  /** Big "+23" over the head (user decision 2026-11-18: levels are shown openly, not hidden). */
+  levelTag: Phaser.GameObjects.Text;
   hpBar: Phaser.GameObjects.Graphics;
   sparks: Phaser.GameObjects.Particles.ParticleEmitter;
   hp: number;
@@ -302,13 +304,18 @@ export class NightScene extends Phaser.Scene {
     }).setDepth(9);
     const plate = label(this, x, y - 70, '', 13, C.text, { weight: 900, origin: [0.5, 0.5] }).setDepth(30);
     plate.setStroke('#140a05', 5);
+    const tagSize = 34 + Math.min(30, d.weapon.level * 0.6);
+    const levelTag = this.add
+      .text(x, y - 112, `+${d.weapon.level}`, { fontFamily: DISPLAY, fontSize: `${Math.round(tagSize)}px`, fontStyle: '900', color: css(this.tierColor(d.weapon.level)), stroke: '#140a05', strokeThickness: 8, resolution: 2 })
+      .setOrigin(0.5, 1)
+      .setDepth(31);
     const hpBar = this.add.graphics().setDepth(30);
     const telegraph = this.add.graphics().setDepth(6);
-    const maxHp = Math.round(DOPPEL_COMBAT.hp.base * Math.pow(DOPPEL_COMBAT.hp.growth, this.nd.day - 1) * (1 + d.weapon.level * DOPPEL_COMBAT.hp.perLevel));
+    const maxHp = Math.round(DOPPEL_COMBAT.hp.base * Math.pow(DOPPEL_COMBAT.hp.growth, this.nd.day - 1) * Math.pow(DOPPEL_COMBAT.hp.levelGrowth, d.weapon.level));
     const shape = COMBOS[d.weapon.cls].steps[0].shape;
     const r: Rival = {
-      d, sprite: s, aura, telegraph, plate, hpBar, sparks, hp: maxHp, maxHp, state: 'arrive', t: 0.6, heavy: false, aim: 0,
-      strafeDir: Math.random() < 0.5 ? 1 : -1, dodgeCd: 0, flinch: 0, revealed: false, engagedAt: this.elapsed, shape, anim,
+      d, sprite: s, aura, telegraph, plate, levelTag, hpBar, sparks, hp: maxHp, maxHp, state: 'arrive', t: 0.6, heavy: false, aim: 0,
+      strafeDir: Math.random() < 0.5 ? 1 : -1, dodgeCd: 0, flinch: 0, revealed: REVEAL.openFromStart, engagedAt: this.elapsed, shape, anim,
     };
     this.physics.add.collider(s, this.player);
     for (const o of this.rivals) this.physics.add.collider(s, o.sprite);
@@ -421,6 +428,7 @@ export class NightScene extends Phaser.Scene {
     r.aura.setPosition(s.x, s.y + 20);
     r.sparks.setPosition(s.x, s.y);
     r.plate.setPosition(s.x, s.y - 74);
+    r.levelTag.setPosition(s.x, s.y - 100);
     r.hpBar.clear();
     r.hpBar.fillStyle(0x000000, 0.6);
     r.hpBar.fillRoundedRect(s.x - 40, s.y - 52, 80, 7, 3);
@@ -798,7 +806,7 @@ export class NightScene extends Phaser.Scene {
     if (!r.revealed) this.reveal(r, '쓰러지며 정체가 드러났다');
     r.sprite.disableBody(true, false);
     this.tweens.add({ targets: [r.sprite, r.aura], alpha: 0, duration: 700, onComplete: () => r.sprite.setVisible(false) });
-    this.tweens.add({ targets: r.plate, alpha: 0, delay: 1200, duration: 400 });
+    this.tweens.add({ targets: [r.plate, r.levelTag], alpha: 0, delay: 1200, duration: 400 });
     const xp = Math.round(DOPPEL_COMBAT.xp * (1 + r.d.weapon.level * 0.1) * (1 + this.sk.xp));
     this.gainXp(xp);
     this.defeated.push(r.d);

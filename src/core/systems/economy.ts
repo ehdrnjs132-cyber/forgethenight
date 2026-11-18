@@ -1,5 +1,5 @@
 // Selling (§14), the merchant Morr (§15) and the consumables he sells. Pure functions over GameState.
-import { KEY_BASE_PRICE, ENHANCE_COST_MIN, ENHANCE_COST_RATE, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_PRICES, SHOP_ORDER, type EnhanceItem, type ItemId } from '../../config/economy';
+import { KEY_BASE_PRICE, ENHANCE_COST_MIN, ENHANCE_COST_RATE, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_MULTIPLIER, SALE_PRICES, SHOP_ORDER, type EnhanceItem, type ItemId } from '../../config/economy';
 import { INVENTORY_CAP, INVENTORY_START, INVENTORY_STEP } from '../../config/weapons';
 import { Rng } from '../rng';
 import type { GameState, StockEntry } from '../state/types';
@@ -53,7 +53,7 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
 /** Sale price including 상인의 눈 and other sale bonuses. */
 export function sellPrice(state: GameState, level: number): number {
   const bonus = skillTotals(state, null).sellBonus;
-  return bonus > 0 ? roundPrice(salePrice(level) * (1 + bonus)) : salePrice(level);
+  return roundPrice(salePrice(level) * SALE_MULTIPLIER * (1 + bonus));
 }
 
 /** What Morr asks today, after 단골 discounts. */
