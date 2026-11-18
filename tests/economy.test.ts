@@ -1,0 +1,196 @@
+import { describe, expect, it } from 'vitest';
+import { runWith, seedFor } from './helpers';
+import { buy, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
+import { effectiveRow, enhance } from '../src/core/systems/enhancement';
+import { ENHANCE_TABLE } from '../src/config/enhancement';
+import { GameCore } from '../src/core/game';
+import { MemoryStorage, SaveManager } from '../src/core/save/save';
+
+describe('sale prices (§14)', () => {
+  it('matches the table rows and grows between them', () => {
+    expect(salePrice(0)).toBe(10);
+    expect(salePrice(10)).toBe(150);
+    expect(salePrice(20)).toBe(1_500);
+    expect(salePrice(50)).toBe(1_500_000);
+    for (let l = 1; l <= 50; l++) expect(salePrice(l)).toBeGreaterThan(salePrice(l - 1));
+  });
+});
+
+describe('selling (QA 6, 7)', () => {
+  it('pays gold and removes the weapon, unequipping it', () => {
+    const s = { ...runWith([{ level: 10 }, {}]), equippedId: 'w1' };
+    const r = sell(s, 'w1');
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.state.gold).toBe(150);
+    expect(r.state.weapons.map((w) => w.id)).toEqual(['w2']);
+    expect(r.state.equippedId).toBeNull();
+    expect(r.state.stats.sold).toBe(1);
+  });
+
+  it('cannot sell the same weapon twice', () => {
+    const r = sell(runWith([{ level: 5 }]), 'w1');
+    if (!r.ok) throw new Error();
+    expect(sell(r.state, 'w1')).toEqual({ ok: false, reason: 'no-weapon' });
+  });
+
+  it('a sale before a lost night stays sold, and its gold stays (decision #4)', () => {
+    const storage = new MemoryStorage();
+    const game = new GameCore(storage, 3);
+    game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
+    const [a, b] = game.state.weapons;
+    game.dispatch({ type: 'SELL', weaponId: a.id });
+    game.dispatch({ type: 'EQUIP', weaponId: b.id });
+    game.dispatch({ type: 'START_NIGHT' });
+    game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 5 });
+    expect(game.state.gold).toBe(10);
+    expect(game.state.weapons).toHaveLength(2);
+    expect(new GameCore(storage).state.gold).toBe(10);
+  });
+
+  it('the sale is on disk immediately (§25: closing mid-sale cannot duplicate gold)', () => {
+    const storage = new MemoryStorage();
+    const game = new GameCore(storage, 3);
+    game.dispatch({ type: 'SELL', weaponId: game.state.weapons[0].id });
+    const saved = new SaveManager(storage).loadRun().state!;
+    expect(saved.gold).toBe(10);
+    expect(saved.weapons).toHaveLength(2);
+  });
+});
+
+describe('merchant Morr (§15)', () => {
+  it('visits every third day', () => {
+    expect([1, 2, 3, 4, 5, 6, 9].map(isMerchantDay)).toEqual([false, false, true, false, false, true, true]);
+  });
+
+  it('rolls the shelf once per visiting day; a second call keeps it', () => {
+    const s = { ...runWith([]), day: 3 };
+    const a = openMerchant(s);
+    expect(a.merchant?.day).toBe(3);
+    expect(openMerchant(a)).toBe(a);
+  });
+
+  it('never stocks the time stone before DAY 15', () => {
+    for (let seed = 1; seed < 300; seed++) {
+      const m = openMerchant({ ...runWith([], seed), day: 12 }).merchant!;
+      expect(m.stock.some((e) => e.item === 'timeStone')).toBe(false);
+    }
+  });
+
+  it('offers the heart on roughly 30% of visits', () => {
+    let n = 0;
+    for (let seed = 1; seed <= 2000; seed++) if (openMerchant({ ...runWith([], seed), day: 3 }).merchant!.stock.some((e) => e.item === 'heart')) n++;
+    expect(n / 2000).toBeGreaterThan(0.25);
+    expect(n / 2000).toBeLessThan(0.35);
+  });
+
+  it('sells for gold, respects stock and the 10-life cap (QA 14)', () => {
+    let s = { ...runWith([]), day: 3, gold: 10_000, lives: 9 };
+    s = { ...s, merchant: { day: 3, stock: [{ item: 'heart', price: 3000, left: 1 }, { item: 'protect', price: 1200, left: 2 }] } };
+    const r1 = buy(s, 'heart');
+    if (!r1.ok) throw new Error();
+    expect(r1.state.lives).toBe(10);
+    expect(r1.state.gold).toBe(7_000);
+    expect(buy(r1.state, 'heart')).toEqual({ ok: false, reason: 'sold-out' });
+    const r2 = buy(r1.state, 'protect');
+    if (!r2.ok) throw new Error();
+    expect(r2.state.items.protect).toBe(1);
+    expect(buy({ ...r2.state, gold: 100 }, 'protect')).toEqual({ ok: false, reason: 'gold' });
+    const full = { ...s, lives: 10 };
+    expect(buy(full, 'heart')).toEqual({ ok: false, reason: 'max-lives' });
+    expect(buy({ ...s, day: 4 }, 'protect')).toEqual({ ok: false, reason: 'closed' });
+  });
+
+  it('a retry sees the same shelf and purchases made before the night are kept', () => {
+    const storage = new MemoryStorage();
+    const game = new GameCore(storage, 5);
+    game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
+    game.state = openMerchant({ ...game.state, day: 3, gold: 5_000, merchant: null });
+    game.state = { ...game.state, merchant: { day: 3, stock: [{ item: 'protect', price: 1200, left: 2 }] } };
+    game.dispatch({ type: 'BUY', item: 'protect' });
+    game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
+    game.dispatch({ type: 'START_NIGHT' });
+    game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 1 });
+    expect(game.state.items.protect).toBe(1);
+    expect(game.state.gold).toBe(3_800);
+    expect(game.state.merchant?.stock[0].left).toBe(1);
+  });
+});
+
+describe('enhancement stones', () => {
+  it('protection turns a destruction into keep and is spent only then', () => {
+    const base = { ...runWith([{ level: 20 }, {}]), items: { protect: 2 } };
+    const destroyRoll = seedFor(base, 'w1', 'destroy');
+    const armed = toggleArmed(destroyRoll, 'protect');
+    const a = enhance(armed, 'w1');
+    if (!a.ok) throw new Error();
+    expect(a.result.outcome).toBe('keep');
+    expect(a.result.protectedFrom).toBe('destroy');
+    expect(a.state.weapons[0].level).toBe(20);
+    expect(a.state.items.protect).toBe(1);
+
+    const successRoll = toggleArmed(seedFor(base, 'w1', 'success'), 'protect');
+    const b = enhance(successRoll, 'w1');
+    if (!b.ok) throw new Error();
+    expect(b.result.protectedFrom).toBeNull();
+    expect(b.state.items.protect).toBe(2);
+  });
+
+  it('luck and master shift the odds and are spent on the attempt', () => {
+    const s = toggleArmed(toggleArmed({ ...runWith([{ level: 20 }, {}]), items: { luck: 1, master: 1 } }, 'luck'), 'master');
+    const base = ENHANCE_TABLE[20];
+    const row = effectiveRow(20, { great: 3, success: 5, destroy: -base.destroy / 2 });
+    const a = enhance(s, 'w1');
+    if (!a.ok) throw new Error();
+    expect(a.result.row.destroy).toBeCloseTo(row.destroy);
+    expect(a.result.row.great).toBeCloseTo(row.great);
+    expect(a.state.items).toEqual({ luck: 0, master: 0 });
+    expect(a.state.armed).toEqual({ luck: false, master: false });
+  });
+
+  it('cannot switch on a stone you do not own', () => {
+    const s = runWith([{}]);
+    expect(toggleArmed(s, 'luck')).toBe(s);
+  });
+});
+
+describe('time stone (decision H)', () => {
+  it('brings back a destroyed weapon in its old slot and equipped', () => {
+    const s = { ...seedFor(runWith([{}, { level: 30 }, {}]), 'w2', 'destroy'), equippedId: 'w2', items: { timeStone: 1 } };
+    const a = enhance(s, 'w2');
+    if (!a.ok) throw new Error();
+    expect(a.state.weapons).toHaveLength(2);
+    const u = undoEnhance(a.state);
+    if (!u.ok) throw new Error();
+    expect(u.state.weapons.map((w) => [w.id, w.level])).toEqual([['w1', 0], ['w2', 30], ['w3', 0]]);
+    expect(u.state.equippedId).toBe('w2');
+    expect(u.state.items.timeStone).toBe(0);
+    expect(undoEnhance(u.state)).toEqual({ ok: false, reason: 'no-stone' });
+  });
+
+  it('only undoes the last attempt and nothing after a sale or the night', () => {
+    const s = { ...runWith([{ level: 5 }, {}]), items: { timeStone: 2 } };
+    expect(undoEnhance(s)).toEqual({ ok: false, reason: 'nothing-to-undo' });
+    const a = enhance(s, 'w1');
+    if (!a.ok) throw new Error();
+    const sold = sell(a.state, 'w2');
+    if (!sold.ok) throw new Error();
+    expect(undoEnhance(sold.state)).toEqual({ ok: false, reason: 'nothing-to-undo' });
+  });
+});
+
+describe('revive stone', () => {
+  it('is spent during the night, and returned if that night is lost anyway', () => {
+    const game = new GameCore(new MemoryStorage(), 7);
+    game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
+    game.state = { ...game.state, items: { revive: 1 } };
+    game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
+    expect(game.dispatch({ type: 'USE_REVIVE' })).toEqual({ type: 'noRevive' });
+    game.dispatch({ type: 'START_NIGHT' });
+    expect(game.dispatch({ type: 'USE_REVIVE' })).toEqual({ type: 'revived' });
+    expect(game.state.items.revive).toBe(0);
+    expect(game.dispatch({ type: 'USE_REVIVE' })).toEqual({ type: 'noRevive' });
+    game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 1 });
+    expect(game.state.items.revive).toBe(1);
+  });
+});

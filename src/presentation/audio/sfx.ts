@@ -119,6 +119,20 @@ export class Sfx {
     this.tone(1400, 0.05, { type: 'square', gain: 0.03 });
   }
 
+  // ───────── economy
+  coin() {
+    [1568, 2093, 2637].forEach((f, i) => this.tone(f, 0.18, { type: 'triangle', gain: 0.06, when: i * 0.06 }));
+  }
+
+  denied() {
+    this.tone(220, 0.14, { type: 'square', gain: 0.04, slideTo: 160 });
+  }
+
+  revive() {
+    [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, 0.6, { type: 'sine', gain: 0.09, when: i * 0.07 }));
+    this.noise(0.5, { gain: 0.06, freq: 800, sweepTo: 4000, q: 0.8 });
+  }
+
   // ───────── night combat (§22 전투 사운드)
   swing(heavy: boolean) {
     this.noise(heavy ? 0.22 : 0.14, { gain: heavy ? 0.12 : 0.08, freq: heavy ? 700 : 1400, sweepTo: heavy ? 300 : 3200, q: 1.2 });

@@ -95,9 +95,12 @@ describe('GameCore persistence', () => {
     v1.stats = { enhanceAttempts: 4, destroyed: 1, bestLevel: 7 };
     storage.setItem(KEYS.run, JSON.stringify({ v: 1, sum: checksum(JSON.stringify(v1)), data: v1 }));
     const loaded = save.loadRun().state!;
-    expect(loaded.version).toBe(2);
+    expect(loaded.version).toBe(3);
     expect(loaded.stats.enhanceAttempts).toBe(4);
     expect(loaded.stats.kills).toBe(0);
     expect(loaded.stats.deaths).toBe(0);
+    expect(loaded.stats.sold).toBe(0);
+    expect(loaded.armed).toEqual({});
+    expect(loaded.merchant).toBeNull();
   });
 });

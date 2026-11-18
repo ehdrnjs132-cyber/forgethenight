@@ -1,5 +1,18 @@
 import type { Element, WeaponClass } from '../../config/weapons';
 import type { Outcome } from '../../config/enhancement';
+import type { EnhanceItem, ItemId } from '../../config/economy';
+
+export interface StockEntry {
+  item: ItemId;
+  price: number;
+  /** Copies left in this visit. */
+  left: number;
+}
+
+export interface MerchantVisit {
+  day: number;
+  stock: StockEntry[];
+}
 
 export interface Weapon {
   id: string;
@@ -16,6 +29,8 @@ export interface EnhanceRecord {
   weaponBefore: Weapon;
   wasEquipped: boolean;
   outcome: Outcome;
+  /** Index the weapon had in the inventory, so an undo puts it back in place. */
+  index: number;
 }
 
 /** Everything belonging to the current run. Wiped on game over; Records survive. */
@@ -36,7 +51,12 @@ export interface GameState {
   player: { level: number; xp: number; skillPoints: number };
   skills: Record<string, number>;
   totems: { owned: string[]; equipped: string[] };
+  /** Owned consumables by ItemId (hearts are used at once and never stored). */
   items: Record<string, number>;
+  /** Enhancement items switched on for the next attempt. */
+  armed: Partial<Record<EnhanceItem, boolean>>;
+  /** Today's merchant stock, rolled once when a visiting day begins (§15). */
+  merchant: MerchantVisit | null;
   tutorials: Record<string, boolean>;
   /** State captured when the night begins; restored on death (DECISIONS.md #4). */
   nightSnapshot: NightSnapshot | null;
@@ -58,6 +78,8 @@ export interface RunStats {
   nightsWon: number;
   deaths: number;
   bossesKilled: number;
+  sold: number;
+  goldEarned: number;
 }
 
 /** What the game over screen shows (§20). */

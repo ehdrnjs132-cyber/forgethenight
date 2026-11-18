@@ -8,6 +8,7 @@ import type { GameOverSummary } from '../../core/state/types';
 import { ENEMIES, HAMMER, PLAYER, SPAWN, WEAPON_ATTACK, WORLD, type AttackShape, type EnemyKind } from '../../config/combat';
 import { CLASS_INFO, ELEMENT_INFO } from '../../config/weapons';
 import { NIGHT_SECONDS } from '../../config/rules';
+import { ITEMS, REVIVE } from '../../config/economy';
 import { addXp, aliveTarget, enemyStats, formatDamage, hits, pickEnemy, weaponDamage, xpToNext } from '../../combat/rules';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
@@ -466,7 +467,33 @@ export class NightScene extends Phaser.Scene {
     this.player.setTintFill(0xff4a4a);
     this.time.delayedCall(80, () => this.player.clearTint());
     this.number(this.player.x, this.player.y - 30, `-${amount}`, 0xff6b6b, 20);
-    if (this.hp <= 0) this.fall();
+    if (this.hp <= 0 && !this.revive()) this.fall();
+  }
+
+  /** Revive stone (§15): used automatically on a fatal hit, saved at once. */
+  private revive(): boolean {
+    if (this.core.dispatch({ type: 'USE_REVIVE' }).type !== 'revived') return false;
+    this.hp = Math.round(PLAYER.maxHp * REVIVE.hpFraction);
+    this.invuln = REVIVE.invuln;
+    this.sfx.revive();
+    this.cameras.main.flash(500, 255, 220, 120);
+    const ring = this.add.image(this.player.x, this.player.y, 'ring').setTint(ITEMS.revive.color).setDepth(30).setBlendMode('ADD').setScale(0.2);
+    this.tweens.add({ targets: ring, scale: 3.2, alpha: 0, duration: 700, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    // push the crowd back so the revive is not wasted on the same hit
+    this.enemies.children.each((obj) => {
+      const e = obj as Enemy;
+      if (e.active && Phaser.Math.Distance.Between(e.x, e.y, this.player.x, this.player.y) < 260) {
+        const a = Phaser.Math.Angle.Between(this.player.x, this.player.y, e.x, e.y);
+        e.setVelocity(Math.cos(a) * 520, Math.sin(a) * 520);
+      }
+      return true;
+    });
+    this.tweens.add({ targets: this.player, alpha: 0.45, duration: 120, yoyo: true, repeat: Math.floor((REVIVE.invuln * 1000) / 240) - 1 });
+    const left = this.core.state.items.revive ?? 0;
+    const t = label(this, W / 2, H / 2 - 120, '부활석이 빛난다', 34, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
+    const sub = label(this, W / 2, H / 2 - 82, `목숨 감소 없이 부활 · 남은 부활석 ${left}`, 15, C.text, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
+    this.tweens.add({ targets: [t, sub], alpha: 0, delay: 1400, duration: 500, onComplete: () => { t.destroy(); sub.destroy(); } });
+    return true;
   }
 
   // ───────────────────────── XP

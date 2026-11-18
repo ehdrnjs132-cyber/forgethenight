@@ -1,10 +1,10 @@
 import type { GameState, Records } from './types';
 import { START_LIVES } from '../../config/rules';
 
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 
 export function createStats(): GameState['stats'] {
-  return { enhanceAttempts: 0, destroyed: 0, bestLevel: 0, kills: 0, nightSeconds: 0, nightsWon: 0, deaths: 0, bossesKilled: 0 };
+  return { enhanceAttempts: 0, destroyed: 0, bestLevel: 0, kills: 0, nightSeconds: 0, nightsWon: 0, deaths: 0, bossesKilled: 0, sold: 0, goldEarned: 0 };
 }
 
 export function createRun(seed: number): GameState {
@@ -23,6 +23,8 @@ export function createRun(seed: number): GameState {
     skills: {},
     totems: { owned: [], equipped: [] },
     items: {},
+    armed: {},
+    merchant: null,
     tutorials: {},
     nightSnapshot: null,
     lastEnhance: null,

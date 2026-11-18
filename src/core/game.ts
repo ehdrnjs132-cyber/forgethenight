@@ -4,7 +4,9 @@ import { createRun } from './state/initial';
 import type { GameOverSummary, GameState, Records, Weapon } from './state/types';
 import { SaveManager, type LoadSource, type StorageLike } from './save/save';
 import { enhance, type EnhanceBlock, type EnhanceOptions, type EnhanceResult } from './systems/enhancement';
-import { equip, grantDaily } from './systems/weapons';
+import { equip, grantDaily, type GrantResult } from './systems/weapons';
+import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
+import type { EnhanceItem, ItemId } from '../config/economy';
 import { completeTutorial, type TutorialId } from './systems/tutorial';
 import { loseNight, startNight, winNight, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
@@ -16,7 +18,12 @@ export type Action =
   | { type: 'START_NIGHT' }
   | ({ type: 'NIGHT_WON'; xp: number } & NightReport)
   | ({ type: 'NIGHT_LOST'; reason: 'death' | 'abandon' } & NightReport)
-  | { type: 'NEW_RUN'; seed?: number };
+  | { type: 'NEW_RUN'; seed?: number }
+  | { type: 'SELL'; weaponId: string }
+  | { type: 'BUY'; item: ItemId }
+  | { type: 'TOGGLE_ITEM'; item: EnhanceItem }
+  | { type: 'UNDO_ENHANCE' }
+  | { type: 'USE_REVIVE' };
 
 export type ActionResult =
   | { type: 'enhanced'; result: EnhanceResult }
@@ -25,6 +32,14 @@ export type ActionResult =
   | { type: 'nightBlocked'; reason: NightBlock }
   | { type: 'nightWon'; day: number; levelBefore: number; level: number; levelsGained: number; granted: number; cleared: boolean }
   | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null }
+  | { type: 'sold'; price: number }
+  | { type: 'sellBlocked'; reason: SellBlock }
+  | { type: 'bought'; item: ItemId }
+  | { type: 'buyBlocked'; reason: BuyBlock }
+  | { type: 'undone'; weapon: Weapon }
+  | { type: 'undoBlocked'; reason: UndoBlock }
+  | { type: 'revived' }
+  | { type: 'noRevive' }
   | { type: 'ok' };
 
 export interface GameEvents {
@@ -64,9 +79,15 @@ export class GameCore {
       return;
     }
     // Today's weapons, once per day. A no-op if they were already handed out.
-    const grant = grantDaily(this.state);
+    const grant = this.beginDay(this.state);
     this.lastGrant = grant.granted;
     this.commit(grant.state);
+  }
+
+  /** Morning: today's free weapons (once per day) and, on visiting days, Morr's shelf. */
+  private beginDay(state: GameState): GrantResult {
+    const grant = grantDaily(state);
+    return { ...grant, state: openMerchant(grant.state) };
   }
 
   /** A fresh run. Tutorial progress is knowledge, not run state, so it carries over. */
@@ -116,7 +137,7 @@ export class GameCore {
     if (r.gameOver) {
       this.save.clearRun();
       const fresh = this.startRun(randomSeed(), this.state.tutorials);
-      const grant = grantDaily(fresh);
+      const grant = this.beginDay(fresh);
       this.lastGrant = grant.granted;
       this.commit(grant.state);
     } else {
@@ -148,7 +169,8 @@ export class GameCore {
         return { type: 'ok' };
       }
       case 'START_NIGHT': {
-        const r = startNight(this.state);
+        // Night is a new action: the time stone can no longer undo the day's last attempt.
+        const r = startNight({ ...this.state, lastEnhance: null });
         if (!r.ok) return { type: 'nightBlocked', reason: r.reason };
         this.commit(r.state); // phase 'night' is on disk before the fight begins
         return { type: 'nightStarted', weapon: r.weapon };
@@ -157,7 +179,7 @@ export class GameCore {
         if (this.state.phase !== 'night') return { type: 'ok' };
         const r = winNight(this.state, action);
         this.addRecords({ kills: action.kills });
-        const grant = grantDaily(r.state);
+        const grant = this.beginDay(r.state);
         this.lastGrant = grant.granted;
         this.commit(grant.state);
         this.emit('changed', this.state);
@@ -180,11 +202,46 @@ export class GameCore {
       case 'NEW_RUN': {
         this.save.clearRun();
         const fresh = this.startRun(action.seed ?? randomSeed(), this.state.tutorials);
-        const grant = grantDaily(fresh);
+        const grant = this.beginDay(fresh);
         this.lastGrant = grant.granted;
         this.commit(grant.state);
         this.emit('changed', this.state);
         return { type: 'ok' };
+      }
+      case 'SELL': {
+        const r = sell(this.state, action.weaponId);
+        if (!r.ok) return { type: 'sellBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'sold', price: r.price };
+      }
+      case 'BUY': {
+        const r = buy(this.state, action.item);
+        if (!r.ok) return { type: 'buyBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'bought', item: action.item };
+      }
+      case 'TOGGLE_ITEM': {
+        if (this.state.phase !== 'day') return { type: 'ok' };
+        this.commit(toggleArmed(this.state, action.item));
+        this.emit('changed', this.state);
+        return { type: 'ok' };
+      }
+      case 'UNDO_ENHANCE': {
+        const r = undoEnhance(this.state);
+        if (!r.ok) return { type: 'undoBlocked', reason: r.reason };
+        const weapon = this.state.lastEnhance!.weaponBefore;
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'undone', weapon };
+      }
+      case 'USE_REVIVE': {
+        // Spent during the night. If the night is still lost later, the snapshot gives it back
+        // together with everything else from the start of the night (decision #4).
+        if (this.state.phase !== 'night' || itemCount(this.state, 'revive') <= 0) return { type: 'noRevive' };
+        this.commit(consume(this.state, 'revive'));
+        return { type: 'revived' };
       }
     }
   }

@@ -16,6 +16,10 @@ import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
 import type { NightData } from './NightScene';
+import { canUndo, itemCount, isArmed, merchantHere, salePrice } from '../../core/systems/economy';
+import { isTutorialDone } from '../../core/systems/tutorial';
+import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
+import { StoneChip } from '../ui/stoneChip';
 
 const LIST = { x: 24, y: 84, w: 316, h: 612, cardH: 66, gap: 8, top: 136 };
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
@@ -52,7 +56,12 @@ export class ForgeScene extends Phaser.Scene {
   private statsText!: Phaser.GameObjects.Text;
   private enhanceBtn!: Button;
   private equipBtn!: Button;
+  private sellBtn!: Button;
   private nightBtn!: Button;
+  private undoBtn!: Button;
+  private shopBtn!: Button;
+  private stoneTitle!: Phaser.GameObjects.Text;
+  private stoneChips: StoneChip[] = [];
   private toastBox!: Phaser.GameObjects.Container;
 
   constructor() {
@@ -62,6 +71,7 @@ export class ForgeScene extends Phaser.Scene {
   create() {
     this.core = this.registry.get('core') as GameCore;
     this.animating = false;
+    this.stoneChips = [];
     this.buildBackground();
     this.buildTopBar();
     this.buildInventory();
@@ -87,6 +97,8 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-DOWN', () => this.step(1));
     kb.on('keydown-E', () => this.equipSelected());
     kb.on('keydown-N', () => this.startNight());
+    kb.on('keydown-S', () => this.trySell());
+    kb.on('keydown-M', () => this.openShop());
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (p.x < LIST.x + LIST.w) this.scroll(Math.sign(dy));
     });
@@ -96,6 +108,8 @@ export class ForgeScene extends Phaser.Scene {
     const notice = this.core.notice;
     if (this.core.recoveredFromCorruption) this.toast('저장 데이터가 손상되어 직전 백업에서 복구했습니다.', C.dangerHi);
     else if (notice?.kind === 'abandoned') this.toast(`전투 도중 종료되어 패배로 처리했습니다 · 남은 목숨 ${notice.livesLeft}`, C.dangerHi);
+    else if (this.core.lastGrant.length && merchantHere(this.core.state))
+      this.toast(`DAY ${this.core.state.day} · 무기 ${this.core.lastGrant.length}자루 도착 · 상인 ${MERCHANT.name}가 대장간에 들렀습니다 (오늘 하루)`, C.goldHi);
     else if (this.core.lastGrant.length) this.toast(`DAY ${this.core.state.day} · 오늘의 무기 ${this.core.lastGrant.length}자루를 받았습니다`, C.goldHi);
     this.core.notice = null;
     this.core.recoveredFromCorruption = false;
@@ -138,6 +152,7 @@ export class ForgeScene extends Phaser.Scene {
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
     this.goldText = label(this, W - 24, 32, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
+    this.shopBtn = new Button(this, 790, 32, 170, 42, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
   private drawLives(lives: number) {
@@ -230,6 +245,7 @@ export class ForgeScene extends Phaser.Scene {
     this.nextText = label(this, 640, 226, '', 15, C.mute, { weight: 700, origin: [0.5, 0.5] });
     this.starterHammer = this.add.image(640, 300, 'weapon-hammer').setScale(0.9).setVisible(false);
     this.emptyText = label(this, 640, 396, '', 16, C.mute, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: 560, lineSpacing: 8 });
+    this.undoBtn = new Button(this, 640, 262, 250, 40, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
   }
 
   private buildOdds() {
@@ -242,7 +258,7 @@ export class ForgeScene extends Phaser.Scene {
     });
     this.oddsBars = this.add.graphics();
     OUTCOMES.forEach((o, i) => {
-      const y = RIGHT.y + 66 + i * 46;
+      const y = RIGHT.y + 62 + i * 40;
       const dot = this.add.graphics();
       dot.fillStyle(OUTCOME_INFO[o].color, 1);
       dot.fillCircle(RIGHT.x + 28, y + 9, 6);
@@ -251,11 +267,17 @@ export class ForgeScene extends Phaser.Scene {
       label(this, RIGHT.x + 100, y + 2, delta, 13, o === 'destroy' ? C.danger : C.dim, { weight: 700 });
       this.oddsTexts[o] = label(this, RIGHT.x + RIGHT.w - 20, y, '', 18, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [1, 0] });
     });
-    const warnY = RIGHT.y + 300;
+    const warnY = RIGHT.y + 262;
     label(this, RIGHT.x + 20, warnY, '파괴된 무기는 영구히 사라집니다', 13, C.danger, { weight: 700 });
-    this.stageText = label(this, RIGHT.x + 20, warnY + 28, '', 13, C.mute, { weight: 700 });
-    this.statsText = label(this, RIGHT.x + 20, warnY + 50, '', 12, C.dim);
-    if (ENHANCE_TABLE_STATUS !== 'confirmed') label(this, RIGHT.x + 20, warnY + 70, '확률표: 임시안 (확정 전)', 12, C.dim);
+    this.stageText = label(this, RIGHT.x + 20, warnY + 22, '', 12, C.mute, { weight: 700 });
+    this.statsText = label(this, RIGHT.x + 20, warnY + 40, '', 12, C.dim);
+    if (ENHANCE_TABLE_STATUS !== 'confirmed') label(this, RIGHT.x + RIGHT.w - 20, warnY + 22, '확률표 임시안', 12, C.dim, { origin: [1, 0] });
+    // Stones switched on for the next attempt (§15). Hidden until the player owns any.
+    this.stoneTitle = label(this, RIGHT.x + 20, RIGHT.y + 330, '다음 강화에 사용', 12, C.mute, { weight: 700 });
+    ENHANCE_ITEMS.forEach((item, i) => {
+      const chip = new StoneChip(this, RIGHT.x + 20 + i * 94, RIGHT.y + 348, 88, 34, item, () => this.toggleStone(item));
+      this.stoneChips.push(chip);
+    });
 
     this.enhanceBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 432, 276, 78, '강화', {
       variant: 'gold',
@@ -263,7 +285,8 @@ export class ForgeScene extends Phaser.Scene {
       sub: '무료 · Space',
       onClick: () => this.tryEnhance(),
     });
-    this.equipBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 518, 276, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
+    this.equipBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 518, 134, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
+    this.sellBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 518, 134, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
     this.nightBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 578, 276, 50, '밤 전투 시작', { variant: 'dark', sub: '', onClick: () => this.startNight() });
   }
 
@@ -378,9 +401,11 @@ export class ForgeScene extends Phaser.Scene {
     g.clear();
     const row = w && w.level < MAX_LEVEL ? effectiveRow(w.level, collectEnhanceMods(this.core.state, w)) : null;
     OUTCOMES.forEach((o, i) => {
-      const y = RIGHT.y + 66 + i * 46 + 26;
+      const y = RIGHT.y + 62 + i * 40 + 26;
       const pct = row ? row[o] : 0;
-      this.oddsTexts[o].setText(row ? `${pct.toFixed(1)}%` : '—');
+      const shielded = row && (o === 'down' || o === 'destroy') && isArmed(this.core.state, 'protect');
+      this.oddsTexts[o].setText(row ? `${shielded ? '→유지 ' : ''}${pct.toFixed(1)}%` : '—');
+      this.oddsTexts[o].setColor(css(shielded ? ITEMS.protect.color : o === 'destroy' ? C.dangerHi : C.text));
       g.fillStyle(0x0a0807, 1);
       g.fillRoundedRect(RIGHT.x + 20, y, RIGHT.w - 40, 6, 3);
       if (pct > 0) {
@@ -397,6 +422,9 @@ export class ForgeScene extends Phaser.Scene {
     const eq = !!w && this.core.state.equippedId === w.id;
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
     this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? '이 무기로 밤에 싸웁니다' : 'E');
+    this.sellBtn.setEnabled(!!w && !this.animating);
+    this.sellBtn.setLabel('판매', w ? `${salePrice(w.level).toLocaleString()}G · S` : 'S');
+    this.renderItems();
     const armed = equippedWeapon(this.core.state);
     const hammer = this.core.state.weapons.length === 0;
     this.nightBtn.setEnabled((!!armed || hammer) && !this.animating);
@@ -417,6 +445,119 @@ export class ForgeScene extends Phaser.Scene {
     const data: NightData = { weapon: r.weapon, day: this.core.state.day };
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', data));
+  }
+
+  /** Stone chips, the time-stone button and the merchant button. */
+  private renderItems() {
+    const s = this.core.state;
+    const anyStone = ENHANCE_ITEMS.some((i) => itemCount(s, i) > 0);
+    this.stoneTitle.setVisible(anyStone);
+    this.stoneChips.forEach((chip) => {
+      const n = itemCount(s, chip.item);
+      chip.setVisible(anyStone);
+      chip.set(n, isArmed(s, chip.item), !this.animating && n > 0);
+    });
+    const undoable = canUndo(s) === null && !this.animating;
+    this.undoBtn.setVisible(undoable);
+    if (undoable) this.undoBtn.setLabel(`⟲ 시간 역행석 사용 (보유 ${itemCount(s, 'timeStone')})`);
+    this.shopBtn.setVisible(merchantHere(s));
+  }
+
+  private toggleStone(item: EnhanceItem) {
+    if (this.animating) return;
+    this.sfx.click();
+    this.core.dispatch({ type: 'TOGGLE_ITEM', item });
+    const on = isArmed(this.core.state, item);
+    this.toast(on ? `${ITEMS[item].name}: 다음 강화에 사용합니다` : `${ITEMS[item].name}: 사용하지 않습니다`, on ? ITEMS[item].color : C.mute);
+  }
+
+  private undo() {
+    if (this.animating) return;
+    const r = this.core.dispatch({ type: 'UNDO_ENHANCE' });
+    if (r.type !== 'undone') return;
+    this.selectedId = r.weapon.id;
+    this.sfx.click();
+    this.cameras.main.flash(380, 120, 240, 230);
+    this.toast(`시간이 거꾸로 흐릅니다 · ${weaponName(r.weapon)} +${r.weapon.level}(으)로 되돌렸습니다`, ITEMS.timeStone.color);
+    this.refresh();
+  }
+
+  private trySell() {
+    if (this.animating || this.leaving) return;
+    const w = this.selected();
+    if (!w) return;
+    const price = salePrice(w.level);
+    const name = `${weaponName(w)} +${w.level}`;
+    if (!isTutorialDone(this.core.state, 'firstSale')) {
+      // §8.5 첫 무기 판매: one short explanation, then it never asks just for being a sale again.
+      this.openModal({
+        kind: 'confirm',
+        title: '첫 무기 판매',
+        body: `무기를 팔면 골드를 받고 무기는 보관함에서 영구히 사라집니다.\n골드는 3일마다 찾아오는 상인 ${MERCHANT.name}에게서 목숨과 강화 보조 아이템을 사는 데 씁니다.\n강화 단계가 높을수록 값이 크게 오릅니다.\n\n${name} → ${price.toLocaleString()}G`,
+        confirmLabel: `${price.toLocaleString()}G에 판매`,
+        onConfirm: () => {
+          this.core.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstSale' });
+          this.sell(w.id, name);
+        },
+      });
+      return;
+    }
+    const equipped = this.core.state.equippedId === w.id;
+    const last = this.core.state.weapons.length === 1;
+    if (w.level >= SALE_CONFIRM_LEVEL || equipped || last) {
+      const why = [
+        w.level >= SALE_CONFIRM_LEVEL ? `+${w.level}까지 키운 무기입니다.` : '',
+        equipped ? '지금 장착 중인 무기입니다.' : '',
+        last ? '마지막 남은 무기입니다. 팔면 기본 망치로 싸워야 합니다.' : '',
+      ].filter(Boolean);
+      this.openModal({
+        kind: 'confirm',
+        danger: last,
+        title: `${price.toLocaleString()}G에 판매할까요?`,
+        body: `${name}\n${why.join('\n')}\n판매한 무기는 되돌릴 수 없습니다.`,
+        confirmLabel: '판매',
+        onConfirm: () => this.sell(w.id, name),
+      });
+      return;
+    }
+    this.sell(w.id, name);
+  }
+
+  private sell(id: string, name: string) {
+    const r = this.core.dispatch({ type: 'SELL', weaponId: id });
+    if (r.type !== 'sold') return;
+    this.selectedId = null;
+    this.sfx.coin();
+    this.coinBurst(r.price);
+    this.toast(`${name} 판매 · +${r.price.toLocaleString()}G`, C.goldHi);
+    this.refresh();
+  }
+
+  /** Coins fly from the anvil to the gold counter. */
+  private coinBurst(price: number) {
+    const n = Phaser.Math.Clamp(Math.round(Math.log10(price) * 3), 3, 16);
+    for (let i = 0; i < n; i++) {
+      const c = this.add.image(640 + Phaser.Math.Between(-60, 60), 330 + Phaser.Math.Between(-20, 20), 'spark').setTint(0xffd36b).setScale(0.9).setDepth(50).setBlendMode('ADD');
+      this.tweens.add({
+        targets: c,
+        x: W - 60,
+        y: 32,
+        scale: 0.4,
+        delay: i * 35,
+        duration: 520 + Phaser.Math.Between(0, 160),
+        ease: 'Cubic.easeIn',
+        onComplete: () => c.destroy(),
+      });
+    }
+    this.goldText.setScale(1.25);
+    this.tweens.add({ targets: this.goldText, scale: 1, delay: 520, duration: 260, ease: 'Back.easeOut' });
+  }
+
+  private openShop() {
+    if (this.animating || this.leaving || !merchantHere(this.core.state)) return;
+    this.sfx.click();
+    this.scene.launch('Shop');
+    this.scene.pause();
   }
 
   // ───────────────────────── input
@@ -493,6 +634,8 @@ export class ForgeScene extends Phaser.Scene {
     const r = res.result;
     this.enhanceBtn.setEnabled(false);
     this.equipBtn.setEnabled(false);
+    this.sellBtn.setEnabled(false);
+    this.renderItems();
     void this.fx
       .play(r, {
         onImpact: () => {
@@ -509,6 +652,9 @@ export class ForgeScene extends Phaser.Scene {
       .then(() => {
         this.animating = false;
         this.refresh();
+        if (r.protectedFrom)
+          this.toast(`강화 보호석 발동 · ${r.protectedFrom === 'destroy' ? '파괴' : '하락'}을 막았습니다`, ITEMS.protect.color);
+        else if (r.used.length) this.toast(`${r.used.map((i) => ITEMS[i].name).join(', ')} 사용`, C.mute);
       });
   }
 }

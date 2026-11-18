@@ -6,6 +6,8 @@ import { Rng } from '../rng';
 import type { GameState, Weapon } from '../state/types';
 import { findWeapon, isLastWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
+import { consume, isArmed } from './economy';
+import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 
 /** Percentage-point adjustments from totems, skills and items (§16). Keep absorbs the rest. */
 export interface EnhanceMods {
@@ -15,9 +17,18 @@ export interface EnhanceMods {
   destroy?: number;
 }
 
-/** Bonuses that apply to the current run. Totems and skills hook in here (M5, M6). */
-export function collectEnhanceMods(_state: GameState, _weapon: Weapon): EnhanceMods {
-  return {};
+/** Bonuses for the next attempt: switched-on stones now; totems and skills hook in here (M5, M6). */
+export function collectEnhanceMods(state: GameState, weapon: Weapon): EnhanceMods {
+  const mods: EnhanceMods = {};
+  if (isArmed(state, 'luck')) {
+    mods.great = (mods.great ?? 0) + LUCK_BONUS.great;
+    mods.success = (mods.success ?? 0) + LUCK_BONUS.success;
+  }
+  if (isArmed(state, 'master')) {
+    const base = ENHANCE_TABLE[Math.min(weapon.level, ENHANCE_TABLE.length - 1)].destroy;
+    mods.destroy = (mods.destroy ?? 0) - base * (1 - MASTER_DESTROY_MUL);
+  }
+  return mods;
 }
 
 /**
@@ -85,6 +96,10 @@ export interface EnhanceResult {
   row: EnhanceRow;
   stageChanged: boolean;
   milestone: Milestone | null;
+  /** The roll that the protection stone turned into 'keep', if it fired. */
+  protectedFrom: Outcome | null;
+  /** Stones spent on this attempt. */
+  used: EnhanceItem[];
 }
 
 export type EnhanceAttempt =
@@ -99,15 +114,29 @@ export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions 
   const before = findWeapon(prev, weaponId)!;
   const row = effectiveRow(before.level, collectEnhanceMods(prev, before));
   const rng = new Rng(prev.rng);
-  const outcome = rollOutcome(row, rng.next());
+  const rolled = rollOutcome(row, rng.next());
+  // Protection stone: a drop or destruction becomes keep, and only then is the stone spent.
+  const protectedFrom = (rolled === 'down' || rolled === 'destroy') && isArmed(prev, 'protect') ? rolled : null;
+  const outcome: Outcome = protectedFrom ? 'keep' : rolled;
   const newLevel = levelAfter(before.level, outcome);
+  const used: EnhanceItem[] = [];
+  if (isArmed(prev, 'luck')) used.push('luck');
+  if (isArmed(prev, 'master')) used.push('master');
+  if (protectedFrom) used.push('protect');
 
   let state: GameState = {
     ...prev,
     rng: rng.state,
-    lastEnhance: { day: prev.day, weaponBefore: { ...before }, wasEquipped: prev.equippedId === weaponId, outcome },
+    lastEnhance: {
+      day: prev.day,
+      weaponBefore: { ...before },
+      wasEquipped: prev.equippedId === weaponId,
+      outcome,
+      index: prev.weapons.findIndex((w) => w.id === weaponId),
+    },
     stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1 },
   };
+  for (const item of used) state = consume(state, item);
 
   let after: Weapon | null = null;
   if (newLevel === null) {
@@ -124,5 +153,5 @@ export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions 
 
   const stageChanged = after !== null && appearanceStage(after.level) !== appearanceStage(before.level);
   const milestone = after ? milestoneCrossed(before.level, after.level) : null;
-  return { ok: true, state, result: { outcome, weaponBefore: before, weaponAfter: after, row, stageChanged, milestone } };
+  return { ok: true, state, result: { outcome, weaponBefore: before, weaponAfter: after, row, stageChanged, milestone, protectedFrom, used } };
 }

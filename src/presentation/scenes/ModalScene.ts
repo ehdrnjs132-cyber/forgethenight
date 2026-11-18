@@ -224,11 +224,13 @@ export class ModalScene extends Phaser.Scene {
   // ───────────────────────── confirmation (§7.5 last weapon)
   private buildConfirm(data: ConfirmModal) {
     const pw = 580;
-    const ph = 300;
+    // Height follows the text: title band + body + button band.
+    const body = label(this, 0, 0, data.body, 17, C.text, { wrap: pw - 80, align: 'center', origin: [0.5, 0], lineSpacing: 8 });
+    const ph = Math.max(300, 96 + body.height + 34 + 104);
     const accent = data.danger ? C.danger : C.gold;
     this.frame(pw, ph, accent);
     const title = label(this, 0, -ph / 2 + 54, data.title, 26, data.danger ? C.dangerHi : C.goldHi, { weight: 900, origin: [0.5, 0.5] });
-    const body = label(this, 0, -12, data.body, 17, C.text, { wrap: pw - 80, align: 'center', origin: [0.5, 0.5], lineSpacing: 8 });
+    body.y = -ph / 2 + 96 + Math.max(0, (ph - 96 - 104 - body.height) / 2);
     const cancel = new Button(this, -130, ph / 2 - 52, 200, 52, data.cancelLabel ?? '취소', { variant: 'dark', sub: 'Esc', onClick: () => this.close(data.onCancel) });
     const ok = new Button(this, 130, ph / 2 - 52, 200, 52, data.confirmLabel, { variant: data.danger ? 'danger' : 'gold', onClick: () => this.close(data.onConfirm) });
     this.root.add([title, body, cancel, ok]);

@@ -57,6 +57,11 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
     // v2 (M3): run totals for the game over screen; snapshot is now typed.
     s = { ...s, version: 2, stats: { ...createStats(), ...s.stats }, nightSnapshot: null };
   }
+  if (fromVersion < 3) {
+    // v3 (M4): selling and the merchant. An old undo record has no index, so drop it.
+    s = { ...s, version: 3, armed: {}, merchant: null, lastEnhance: null, stats: { ...createStats(), ...s.stats } };
+    if (s.nightSnapshot) s.nightSnapshot = { ...s.nightSnapshot, version: 3, armed: {}, merchant: null, lastEnhance: null, stats: { ...createStats(), ...s.nightSnapshot.stats } };
+  }
   return s;
 }
 
