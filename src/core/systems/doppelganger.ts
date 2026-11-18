@@ -1,7 +1,7 @@
 // Doppelganger generation (reboot spec §3.3, §3.6): each blacksmith from another world really forges
 // its weapon with the player's own enhancement table, and keeps an honest record of how it got there.
 import { ENHANCE_TABLE, type Outcome } from '../../config/enhancement';
-import { CLASS_WORD, ELEMENT_TITLE, ELEMENT_WORD, ROLES, TEMPERAMENTS, nightPlan, type Temperament } from '../../config/doppelganger';
+import { CLASS_WORD, ELEMENT_WORD, TEMPERAMENTS, nightPlan, type Temperament } from '../../config/doppelganger';
 import { ELEMENTS, MAX_LEVEL, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
 import { weaponDisplayName } from '../../config/swordNames';
 import { Rng } from '../rng';
@@ -106,7 +106,8 @@ export function generateNight(day: number, seed: number): { doppelgangers: Doppe
     const cls = rng.pick(WEAPON_CLASSES);
     const element = rng.pick(ELEMENTS);
     const { level, record } = forgeWeapon(rng, temperament, plan.attemptBudget, plan.expectedLevel, plan.weapons);
-    const name = `${rng.pick(ELEMENT_TITLE[element])} ${rng.pick(ROLES)}`;
+    // User decision 2026-11-18: every rival is "earth N", N random 1..999 (the world it came from).
+    const name = `earth ${1 + rng.int(999)}`;
     list.push({ id: `d${day}-${i}`, name, temperament, weapon: { cls, element, level }, record });
   }
   return { doppelgangers: list, rng: rng.state };

@@ -20,6 +20,10 @@ import { glowStrength } from '../weaponArt';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
 import { TouchPad, isTouchDevice } from '../ui/touchPad';
+import { Bubble, RIVAL_STYLE, SMITH_STYLE } from '../ui/speech';
+import { LevelBadge } from '../ui/levelBadge';
+import { LAST_WORDS, NARRATOR_LINES, TAUNTS, pick } from '../../config/dialogue';
+import { inPrologue } from '../../core/systems/prologue';
 import { PROP_COUNT } from './BootScene';
 import type { ModalData, ModalRequest } from './ModalScene';
 
@@ -37,8 +41,11 @@ interface Rival {
   aura: Phaser.GameObjects.Graphics;
   telegraph: Phaser.GameObjects.Graphics;
   plate: Phaser.GameObjects.Text;
-  /** Big "+23" over the head (user decision 2026-11-18: levels are shown openly, not hidden). */
-  levelTag: Phaser.GameObjects.Text;
+  /** Big "+23" badge over the head (user decision 2026-11-18: levels are shown openly, not hidden). */
+  levelTag: Phaser.GameObjects.Container;
+  /** Taunts (DAY 1 often, later now and then). */
+  bubble: Bubble;
+  nextTaunt: number;
   hpBar: Phaser.GameObjects.Graphics;
   sparks: Phaser.GameObjects.Particles.ParticleEmitter;
   hp: number;
@@ -70,6 +77,8 @@ export class NightScene extends Phaser.Scene {
   private baseDamage = 100;
   private levelGlow = 0;
   private touch: TouchPad | null = null;
+  /** The scripted first night: rivals cannot really be beaten, and the loss costs no life. */
+  private prologue = false;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private heroAnim: string | null = null;
@@ -134,6 +143,7 @@ export class NightScene extends Phaser.Scene {
     const high = w.kind === 'weapon' && w.weapon.level >= 20 ? this.sk.highLevel : 0;
     this.baseDamage = Math.round(raw * (1 + this.sk.damage + this.sk.mastery + high));
     this.levelGlow = w.kind === 'weapon' ? glowStrength(w.weapon.level) : 0;
+    this.prologue = inPrologue(this.core.state);
     this.maxHp = Math.round(PLAYER_COMBAT.maxHp + this.sk.maxHp);
     const p = this.core.state.player;
     Object.assign(this, {
@@ -273,7 +283,7 @@ export class NightScene extends Phaser.Scene {
   private intro() {
     const t = label(this, W / 2, H / 2 - 70, `DAY ${this.nd.day} · 밤`, 46, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
-    const s2 = label(this, W / 2, H / 2 + 8, '머리 위 숫자가 그들이 벼려 온 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
+    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 벼려 온 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     for (const o of [t, s, s2]) {
       o.setAlpha(0);
       this.tweens.add({ targets: o, alpha: 1, duration: 300 });
@@ -320,17 +330,15 @@ export class NightScene extends Phaser.Scene {
     }).setDepth(9);
     const plate = label(this, x, y - 70, '', 13, C.text, { weight: 900, origin: [0.5, 0.5] }).setDepth(30);
     plate.setStroke('#140a05', 5);
-    const tagSize = 34 + Math.min(30, d.weapon.level * 0.6);
-    const levelTag = this.add
-      .text(x, y - 112, `+${d.weapon.level}`, { fontFamily: DISPLAY, fontSize: `${Math.round(tagSize)}px`, fontStyle: '900', color: css(this.tierColor(d.weapon.level)), stroke: '#140a05', strokeThickness: 8, resolution: 2 })
-      .setOrigin(0.5, 1)
-      .setDepth(31);
+    const levelTag = new LevelBadge(this, x, y - 118, d.weapon.level, Math.round(26 + Math.min(20, d.weapon.level * 0.4))).setDepth(31);
+    const bubble = new Bubble(this, RIVAL_STYLE, 40);
     const hpBar = this.add.graphics().setDepth(30);
     const telegraph = this.add.graphics().setDepth(6);
-    const maxHp = Math.round(DOPPEL_COMBAT.hp.base * Math.pow(DOPPEL_COMBAT.hp.growth, this.nd.day - 1) * Math.pow(DOPPEL_COMBAT.hp.levelGrowth, d.weapon.level));
+    // the scripted first night cannot be won: rivals take 20× the HP
+    const maxHp = Math.round(DOPPEL_COMBAT.hp.base * Math.pow(DOPPEL_COMBAT.hp.growth, this.nd.day - 1) * Math.pow(DOPPEL_COMBAT.hp.levelGrowth, d.weapon.level) * (this.prologue ? 20 : 1));
     const shape = COMBOS[d.weapon.cls].steps[0].shape;
     const r: Rival = {
-      d, sprite: s, aura, telegraph, plate, levelTag, hpBar, sparks, hp: maxHp, maxHp, state: 'arrive', t: 0.6, heavy: false, aim: 0,
+      d, sprite: s, aura, telegraph, plate, levelTag, bubble, nextTaunt: this.elapsed + 1.5 + i * 1.3, hpBar, sparks, hp: maxHp, maxHp, state: 'arrive', t: 0.6, heavy: false, aim: 0,
       strafeDir: Math.random() < 0.5 ? 1 : -1, dodgeCd: 0, flinch: 0, revealed: REVEAL.openFromStart, engagedAt: this.elapsed, shape, anim,
     };
     this.physics.add.collider(s, this.player);
@@ -349,7 +357,7 @@ export class NightScene extends Phaser.Scene {
   }
 
   private rivalDamage(r: Rival): number {
-    const base = DOPPEL_COMBAT.damage.base * Math.pow(DOPPEL_COMBAT.damage.growth, r.d.weapon.level);
+    const base = DOPPEL_COMBAT.damage.base * Math.pow(DOPPEL_COMBAT.damage.growth, r.d.weapon.level) * (this.prologue ? 1.5 : 1);
     return Math.round(base * (r.heavy ? DOPPEL_COMBAT.damage.heavyMul : 1));
   }
 
@@ -444,7 +452,18 @@ export class NightScene extends Phaser.Scene {
     r.aura.setPosition(s.x, s.y + 20);
     r.sparks.setPosition(s.x, s.y);
     r.plate.setPosition(s.x, s.y - 74);
-    r.levelTag.setPosition(s.x, s.y - 100);
+    r.levelTag.setPosition(s.x, s.y - 116);
+    r.bubble.setPosition(s.x, s.y - 140);
+    // taunts: often on DAY 1, now and then on later nights
+    if (this.elapsed >= r.nextTaunt) {
+      const day1 = this.nd.day === 1;
+      r.nextTaunt = this.elapsed + (day1 ? Phaser.Math.FloatBetween(4, 7) : Phaser.Math.FloatBetween(14, 24));
+      if ((day1 || Math.random() < 0.4) && !r.bubble.showing && !this.rivals.some((o) => o !== r && o.bubble.showing)) {
+        const fits = this.cls === 'hammer' ? TAUNTS : TAUNTS.filter((t) => !t.includes('망치') && !t.includes('+0'));
+        const text = pick(fits);
+        void r.bubble.say(text, s.x, s.y - 140);
+      }
+    }
     r.hpBar.clear();
     r.hpBar.fillStyle(0x000000, 0.6);
     r.hpBar.fillRoundedRect(s.x - 40, s.y - 52, 80, 7, 3);
@@ -847,7 +866,7 @@ export class NightScene extends Phaser.Scene {
     if (!r.revealed) this.reveal(r, '쓰러지며 정체가 드러났다');
     r.sprite.disableBody(true, false);
     this.tweens.add({ targets: [r.sprite, r.aura], alpha: 0, duration: 700, onComplete: () => r.sprite.setVisible(false) });
-    this.tweens.add({ targets: [r.plate, r.levelTag], alpha: 0, delay: 1200, duration: 400 });
+    this.tweens.add({ targets: [r.plate, r.levelTag, r.bubble], alpha: 0, delay: 1200, duration: 400 });
     const xp = Math.round(DOPPEL_COMBAT.xp * (1 + r.d.weapon.level * 0.1) * (1 + this.sk.xp));
     this.gainXp(xp);
     this.defeated.push(r.d);
@@ -1067,6 +1086,19 @@ export class NightScene extends Phaser.Scene {
     }
     if (r.gameOver) {
       this.goGameOver(r.gameOver);
+      return;
+    }
+    if (r.prologue) {
+      // the scripted first defeat: last words, a line of narration, then DAY 1 again with new weapons
+      void new Bubble(this, SMITH_STYLE, 130).say(pick(LAST_WORDS), this.player.x, this.player.y - 70, 2.2);
+      const n = label(this, W / 2, H / 2 + 120, NARRATOR_LINES.prologueDeath, 20, C.goldHi, { weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(130);
+      n.setStroke('#140a05', 6).setAlpha(0);
+      this.tweens.add({ targets: n, alpha: 1, delay: 1200, duration: 500 });
+      this.registry.set('afterPrologue', true);
+      this.time.delayedCall(4200, () => {
+        this.cameras.main.fadeOut(700, 0, 0, 0);
+        this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Forge'));
+      });
       return;
     }
     const left = r.livesLeft;

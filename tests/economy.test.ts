@@ -40,6 +40,7 @@ describe('selling (QA 6, 7)', () => {
     const storage = new MemoryStorage();
     const game = new GameCore(storage, 3);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
+    game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
     const [a, b] = game.state.weapons;
     game.dispatch({ type: 'SELL', weaponId: a.id });
     game.dispatch({ type: 'EQUIP', weaponId: b.id });
@@ -53,6 +54,7 @@ describe('selling (QA 6, 7)', () => {
   it('the sale is on disk immediately (§25: closing mid-sale cannot duplicate gold)', () => {
     const storage = new MemoryStorage();
     const game = new GameCore(storage, 3);
+    game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
     game.dispatch({ type: 'SELL', weaponId: game.state.weapons[0].id });
     const saved = new SaveManager(storage).loadRun().state!;
     expect(saved.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);

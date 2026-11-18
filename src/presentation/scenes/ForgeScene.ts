@@ -4,7 +4,7 @@ import type { GameCore } from '../../core/game';
 import type { Weapon } from '../../core/state/types';
 import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement';
 import { equippedWeapon, findWeapon } from '../../core/systems/weapons';
-import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS } from '../../config/enhancement';
+import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
 import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
 import { START_LIVES } from '../../config/rules';
@@ -20,6 +20,10 @@ import type { CinematicData } from './CinematicScene';
 import { INTRO } from '../../config/cinematics';
 import { weaponDisplayName } from '../../config/swordNames';
 import { openRanking } from '../../online/ui';
+import { inPrologue } from '../../core/systems/prologue';
+import { NARRATOR_LINES, SMITH_LINES, pick } from '../../config/dialogue';
+import { Bubble, SMITH_STYLE } from '../ui/speech';
+import { LevelBadge } from '../ui/levelBadge';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
@@ -70,6 +74,8 @@ const ANVIL_X = 600;
  */
 const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
+/** Tail tip of the smith's speech bubble: beside his head, clear of the hammer and the right panel. */
+const SMITH_BUBBLE = { x: 770, y: 300 };
 
 const weaponName = (w: Weapon) => weaponDisplayName(w);
 
@@ -96,7 +102,7 @@ export class ForgeScene extends Phaser.Scene {
   private swing!: Swing;
   private damageText!: Phaser.GameObjects.Text;
   private nameText!: Phaser.GameObjects.Text;
-  private levelText!: Phaser.GameObjects.Text;
+  private levelText!: LevelBadge;
   private nextText!: Phaser.GameObjects.Text;
   private emptyText!: Phaser.GameObjects.Text;
   private starterHammer!: Phaser.GameObjects.Image;
@@ -109,6 +115,8 @@ export class ForgeScene extends Phaser.Scene {
   private equipBtn!: Button;
   private sellBtn!: Button;
   private nightBtn!: Button;
+  /** DAY 1 lines over the blacksmith's head. */
+  private bubble!: Bubble;
   private undoBtn!: Button;
   private shopBtn!: Button;
   private skillBtn!: Button;
@@ -177,6 +185,45 @@ export class ForgeScene extends Phaser.Scene {
     this.core.recoveredFromCorruption = false;
     this.core.lastGrant = [];
     this.core.lastOverflow = { count: 0, gold: 0 };
+
+    // DAY 1 talk: the prologue morning, or the morning after the scripted defeat.
+    this.bubble = new Bubble(this, SMITH_STYLE, 70);
+    const s = this.core.state;
+    if (this.registry.get('afterPrologue')) {
+      this.registry.set('afterPrologue', false);
+      void this.sayAll(SMITH_LINES.afterPrologue, 600);
+    } else if (inPrologue(s) && s.stats.enhanceAttempts === 0) void this.sayAll(SMITH_LINES.prologueArrive, 900);
+  }
+
+  // ───────────────────────── DAY 1 lines
+  private afterEnhanceLine(outcome: Outcome) {
+    const s = this.core.state;
+    if (inPrologue(s) && outcome === 'destroy') {
+      const left = s.weapons.length;
+      this.say(SMITH_LINES.prologueDestroy[Math.min(left, SMITH_LINES.prologueDestroy.length - 1)], true);
+      if (left === 0) {
+        // nothing left but the hammer: point at the night button
+        this.time.delayedCall(2600, () => this.toast(NARRATOR_LINES.allShattered, C.goldHi));
+        this.tweens.add({ targets: this.nightBtn, scale: 1.07, duration: 520, yoyo: true, repeat: 7, ease: 'Sine.easeInOut' });
+      }
+      return;
+    }
+    this.say(SMITH_LINES[outcome]);
+  }
+
+  /** One line over the smith's head (DAY 1 only unless `always`). */
+  private say(lines: readonly string[] | string, always = false) {
+    if (!always && this.core.state.day !== 1) return;
+    void this.bubble.say(typeof lines === 'string' ? lines : pick(lines), SMITH_BUBBLE.x, SMITH_BUBBLE.y);
+  }
+
+  /** Several lines in a row. */
+  private async sayAll(lines: readonly string[], delayMs = 0) {
+    if (delayMs) await new Promise((r) => this.time.delayedCall(delayMs, r));
+    for (const l of lines) {
+      if (!this.scene.isActive()) return;
+      await this.bubble.say(l, SMITH_BUBBLE.x, SMITH_BUBBLE.y);
+    }
   }
 
   // ───────────────────────── layout
@@ -479,9 +526,7 @@ export class ForgeScene extends Phaser.Scene {
     const gap = staged ? { lv: 50, next: 98, dmg: 130, undo: 176 } : { lv: 64, next: 118, dmg: 152, undo: 196 };
     this.nameText = label(this, cx, y0, '', 22, C.text, { weight: 900, origin: [0.5, 0.5] });
     this.nameText.setStroke('#140a05', 6);
-    this.levelText = this.add
-      .text(cx, y0 + gap.lv, '', { fontFamily: DISPLAY, fontSize: staged ? '64px' : '76px', fontStyle: '800', color: css(C.goldHi), stroke: '#000000', strokeThickness: 8, resolution: 2 })
-      .setOrigin(0.5);
+    this.levelText = new LevelBadge(this, cx, y0 + gap.lv, 0, staged ? 46 : 54);
     this.nextText = label(this, cx, y0 + gap.next, '', 14, C.text, { weight: 700, origin: [0.5, 0.5] });
     this.nextText.setStroke('#140a05', 5);
     // How hard this weapon hits: the direct, readable payoff of every enhancement.
@@ -641,11 +686,7 @@ export class ForgeScene extends Phaser.Scene {
           drawWeapon(g, w, 170);
           parts.push(g);
         }
-        parts.push(
-          this.add
-            .text(SW / 2 - 8, -SH / 2 + 4, `+${w.level}`, { fontFamily: DISPLAY, fontSize: '22px', fontStyle: '900', color: css(w.level >= 10 ? C.goldHi : C.text), stroke: '#140a05', strokeThickness: 6, resolution: 2 })
-            .setOrigin(1, 0),
-        );
+        parts.push(new LevelBadge(this, SW / 2 - 26, -SH / 2 + 14, w.level, 17));
         if (eq) {
           const t = label(this, -SW / 2 + 4, -SH / 2 + 4, '장착', 13, C.goldHi, { weight: 900, origin: [0, 0] });
           t.setStroke('#140a05', 5);
@@ -674,7 +715,8 @@ export class ForgeScene extends Phaser.Scene {
   /** Name, level and next-milestone line above the anvil. */
   private renderHeader(w: Weapon | null | undefined) {
     this.nameText.setText(w ? weaponName(w) : '').setColor(w ? css(ELEMENT_INFO[w.element].glow) : css(C.text));
-    this.levelText.setText(w ? `+${w.level}` : '');
+    this.levelText.setVisible(!!w);
+    if (w) this.levelText.setLevel(w.level);
     if (w) {
       const next = MILESTONES.find((m) => m.level > w.level);
       this.nextText.setText(w.level >= MAX_LEVEL ? '궁극의 무기 · 더 이상 강화할 수 없습니다' : next ? `다음 각성  +${next.level} ${next.name}  ·  ${next.level - w.level}단계 남음` : '');
@@ -770,13 +812,21 @@ export class ForgeScene extends Phaser.Scene {
     if (this.animating || this.leaving) return;
     const r = this.core.dispatch({ type: 'START_NIGHT' });
     if (r.type !== 'nightStarted') {
-      if (r.type === 'nightBlocked') this.toast('밤에 들고 갈 무기를 먼저 장착하세요', C.dangerHi);
+      if (r.type === 'nightBlocked') {
+        this.toast('밤에 들고 갈 무기를 먼저 장착하세요', C.dangerHi);
+        this.say(SMITH_LINES.needEquip);
+      }
       return;
     }
     this.leaving = true;
     const data: NightData = { weapon: r.weapon, day: this.core.state.day, lineup: r.lineup };
-    this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', data));
+    // DAY 1: a last word before the fade
+    const talk = this.core.state.day === 1;
+    if (talk) this.say(r.weapon.kind === 'hammer' ? SMITH_LINES.nightStartHammer : SMITH_LINES.nightStart);
+    this.time.delayedCall(talk ? 1300 : 0, () => {
+      this.cameras.main.fadeOut(300, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', data));
+    });
   }
 
   /** Stone chips, the time-stone button and the merchant button. */
@@ -833,6 +883,11 @@ export class ForgeScene extends Phaser.Scene {
     if (this.animating || this.leaving) return;
     const w = this.selected();
     if (!w) return;
+    if (inPrologue(this.core.state)) {
+      this.sfx.denied();
+      this.say(SMITH_LINES.sellPrologue, true);
+      return;
+    }
     const price = sellPrice(this.core.state, w.level);
     const name = `${weaponName(w)} +${w.level}`;
     if (!isTutorialDone(this.core.state, 'firstSale')) {
@@ -877,6 +932,7 @@ export class ForgeScene extends Phaser.Scene {
     this.sfx.coin();
     this.coinBurst(r.price);
     this.toast(`${name} 판매 · +${r.price.toLocaleString()}G`, C.goldHi);
+    this.say(SMITH_LINES.sell);
     this.refresh();
   }
 
@@ -913,6 +969,7 @@ export class ForgeScene extends Phaser.Scene {
     this.selectedId = id;
     this.sfx.click();
     this.refresh();
+    this.say(SMITH_LINES.select);
   }
 
   private step(dir: number) {
@@ -929,6 +986,7 @@ export class ForgeScene extends Phaser.Scene {
     if (!w || this.animating) return;
     this.core.dispatch({ type: 'EQUIP', weaponId: w.id });
     this.toast(`${weaponName(w)} +${w.level}을(를) 장착했습니다`);
+    this.say(SMITH_LINES.equip);
   }
 
   private openModal(data: ModalRequest) {
@@ -972,11 +1030,13 @@ export class ForgeScene extends Phaser.Scene {
       else if (res.reason === 'gold') {
         this.sfx.denied();
         this.toast(`골드가 부족합니다 (강화 ${enhanceCost(w.level).toLocaleString()}G) · 무기를 팔아 골드를 마련하세요`, C.dangerHi);
+        this.say(SMITH_LINES.noGold);
       }
       return;
     }
     if (res.type !== 'enhanced') return;
     const r = res.result;
+    this.say(SMITH_LINES.enhanceStart);
     this.enhanceBtn.setEnabled(false);
     this.equipBtn.setEnabled(false);
     this.sellBtn.setEnabled(false);
@@ -998,6 +1058,7 @@ export class ForgeScene extends Phaser.Scene {
       .then(() => {
         this.animating = false;
         this.refresh();
+        this.afterEnhanceLine(r.outcome);
         if (r.protectedFrom)
           this.toast(`강화 보호석 발동 · ${r.protectedFrom === 'destroy' ? '파괴' : '하락'}을 막았습니다`, ITEMS.protect.color);
         else if (r.used.length) this.toast(`${r.used.map((i) => ITEMS[i].name).join(', ')} 사용`, C.mute);

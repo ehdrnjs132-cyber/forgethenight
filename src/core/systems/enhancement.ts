@@ -81,6 +81,8 @@ export type EnhanceBlock = 'no-weapon' | 'max-level' | 'tutorial' | 'gold' | 'co
 export interface EnhanceOptions {
   /** Player confirmed enhancing their last remaining weapon (§7.5). */
   confirmLast?: boolean;
+  /** Scripted result (first-day prologue); skips the roll. */
+  force?: Outcome;
 }
 
 /** Steps 1–3 of §6.4. Returns why the attempt must not run, or null. */
@@ -121,7 +123,8 @@ export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions 
   const before = findWeapon(prev, weaponId)!;
   const row = effectiveRow(before.level, collectEnhanceMods(prev, before));
   const rng = new Rng(prev.rng);
-  const rolled = rollOutcome(row, rng.next());
+  const roll = rng.next();
+  const rolled = opts.force ?? rollOutcome(row, roll);
   // Protection stone: a drop or destruction becomes keep, and only then is the stone spent.
   const protectedFrom = (rolled === 'down' || rolled === 'destroy') && isArmed(prev, 'protect') ? rolled : null;
   const outcome: Outcome = protectedFrom ? 'keep' : rolled;

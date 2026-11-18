@@ -11,6 +11,7 @@ import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/
 import { completeTutorial, type TutorialId } from './systems/tutorial';
 import { loseNight, startNight, winNight, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
+import { endPrologue, inPrologue } from './systems/prologue';
 import { generateNight, type Doppelganger } from './systems/doppelganger';
 
 export type Action =
@@ -35,9 +36,9 @@ export type ActionResult =
   | { type: 'nightStarted'; weapon: NightWeapon; lineup: Doppelganger[] }
   | { type: 'nightBlocked'; reason: NightBlock }
   | { type: 'nightWon'; day: number; levelBefore: number; level: number; levelsGained: number; granted: number; cleared: boolean }
-  | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null }
+  | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null; prologue?: boolean }
   | { type: 'sold'; price: number }
-  | { type: 'sellBlocked'; reason: SellBlock }
+  | { type: 'sellBlocked'; reason: SellBlock | 'prologue' }
   | { type: 'bought'; item: ItemId }
   | { type: 'buyBlocked'; reason: BuyBlock }
   | { type: 'undone'; weapon: Weapon }
@@ -173,7 +174,7 @@ export class GameCore {
     switch (action.type) {
       case 'ENHANCE': {
         if (this.state.phase !== 'day') return { type: 'ok' };
-        const opts: EnhanceOptions = { confirmLast: action.confirmLast };
+        const opts: EnhanceOptions = { confirmLast: action.confirmLast, force: inPrologue(this.state) ? 'destroy' : undefined };
         const attempt = enhance(this.state, action.weaponId, opts);
         if (!attempt.ok) return { type: 'blocked', reason: attempt.blocked };
         this.commit(attempt.state); // saved before any animation starts
@@ -221,6 +222,15 @@ export class GameCore {
       }
       case 'NIGHT_LOST': {
         if (this.state.phase !== 'night') return { type: 'ok' };
+        if (inPrologue(this.state)) {
+          // the scripted first defeat: no life lost, DAY 1 again with three new weapons
+          const g = endPrologue(this.state);
+          this.lastGrant = g.granted;
+          this.lastOverflow = { count: g.overflow, gold: g.overflowGold };
+          this.commit(g.state);
+          this.emit('changed', this.state);
+          return { type: 'nightLost', livesLeft: this.state.lives, gameOver: null, prologue: true };
+        }
         const r = this.applyLoss(action);
         this.emit('changed', this.state);
         return { type: 'nightLost', livesLeft: r.livesLeft, gameOver: r.gameOver };
@@ -236,6 +246,7 @@ export class GameCore {
         return { type: 'ok' };
       }
       case 'SELL': {
+        if (inPrologue(this.state)) return { type: 'sellBlocked', reason: 'prologue' };
         const r = sell(this.state, action.weaponId);
         if (!r.ok) return { type: 'sellBlocked', reason: r.reason };
         this.commit(r.state);

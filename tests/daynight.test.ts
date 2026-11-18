@@ -6,6 +6,7 @@ import { START_GOLD, START_LIVES } from '../src/config/rules';
 function readyGame(storage = new MemoryStorage()) {
   const game = new GameCore(storage, 11);
   game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
+  game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' }); // these tests are about normal days
   game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
   return { game, storage };
 }
