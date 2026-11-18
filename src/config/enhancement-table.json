@@ -1,0 +1,378 @@
+{
+  "note": "Placeholder enhancement table (+0..+49). Percent per outcome; each row sums to 100. Edit freely; tests verify the sums.",
+  "status": "pending-confirmation",
+  "params": {
+    "great": [
+      10,
+      6,
+      1
+    ],
+    "success": [
+      56,
+      52,
+      1
+    ],
+    "down": [
+      3,
+      7,
+      1
+    ],
+    "destroy": [
+      2,
+      20,
+      1.7
+    ]
+  },
+  "rows": [
+    {
+      "great": 10,
+      "success": 56,
+      "keep": 29,
+      "down": 3,
+      "destroy": 2
+    },
+    {
+      "great": 9.9,
+      "success": 55.9,
+      "keep": 29.1,
+      "down": 3.1,
+      "destroy": 2
+    },
+    {
+      "great": 9.8,
+      "success": 55.8,
+      "keep": 29.1,
+      "down": 3.2,
+      "destroy": 2.1
+    },
+    {
+      "great": 9.8,
+      "success": 55.8,
+      "keep": 29,
+      "down": 3.2,
+      "destroy": 2.2
+    },
+    {
+      "great": 9.7,
+      "success": 55.7,
+      "keep": 29,
+      "down": 3.3,
+      "destroy": 2.3
+    },
+    {
+      "great": 9.6,
+      "success": 55.6,
+      "keep": 29,
+      "down": 3.4,
+      "destroy": 2.4
+    },
+    {
+      "great": 9.5,
+      "success": 55.5,
+      "keep": 29,
+      "down": 3.5,
+      "destroy": 2.5
+    },
+    {
+      "great": 9.4,
+      "success": 55.4,
+      "keep": 28.9,
+      "down": 3.6,
+      "destroy": 2.7
+    },
+    {
+      "great": 9.3,
+      "success": 55.3,
+      "keep": 28.9,
+      "down": 3.7,
+      "destroy": 2.8
+    },
+    {
+      "great": 9.3,
+      "success": 55.3,
+      "keep": 28.7,
+      "down": 3.7,
+      "destroy": 3
+    },
+    {
+      "great": 9.2,
+      "success": 55.2,
+      "keep": 28.6,
+      "down": 3.8,
+      "destroy": 3.2
+    },
+    {
+      "great": 9.1,
+      "success": 55.1,
+      "keep": 28.5,
+      "down": 3.9,
+      "destroy": 3.4
+    },
+    {
+      "great": 9,
+      "success": 55,
+      "keep": 28.4,
+      "down": 4,
+      "destroy": 3.6
+    },
+    {
+      "great": 8.9,
+      "success": 54.9,
+      "keep": 28.2,
+      "down": 4.1,
+      "destroy": 3.9
+    },
+    {
+      "great": 8.9,
+      "success": 54.9,
+      "keep": 28,
+      "down": 4.1,
+      "destroy": 4.1
+    },
+    {
+      "great": 8.8,
+      "success": 54.8,
+      "keep": 27.8,
+      "down": 4.2,
+      "destroy": 4.4
+    },
+    {
+      "great": 8.7,
+      "success": 54.7,
+      "keep": 27.6,
+      "down": 4.3,
+      "destroy": 4.7
+    },
+    {
+      "great": 8.6,
+      "success": 54.6,
+      "keep": 27.4,
+      "down": 4.4,
+      "destroy": 5
+    },
+    {
+      "great": 8.5,
+      "success": 54.5,
+      "keep": 27.2,
+      "down": 4.5,
+      "destroy": 5.3
+    },
+    {
+      "great": 8.4,
+      "success": 54.4,
+      "keep": 27,
+      "down": 4.6,
+      "destroy": 5.6
+    },
+    {
+      "great": 8.4,
+      "success": 54.4,
+      "keep": 26.7,
+      "down": 4.6,
+      "destroy": 5.9
+    },
+    {
+      "great": 8.3,
+      "success": 54.3,
+      "keep": 26.4,
+      "down": 4.7,
+      "destroy": 6.3
+    },
+    {
+      "great": 8.2,
+      "success": 54.2,
+      "keep": 26.2,
+      "down": 4.8,
+      "destroy": 6.6
+    },
+    {
+      "great": 8.1,
+      "success": 54.1,
+      "keep": 25.9,
+      "down": 4.9,
+      "destroy": 7
+    },
+    {
+      "great": 8,
+      "success": 54,
+      "keep": 25.7,
+      "down": 5,
+      "destroy": 7.3
+    },
+    {
+      "great": 8,
+      "success": 54,
+      "keep": 25.3,
+      "down": 5,
+      "destroy": 7.7
+    },
+    {
+      "great": 7.9,
+      "success": 53.9,
+      "keep": 25,
+      "down": 5.1,
+      "destroy": 8.1
+    },
+    {
+      "great": 7.8,
+      "success": 53.8,
+      "keep": 24.7,
+      "down": 5.2,
+      "destroy": 8.5
+    },
+    {
+      "great": 7.7,
+      "success": 53.7,
+      "keep": 24.3,
+      "down": 5.3,
+      "destroy": 9
+    },
+    {
+      "great": 7.6,
+      "success": 53.6,
+      "keep": 24,
+      "down": 5.4,
+      "destroy": 9.4
+    },
+    {
+      "great": 7.6,
+      "success": 53.6,
+      "keep": 23.6,
+      "down": 5.4,
+      "destroy": 9.8
+    },
+    {
+      "great": 7.5,
+      "success": 53.5,
+      "keep": 23.2,
+      "down": 5.5,
+      "destroy": 10.3
+    },
+    {
+      "great": 7.4,
+      "success": 53.4,
+      "keep": 22.9,
+      "down": 5.6,
+      "destroy": 10.7
+    },
+    {
+      "great": 7.3,
+      "success": 53.3,
+      "keep": 22.5,
+      "down": 5.7,
+      "destroy": 11.2
+    },
+    {
+      "great": 7.2,
+      "success": 53.2,
+      "keep": 22.1,
+      "down": 5.8,
+      "destroy": 11.7
+    },
+    {
+      "great": 7.1,
+      "success": 53.1,
+      "keep": 21.7,
+      "down": 5.9,
+      "destroy": 12.2
+    },
+    {
+      "great": 7.1,
+      "success": 53.1,
+      "keep": 21.2,
+      "down": 5.9,
+      "destroy": 12.7
+    },
+    {
+      "great": 7,
+      "success": 53,
+      "keep": 20.8,
+      "down": 6,
+      "destroy": 13.2
+    },
+    {
+      "great": 6.9,
+      "success": 52.9,
+      "keep": 20.4,
+      "down": 6.1,
+      "destroy": 13.7
+    },
+    {
+      "great": 6.8,
+      "success": 52.8,
+      "keep": 20,
+      "down": 6.2,
+      "destroy": 14.2
+    },
+    {
+      "great": 6.7,
+      "success": 52.7,
+      "keep": 19.6,
+      "down": 6.3,
+      "destroy": 14.7
+    },
+    {
+      "great": 6.7,
+      "success": 52.7,
+      "keep": 19,
+      "down": 6.3,
+      "destroy": 15.3
+    },
+    {
+      "great": 6.6,
+      "success": 52.6,
+      "keep": 18.5,
+      "down": 6.4,
+      "destroy": 15.9
+    },
+    {
+      "great": 6.5,
+      "success": 52.5,
+      "keep": 18.1,
+      "down": 6.5,
+      "destroy": 16.4
+    },
+    {
+      "great": 6.4,
+      "success": 52.4,
+      "keep": 17.6,
+      "down": 6.6,
+      "destroy": 17
+    },
+    {
+      "great": 6.3,
+      "success": 52.3,
+      "keep": 17.1,
+      "down": 6.7,
+      "destroy": 17.6
+    },
+    {
+      "great": 6.2,
+      "success": 52.2,
+      "keep": 16.6,
+      "down": 6.8,
+      "destroy": 18.2
+    },
+    {
+      "great": 6.2,
+      "success": 52.2,
+      "keep": 16,
+      "down": 6.8,
+      "destroy": 18.8
+    },
+    {
+      "great": 6.1,
+      "success": 52.1,
+      "keep": 15.5,
+      "down": 6.9,
+      "destroy": 19.4
+    },
+    {
+      "great": 6,
+      "success": 52,
+      "keep": 15,
+      "down": 7,
+      "destroy": 20
+    }
+  ]
+}
