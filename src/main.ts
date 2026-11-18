@@ -10,6 +10,7 @@ import { ShopScene } from './presentation/scenes/ShopScene';
 import { SkillScene } from './presentation/scenes/SkillScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { H, W } from './presentation/theme';
+import { setupInstall } from './install';
 
 async function fontsReady() {
   const wanted = ['400 18px "Noto Sans KR"', '700 18px "Noto Sans KR"', '900 18px "Noto Sans KR"', '800 18px Cinzel'];
@@ -59,6 +60,7 @@ async function boot() {
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   goFullscreenOnTouch();
+  setupInstall();
   // Debug handle for manual testing in the browser console.
   (window as unknown as { __ftn: unknown }).__ftn = { core, game };
   document.getElementById('boot')?.remove();

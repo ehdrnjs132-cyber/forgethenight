@@ -1,9 +1,19 @@
 {
+  "id": "/",
   "name": "FORGE THE NIGHT",
   "short_name": "FORGE",
+  "description": "낮에는 벼리고, 밤에는 다른 세계의 대장장이와 싸운다.",
   "start_url": "/",
+  "scope": "/",
   "display": "fullscreen",
+  "display_override": ["fullscreen", "standalone"],
   "orientation": "landscape",
   "background_color": "#07060a",
-  "theme_color": "#07060a"
+  "theme_color": "#07060a",
+  "lang": "ko",
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
 }
