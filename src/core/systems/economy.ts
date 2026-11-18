@@ -3,6 +3,7 @@ import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_PRICES, SHOP_ORDER, type EnhanceIt
 import { Rng } from '../rng';
 import type { GameState, StockEntry } from '../state/types';
 import { findWeapon, removeWeapon } from './weapons';
+import { skillTotals } from './skills';
 
 /** §14 price, log-interpolated between table rows and rounded to a readable number. */
 export function salePrice(level: number): number {
@@ -33,7 +34,7 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
   if (prev.phase !== 'day') return { ok: false, reason: 'night' };
   const w = findWeapon(prev, weaponId);
   if (!w) return { ok: false, reason: 'no-weapon' };
-  const price = salePrice(w.level);
+  const price = sellPrice(prev, w.level);
   const state = removeWeapon(prev, weaponId);
   return {
     ok: true,
@@ -46,6 +47,18 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
       stats: { ...state.stats, sold: state.stats.sold + 1, goldEarned: state.stats.goldEarned + price },
     },
   };
+}
+
+/** Sale price including 상인의 눈 and other sale bonuses. */
+export function sellPrice(state: GameState, level: number): number {
+  const bonus = skillTotals(state, null).sellBonus;
+  return bonus > 0 ? roundPrice(salePrice(level) * (1 + bonus)) : salePrice(level);
+}
+
+/** What Morr asks today, after 단골 discounts. */
+export function shopPrice(state: GameState, entry: StockEntry): number {
+  const d = Math.min(0.5, skillTotals(state, null).discount);
+  return d > 0 ? Math.round((entry.price * (1 - d)) / 10) * 10 : entry.price;
 }
 
 // ───────────────────────── merchant
@@ -62,7 +75,8 @@ export function openMerchant(prev: GameState): GameState {
   for (const item of SHOP_ORDER) {
     const def = ITEMS[item];
     if (prev.day < def.fromDay) continue;
-    if (rng.next() >= def.chance) continue;
+    const chance = def.chance + (item === 'heart' ? skillTotals(prev, null).heartChance : 0);
+    if (rng.next() >= chance) continue;
     stock.push({ item, price: def.price, left: def.perVisit });
   }
   return { ...prev, rng: rng.state, merchant: { day: prev.day, stock } };
@@ -81,10 +95,11 @@ export function buy(prev: GameState, item: ItemId): BuyAttempt {
   if (!merchantHere(prev)) return { ok: false, reason: 'closed' };
   const entry = prev.merchant!.stock.find((s) => s.item === item);
   if (!entry || entry.left <= 0) return { ok: false, reason: 'sold-out' };
-  if (prev.gold < entry.price) return { ok: false, reason: 'gold' };
+  const price = shopPrice(prev, entry);
+  if (prev.gold < price) return { ok: false, reason: 'gold' };
   if (item === 'heart' && prev.lives >= MERCHANT.maxLives) return { ok: false, reason: 'max-lives' };
   const stock = prev.merchant!.stock.map((s) => (s.item === item ? { ...s, left: s.left - 1 } : s));
-  let state: GameState = { ...prev, gold: prev.gold - entry.price, merchant: { ...prev.merchant!, stock } };
+  let state: GameState = { ...prev, gold: prev.gold - price, merchant: { ...prev.merchant!, stock } };
   if (item === 'heart') state = { ...state, lives: state.lives + 1 };
   else state = { ...state, items: { ...state.items, [item]: itemCount(state, item) + 1 } };
   return { ok: true, state };

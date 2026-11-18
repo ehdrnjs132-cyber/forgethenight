@@ -1,7 +1,7 @@
 // TutorialManager state helpers (§8). Content lives in config/tutorials.ts.
 import type { GameState } from '../state/types';
 
-export type TutorialId = 'firstEnhance' | 'firstSale' | 'firstMerchant';
+export type TutorialId = 'firstEnhance' | 'firstSale' | 'firstMerchant' | 'firstSkillPoint';
 
 export function isTutorialDone(state: GameState, id: TutorialId): boolean {
   return state.tutorials[id] === true;

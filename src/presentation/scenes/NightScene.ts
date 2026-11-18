@@ -9,6 +9,8 @@ import { ENEMIES, HAMMER, PLAYER, SPAWN, WEAPON_ATTACK, WORLD, type AttackShape,
 import { CLASS_INFO, ELEMENT_INFO } from '../../config/weapons';
 import { NIGHT_SECONDS } from '../../config/rules';
 import { ITEMS, REVIVE } from '../../config/economy';
+import { ARMOR_CAP, BLAST, CHAIN, CHILL, CRIT_BASE, HEAL_ON_KILL, LAST_STAND_HP, QUAKE, type SkillEffects } from '../../config/skills';
+import { skillTotals } from '../../core/systems/skills';
 import { addXp, aliveTarget, enemyStats, formatDamage, hits, pickEnemy, weaponDamage, xpToNext } from '../../combat/rules';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
@@ -29,7 +31,27 @@ interface EnemyFields {
   radius: number;
   knockT: number;
   flashT: number;
+  // skill status effects
+  burnT: number;
+  burnDps: number;
+  burnTick: number;
+  slowT: number;
+  slow: number;
+  frozenT: number;
+  stunT: number;
 }
+
+/** A pending fire blast or ice shatter, processed a few per frame (§19 프레임당 처리 횟수). */
+interface Blast {
+  x: number;
+  y: number;
+  radius: number;
+  damage: number;
+  gen: number;
+  kind: 'fire' | 'ice';
+}
+
+const STATUS_RESET = { burnT: 0, burnDps: 0, burnTick: 0, slowT: 0, slow: 0, frozenT: 0, stunT: 0 };
 type Enemy = Phaser.Physics.Arcade.Sprite & EnemyFields;
 
 const SWING_WIDTH: Record<string, number> = { sword: 118, spear: 214, axe: 128, hammer: 96 };
@@ -39,6 +61,10 @@ export class NightScene extends Phaser.Scene {
   private nd!: NightData;
   private shape!: AttackShape;
   private damage = 0;
+  private sk!: Required<SkillEffects>;
+  private maxHp = PLAYER.maxHp;
+  private attackCount = 0;
+  private blasts: Blast[] = [];
   private duration = NIGHT_SECONDS;
   private sfx = new Sfx();
 
@@ -86,16 +112,33 @@ export class NightScene extends Phaser.Scene {
     this.core = this.registry.get('core') as GameCore;
     this.nd = data;
     const w = data.weapon;
-    this.shape = w.kind === 'weapon' ? WEAPON_ATTACK[w.weapon.cls] : HAMMER.attack;
-    this.damage = w.kind === 'weapon' ? weaponDamage(w.weapon.level, w.weapon.cls) : HAMMER.damage;
+    // Skills (§17): element nodes only count for the weapon's element (or at 50% with resonance).
+    const sk = skillTotals(this.core.state, w.kind === 'weapon' ? w.weapon.element : null);
+    this.sk = sk;
+    const base = w.kind === 'weapon' ? WEAPON_ATTACK[w.weapon.cls] : HAMMER.attack;
+    this.shape = {
+      ...base,
+      range: base.range * (1 + sk.area),
+      width: base.width ? base.width * (1 + sk.area * 0.5) : base.width,
+      interval: base.interval / (1 + sk.attackSpeed),
+      knockback: base.knockback * (1 + sk.knockback + sk.waterKnock),
+    };
+    const raw = w.kind === 'weapon' ? weaponDamage(w.weapon.level, w.weapon.cls) : HAMMER.damage;
+    const high = w.kind === 'weapon' && w.weapon.level >= 20 ? sk.highLevel : 0;
+    this.damage = Math.round(raw * (1 + sk.damage + sk.mastery + high));
+    this.maxHp = Math.round(PLAYER.maxHp + sk.maxHp);
     const override = Number(new URLSearchParams(location.search).get('night'));
     this.duration = override > 0 ? override : NIGHT_SECONDS;
     const p = this.core.state.player;
     Object.assign(this, {
-      hp: PLAYER.maxHp, invuln: 0, dodgeCd: 0, dodgeT: 0, facing: 0, elapsed: 0, attackT: 0.4, spawnT: 0,
+      hp: this.maxHp, attackCount: 0, blasts: [], invuln: 0, dodgeCd: 0, dodgeT: 0, facing: 0, elapsed: 0, attackT: 0.4, spawnT: 0,
       kills: 0, level: p.level, xp: p.xp, xpTotal: 0, ended: false, damageDealt: 0, hitsTaken: 0, gems: [], numbers: [], numberIdx: 0,
     });
     this.swing = { rot: 0, off: 0, alpha: 0 };
+  }
+
+  private get dodgeCooldown(): number {
+    return PLAYER.dodge.cooldown * (1 - Math.min(0.6, this.sk.dodgeCooldown));
   }
 
   private get cls(): string {
@@ -205,10 +248,12 @@ export class NightScene extends Phaser.Scene {
     this.invuln = Math.max(0, this.invuln - dt);
     this.dodgeCd = Math.max(0, this.dodgeCd - dt);
 
+    if (this.sk.regen > 0) this.hp = Math.min(this.maxHp, this.hp + this.sk.regen * dt);
     this.movePlayer(dt);
     this.steerEnemies(dt);
     this.spawn(dt);
     this.attack(dt);
+    this.processBlasts();
     this.collectGems(dt);
     this.placeSwing();
     this.renderHud();
@@ -231,12 +276,13 @@ export class NightScene extends Phaser.Scene {
     if ((Phaser.Input.Keyboard.JustDown(k.SPACE) || Phaser.Input.Keyboard.JustDown(k.SHIFT)) && this.dodgeCd <= 0) {
       this.dodgeDir = dir.lengthSq() > 0 ? dir.clone() : new Phaser.Math.Vector2(Math.cos(this.facing), Math.sin(this.facing));
       this.dodgeT = PLAYER.dodge.duration;
-      this.dodgeCd = PLAYER.dodge.cooldown;
+      this.dodgeCd = this.dodgeCooldown;
       this.invuln = Math.max(this.invuln, PLAYER.dodge.iframes);
       this.sfx.dodge();
       return;
     }
-    this.player.setVelocity(dir.x * PLAYER.speed, dir.y * PLAYER.speed);
+    const speed = PLAYER.speed * (1 + this.sk.moveSpeed);
+    this.player.setVelocity(dir.x * speed, dir.y * speed);
     if (dir.x !== 0) this.player.setFlipX(dir.x < 0);
     this.player.setAlpha(this.invuln > 0 && this.dodgeT <= 0 ? 0.55 + 0.45 * Math.sin(this.elapsed * 40) : 1);
   }
@@ -254,14 +300,33 @@ export class NightScene extends Phaser.Scene {
       if (!e.active) return true;
       if (e.flashT > 0) {
         e.flashT -= dt;
-        if (e.flashT <= 0) e.clearTint();
+        if (e.flashT <= 0) this.statusTint(e);
+      }
+      if (e.burnT > 0) {
+        e.burnT -= dt;
+        e.burnTick -= dt;
+        if (e.burnTick <= 0) {
+          e.burnTick = 0.5;
+          this.hurtEnemy(e, Math.max(1, Math.round(e.burnDps * 0.5)), { quiet: true, color: 0xff8a3a });
+          if (!e.active) return true;
+        }
+      }
+      if (e.slowT > 0) e.slowT -= dt;
+      if (e.frozenT > 0 || e.stunT > 0) {
+        e.frozenT = Math.max(0, e.frozenT - dt);
+        e.stunT = Math.max(0, e.stunT - dt);
+        if (e.knockT <= 0) e.setVelocity(0, 0);
+        else e.knockT -= dt;
+        if (e.frozenT <= 0 && e.stunT <= 0) this.statusTint(e);
+        return true;
       }
       if (e.knockT > 0) {
         e.knockT -= dt;
         return true;
       }
       const a = Math.atan2(py - e.y, px - e.x);
-      e.setVelocity(Math.cos(a) * e.speed, Math.sin(a) * e.speed);
+      const sp = e.speed * (e.slowT > 0 ? 1 - e.slow : 1);
+      e.setVelocity(Math.cos(a) * sp, Math.sin(a) * sp);
       e.setFlipX(px < e.x);
       return true;
     });
@@ -288,7 +353,7 @@ export class NightScene extends Phaser.Scene {
     e.setTexture(`enemy-${kind}`).setActive(true).setVisible(true).setAlpha(1).clearTint().setDepth(8);
     e.enableBody(true, x, y, true, true);
     e.setCircle(def.radius, e.width / 2 - def.radius, e.height / 2 - def.radius);
-    Object.assign(e, { kind, hp: stats.hp, maxHp: stats.hp, atk: stats.atk, speed: def.speed * Phaser.Math.FloatBetween(0.9, 1.15), radius: def.radius, knockT: 0, flashT: 0 });
+    Object.assign(e, { kind, hp: stats.hp, maxHp: stats.hp, atk: stats.atk, speed: def.speed * Phaser.Math.FloatBetween(0.9, 1.15), radius: def.radius, knockT: 0, flashT: 0, ...STATUS_RESET });
   }
 
   // ───────────────────────── attacking
@@ -317,20 +382,107 @@ export class NightScene extends Phaser.Scene {
       return;
     }
     this.attackT = this.shape.interval;
+    this.attackCount++;
     this.facing = Math.atan2(target.y - this.player.y, target.x - this.player.x);
     this.swingFx(this.facing);
     const px = this.player.x;
     const py = this.player.y;
-    let count = 0;
+    const hit: Enemy[] = [];
     this.enemies.children.each((obj) => {
       const e = obj as Enemy;
-      if (e.active && hits(this.shape, px, py, this.facing, e.x, e.y, e.radius)) {
-        this.hurtEnemy(e, this.damage);
-        count++;
-      }
+      if (e.active && hits(this.shape, px, py, this.facing, e.x, e.y, e.radius)) hit.push(e);
       return true;
     });
-    if (count) this.sfx.hit(count);
+    for (const e of hit) this.strike(e, this.damage);
+    if (hit.length) this.sfx.hit(hit.length);
+    if (this.sk.chainCount > 0 && hit.length) this.chain(hit[hit.length - 1], new Set(hit));
+    if (this.sk.quake > 0 && this.attackCount % QUAKE.every === 0) this.quake();
+  }
+
+  /** A weapon hit: crit roll, then the element riders (burn, chill, freeze). */
+  private strike(e: Enemy, base: number, scale = 1) {
+    const crit = Math.random() < this.sk.critChance;
+    const amount = Math.round(base * scale * (crit ? CRIT_BASE + this.sk.critDamage : 1));
+    if (this.sk.burn > 0) {
+      e.burnT = 2;
+      e.burnDps = Math.max(e.burnDps, (amount * this.sk.burn) / 2);
+    }
+    if (this.sk.chill > 0) {
+      e.slowT = CHILL.seconds;
+      e.slow = Math.min(0.8, this.sk.chill);
+    }
+    if (this.sk.freezeChance > 0 && Math.random() < this.sk.freezeChance) e.frozenT = CHILL.freezeSeconds;
+    this.hurtEnemy(e, amount, { crit });
+  }
+
+  /** 번개 연쇄: jump from the last target to the nearest enemies not yet hit. */
+  private chain(from: Enemy, done: Set<Enemy>) {
+    let src = { x: from.x, y: from.y };
+    const g = this.add.graphics().setDepth(13).setBlendMode(Phaser.BlendModes.ADD);
+    g.lineStyle(3, 0xb9e8ff, 1);
+    for (let i = 0; i < Math.round(this.sk.chainCount); i++) {
+      let best: Enemy | null = null;
+      let bestD = CHAIN.range * CHAIN.range;
+      this.enemies.children.each((obj) => {
+        const e = obj as Enemy;
+        if (!e.active || done.has(e)) return true;
+        const d = Phaser.Math.Distance.Squared(src.x, src.y, e.x, e.y);
+        if (d < bestD) {
+          bestD = d;
+          best = e;
+        }
+        return true;
+      });
+      if (!best) break;
+      const t = best as Enemy;
+      done.add(t);
+      // jagged bolt
+      g.beginPath();
+      g.moveTo(src.x, src.y);
+      for (let k = 1; k < 4; k++) g.lineTo(src.x + ((t.x - src.x) * k) / 4 + Phaser.Math.Between(-10, 10), src.y + ((t.y - src.y) * k) / 4 + Phaser.Math.Between(-10, 10));
+      g.lineTo(t.x, t.y);
+      g.strokePath();
+      src = { x: t.x, y: t.y };
+      this.strike(t, this.damage, this.sk.chainDamage);
+    }
+    this.tweens.add({ targets: g, alpha: 0, duration: 180, onComplete: () => g.destroy() });
+  }
+
+  /** 대지 충격파: a ring around the smith that pushes and stuns. */
+  private quake() {
+    const px = this.player.x;
+    const py = this.player.y;
+    const ring = this.add.image(px, py, 'ring').setTint(0xd9a066).setDepth(7).setScale(0.3).setAlpha(0.9);
+    this.tweens.add({ targets: ring, scale: (QUAKE.radius * 2) / 128, alpha: 0, duration: 320, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    this.cameras.main.shake(70, 0.003);
+    this.enemies.children.each((obj) => {
+      const e = obj as Enemy;
+      if (!e.active || Phaser.Math.Distance.Between(px, py, e.x, e.y) > QUAKE.radius + e.radius) return true;
+      if (this.sk.stun > 0) e.stunT = Math.max(e.stunT, this.sk.stun);
+      this.hurtEnemy(e, Math.round(this.damage * this.sk.quake), { knock: 2.2, color: 0xe8c08a });
+      return true;
+    });
+  }
+
+  private statusTint(e: Enemy) {
+    if (e.frozenT > 0) e.setTint(0x9fdcff);
+    else if (e.stunT > 0) e.setTint(0xe8c08a);
+    else e.clearTint();
+  }
+
+  /** Fire blasts and ice shatters, at most BLAST.perFrame per frame. */
+  private processBlasts() {
+    for (let n = 0; n < BLAST.perFrame && this.blasts.length; n++) {
+      const b = this.blasts.shift()!;
+      const col = b.kind === 'fire' ? 0xff7a2a : 0x9fdcff;
+      const ring = this.add.image(b.x, b.y, 'ring').setTint(col).setDepth(9).setBlendMode('ADD').setScale(0.2);
+      this.tweens.add({ targets: ring, scale: (b.radius * 2) / 128, alpha: 0, duration: 260, onComplete: () => ring.destroy() });
+      this.enemies.children.each((obj) => {
+        const e = obj as Enemy;
+        if (e.active && Phaser.Math.Distance.Between(b.x, b.y, e.x, e.y) <= b.radius + e.radius) this.hurtEnemy(e, b.damage, { gen: b.gen + 1, quiet: true, color: col });
+        return true;
+      });
+    }
   }
 
   private swingFx(angle: number) {
@@ -389,27 +541,45 @@ export class NightScene extends Phaser.Scene {
     this.swingImg.setPosition(this.player.x + Math.cos(s.rot) * s.off, this.player.y + 6 + Math.sin(s.rot) * s.off);
   }
 
-  private hurtEnemy(e: Enemy, amount: number) {
+  private hurtEnemy(e: Enemy, amount: number, o: { gen?: number; quiet?: boolean; crit?: boolean; knock?: number; color?: number } = {}) {
+    if (!e.active) return;
     e.hp -= amount;
     this.damageDealt += Math.min(amount, e.hp + amount);
     const killed = e.hp <= 0;
-    this.number(e.x, e.y - 18, formatDamage(amount), killed ? 0xffd34d : 0xffffff, killed ? 24 : 18);
+    // Riders (burn ticks, blasts) only show a number now and then to keep the screen readable.
+    if (!o.quiet || killed || Math.random() < 0.25) {
+      const color = o.crit ? 0xff9a2a : killed ? 0xffd34d : (o.color ?? 0xffffff);
+      this.number(e.x, e.y - 18, o.crit ? `${formatDamage(amount)}!` : formatDamage(amount), color, o.crit ? 28 : killed ? 24 : o.quiet ? 15 : 18);
+    }
     if (killed) {
-      this.killEnemy(e);
+      this.killEnemy(e, o.gen ?? 0);
       return;
     }
+    if (o.quiet) return;
     e.setTintFill(0xffffff);
     e.flashT = 0.06;
     const a = Math.atan2(e.y - this.player.y, e.x - this.player.x);
-    e.setVelocity(Math.cos(a) * this.shape.knockback, Math.sin(a) * this.shape.knockback);
+    const kb = this.shape.knockback * (o.knock ?? 1);
+    e.setVelocity(Math.cos(a) * kb, Math.sin(a) * kb);
     e.knockT = 0.14;
   }
 
-  private killEnemy(e: Enemy) {
+  private killEnemy(e: Enemy, gen = 0) {
     const { x, y, kind } = e;
     const def = ENEMIES[kind];
+    const wasFrozen = e.frozenT > 0;
     e.disableBody(true, true);
     this.kills++;
+    // 화염 폭발 (§18): the first blast is a roll, blast kills always chain; 5 generations, −20% each.
+    if (this.sk.blastChance > 0 && gen < BLAST.maxGen && (gen > 0 || Math.random() < this.sk.blastChance))
+      this.blasts.push({ x, y, radius: BLAST.radius, damage: Math.round(this.damage * this.sk.blastDamage * Math.pow(BLAST.falloff, gen)), gen, kind: 'fire' });
+    // 빙결 파쇄: shatter once; shatter kills do not shatter again.
+    if (wasFrozen && this.sk.shatter > 0 && gen < BLAST.maxGen)
+      this.blasts.push({ x, y, radius: CHILL.shatterRadius, damage: Math.round(this.damage * this.sk.shatter), gen: BLAST.maxGen - 1, kind: 'ice' });
+    if (this.sk.healOnKill > 0 && Math.random() < this.sk.healOnKill && this.hp < this.maxHp) {
+      this.hp = Math.min(this.maxHp, this.hp + HEAL_ON_KILL);
+      this.number(this.player.x, this.player.y - 34, `+${HEAL_ON_KILL}`, 0x6fe0ff, 16);
+    }
     this.sfx.kill();
     const burst = this.add.particles(x, y, 'spark', {
       speed: { min: 60, max: 220 },
@@ -420,7 +590,7 @@ export class NightScene extends Phaser.Scene {
     }).setDepth(9);
     burst.explode(10);
     this.time.delayedCall(420, () => burst.destroy());
-    this.dropGem(x, y, def.xp);
+    this.dropGem(x, y, def.xp * (1 + this.sk.xp));
     if (def.explode) this.slimeBlast(x, y, def.explode, e.atk);
   }
 
@@ -457,11 +627,13 @@ export class NightScene extends Phaser.Scene {
     this.hurtPlayer(e.atk);
   }
 
-  private hurtPlayer(amount: number) {
+  private hurtPlayer(raw: number) {
     if (this.invuln > 0 || this.ended) return;
+    const low = this.hp / this.maxHp < LAST_STAND_HP ? this.sk.lastStand : 0;
+    const amount = Math.max(1, Math.round(raw * (1 - Math.min(ARMOR_CAP, this.sk.armor + low))));
     this.hp = Math.max(0, this.hp - amount);
     this.hitsTaken++;
-    this.invuln = PLAYER.hurtInvuln;
+    this.invuln = PLAYER.hurtInvuln + this.sk.iframes;
     this.sfx.hurt();
     this.cameras.main.shake(90, 0.005);
     this.player.setTintFill(0xff4a4a);
@@ -473,7 +645,7 @@ export class NightScene extends Phaser.Scene {
   /** Revive stone (§15): used automatically on a fatal hit, saved at once. */
   private revive(): boolean {
     if (this.core.dispatch({ type: 'USE_REVIVE' }).type !== 'revived') return false;
-    this.hp = Math.round(PLAYER.maxHp * REVIVE.hpFraction);
+    this.hp = Math.round(this.maxHp * REVIVE.hpFraction);
     this.invuln = REVIVE.invuln;
     this.sfx.revive();
     this.cameras.main.flash(500, 255, 220, 120);
@@ -513,7 +685,7 @@ export class NightScene extends Phaser.Scene {
       if (!g.active) continue;
       const d = Phaser.Math.Distance.Between(g.x, g.y, px, py);
       let pull = g.getData('pull') as number;
-      if (d < PLAYER.pickupRadius || pull > 0) {
+      if (d < PLAYER.pickupRadius * (1 + this.sk.pickup) || pull > 0) {
         pull = Math.min(900, pull + 1600 * dt + 120);
         g.setData('pull', pull);
         const a = Math.atan2(py - g.y, px - g.x);
@@ -555,9 +727,9 @@ export class NightScene extends Phaser.Scene {
     h.hpBar.clear();
     h.hpBar.fillStyle(0x2a1416, 1);
     h.hpBar.fillRoundedRect(32, 42, hpw, 14, 4);
-    h.hpBar.fillStyle(this.hp / PLAYER.maxHp < 0.3 ? C.dangerHi : C.danger, 1);
-    h.hpBar.fillRoundedRect(32, 42, Math.max(0, (hpw * this.hp) / PLAYER.maxHp), 14, 4);
-    h.hpText.setText(`HP ${Math.ceil(this.hp)} / ${PLAYER.maxHp}`);
+    h.hpBar.fillStyle(this.hp / this.maxHp < 0.3 ? C.dangerHi : C.danger, 1);
+    h.hpBar.fillRoundedRect(32, 42, Math.max(0, (hpw * this.hp) / this.maxHp), 14, 4);
+    h.hpText.setText(`HP ${Math.ceil(this.hp)} / ${this.maxHp}`);
     const left = Math.max(0, this.duration - this.elapsed);
     h.timer.setText(`${Math.floor(left / 60)}:${String(Math.floor(left % 60)).padStart(2, '0')}`);
     h.kills.setText(`처치 ${this.kills}`);
@@ -571,7 +743,7 @@ export class NightScene extends Phaser.Scene {
     h.xpBar.fillStyle(0x3fc6e8, 1);
     h.xpBar.fillRoundedRect(W / 2 - xw / 2, H - 40, Math.max(4, (xw * this.xp) / need), 20, 6);
     h.xpText.setText(`Lv ${this.level}   ${this.xp} / ${need} XP`);
-    const ready = 1 - this.dodgeCd / PLAYER.dodge.cooldown;
+    const ready = 1 - this.dodgeCd / this.dodgeCooldown;
     h.dodge.clear();
     h.dodge.fillStyle(0x15303a, 1);
     h.dodge.fillRoundedRect(220, 64, 80, 8, 3);

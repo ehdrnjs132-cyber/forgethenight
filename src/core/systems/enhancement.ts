@@ -7,6 +7,7 @@ import type { GameState, Weapon } from '../state/types';
 import { findWeapon, isLastWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
 import { consume, isArmed } from './economy';
+import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 
 /** Percentage-point adjustments from totems, skills and items (§16). Keep absorbs the rest. */
@@ -19,7 +20,12 @@ export interface EnhanceMods {
 
 /** Bonuses for the next attempt: switched-on stones now; totems and skills hook in here (M5, M6). */
 export function collectEnhanceMods(state: GameState, weapon: Weapon): EnhanceMods {
-  const mods: EnhanceMods = {};
+  const sk = skillTotals(state, null);
+  const mods: EnhanceMods = {
+    ...(sk.enhanceGreat ? { great: sk.enhanceGreat } : {}),
+    ...(sk.enhanceSuccess ? { success: sk.enhanceSuccess } : {}),
+    ...(sk.enhanceSafety ? { destroy: -sk.enhanceSafety } : {}),
+  };
   if (isArmed(state, 'luck')) {
     mods.great = (mods.great ?? 0) + LUCK_BONUS.great;
     mods.success = (mods.success ?? 0) + LUCK_BONUS.success;

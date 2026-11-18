@@ -7,6 +7,7 @@ import { enhance, type EnhanceBlock, type EnhanceOptions, type EnhanceResult } f
 import { equip, grantDaily, type GrantResult } from './systems/weapons';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
+import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/skills';
 import { completeTutorial, type TutorialId } from './systems/tutorial';
 import { loseNight, startNight, winNight, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
@@ -23,7 +24,9 @@ export type Action =
   | { type: 'BUY'; item: ItemId }
   | { type: 'TOGGLE_ITEM'; item: EnhanceItem }
   | { type: 'UNDO_ENHANCE' }
-  | { type: 'USE_REVIVE' };
+  | { type: 'USE_REVIVE' }
+  | { type: 'LEARN_SKILL'; id: string }
+  | { type: 'RESET_SKILLS' };
 
 export type ActionResult =
   | { type: 'enhanced'; result: EnhanceResult }
@@ -40,6 +43,10 @@ export type ActionResult =
   | { type: 'undoBlocked'; reason: UndoBlock }
   | { type: 'revived' }
   | { type: 'noRevive' }
+  | { type: 'learned'; id: string }
+  | { type: 'learnBlocked'; reason: LearnBlock }
+  | { type: 'skillsReset'; refunded: number }
+  | { type: 'resetBlocked'; reason: ResetBlock }
   | { type: 'ok' };
 
 export interface GameEvents {
@@ -242,6 +249,20 @@ export class GameCore {
         if (this.state.phase !== 'night' || itemCount(this.state, 'revive') <= 0) return { type: 'noRevive' };
         this.commit(consume(this.state, 'revive'));
         return { type: 'revived' };
+      }
+      case 'LEARN_SKILL': {
+        const r = learn(this.state, action.id);
+        if (!r.ok) return { type: 'learnBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'learned', id: action.id };
+      }
+      case 'RESET_SKILLS': {
+        const r = resetSkills(this.state);
+        if (!r.ok) return { type: 'resetBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'skillsReset', refunded: r.refunded };
       }
     }
   }

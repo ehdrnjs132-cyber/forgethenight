@@ -16,7 +16,7 @@ import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
 import type { NightData } from './NightScene';
-import { canUndo, itemCount, isArmed, merchantHere, salePrice } from '../../core/systems/economy';
+import { canUndo, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
 import { StoneChip } from '../ui/stoneChip';
@@ -60,6 +60,8 @@ export class ForgeScene extends Phaser.Scene {
   private nightBtn!: Button;
   private undoBtn!: Button;
   private shopBtn!: Button;
+  private skillBtn!: Button;
+  private skillPulse: Phaser.Tweens.Tween | null = null;
   private stoneTitle!: Phaser.GameObjects.Text;
   private stoneChips: StoneChip[] = [];
   private toastBox!: Phaser.GameObjects.Container;
@@ -72,6 +74,7 @@ export class ForgeScene extends Phaser.Scene {
     this.core = this.registry.get('core') as GameCore;
     this.animating = false;
     this.stoneChips = [];
+    this.skillPulse = null;
     this.buildBackground();
     this.buildTopBar();
     this.buildInventory();
@@ -99,6 +102,7 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-N', () => this.startNight());
     kb.on('keydown-S', () => this.trySell());
     kb.on('keydown-M', () => this.openShop());
+    kb.on('keydown-K', () => this.openSkills());
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (p.x < LIST.x + LIST.w) this.scroll(Math.sign(dy));
     });
@@ -111,6 +115,9 @@ export class ForgeScene extends Phaser.Scene {
     else if (this.core.lastGrant.length && merchantHere(this.core.state))
       this.toast(`DAY ${this.core.state.day} · 무기 ${this.core.lastGrant.length}자루 도착 · 상인 ${MERCHANT.name}가 대장간에 들렀습니다 (오늘 하루)`, C.goldHi);
     else if (this.core.lastGrant.length) this.toast(`DAY ${this.core.state.day} · 오늘의 무기 ${this.core.lastGrant.length}자루를 받았습니다`, C.goldHi);
+    // §8.5 첫 스킬 포인트: a short hint once, after the day's own message.
+    if (this.core.state.player.skillPoints > 0 && !isTutorialDone(this.core.state, 'firstSkillPoint'))
+      this.time.delayedCall(3200, () => this.toast('첫 스킬 포인트를 얻었습니다 · 상단의 스킬트리(K)에서 별자리를 이어 보세요', 0x7fe9ff));
     this.core.notice = null;
     this.core.recoveredFromCorruption = false;
     this.core.lastGrant = [];
@@ -152,7 +159,8 @@ export class ForgeScene extends Phaser.Scene {
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
     this.goldText = label(this, W - 24, 32, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
-    this.shopBtn = new Button(this, 790, 32, 170, 42, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
+    this.skillBtn = new Button(this, 340, 32, 170, 42, '스킬트리', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
+    this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
   private drawLives(lives: number) {
@@ -423,7 +431,7 @@ export class ForgeScene extends Phaser.Scene {
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
     this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? '이 무기로 밤에 싸웁니다' : 'E');
     this.sellBtn.setEnabled(!!w && !this.animating);
-    this.sellBtn.setLabel('판매', w ? `${salePrice(w.level).toLocaleString()}G · S` : 'S');
+    this.sellBtn.setLabel('판매', w ? `${sellPrice(this.core.state, w.level).toLocaleString()}G · S` : 'S');
     this.renderItems();
     const armed = equippedWeapon(this.core.state);
     const hammer = this.core.state.weapons.length === 0;
@@ -461,6 +469,21 @@ export class ForgeScene extends Phaser.Scene {
     this.undoBtn.setVisible(undoable);
     if (undoable) this.undoBtn.setLabel(`⟲ 시간 역행석 사용 (보유 ${itemCount(s, 'timeStone')})`);
     this.shopBtn.setVisible(merchantHere(s));
+    const pts = s.player.skillPoints;
+    this.skillBtn.setLabel('스킬트리', pts > 0 ? `포인트 ${pts} · K` : `Lv ${s.player.level} · K`);
+    if (pts > 0 && !this.skillPulse) this.skillPulse = this.tweens.add({ targets: this.skillBtn, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    else if (pts === 0 && this.skillPulse) {
+      this.skillPulse.remove();
+      this.skillPulse = null;
+      this.skillBtn.setScale(1);
+    }
+  }
+
+  private openSkills() {
+    if (this.animating || this.leaving) return;
+    this.sfx.click();
+    this.scene.launch('Skills');
+    this.scene.pause();
   }
 
   private toggleStone(item: EnhanceItem) {
@@ -486,7 +509,7 @@ export class ForgeScene extends Phaser.Scene {
     if (this.animating || this.leaving) return;
     const w = this.selected();
     if (!w) return;
-    const price = salePrice(w.level);
+    const price = sellPrice(this.core.state, w.level);
     const name = `${weaponName(w)} +${w.level}`;
     if (!isTutorialDone(this.core.state, 'firstSale')) {
       // §8.5 첫 무기 판매: one short explanation, then it never asks just for being a sale again.

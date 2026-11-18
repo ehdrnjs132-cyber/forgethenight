@@ -2,7 +2,7 @@
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import type { BuyBlock } from '../../core/systems/economy';
-import { itemCount } from '../../core/systems/economy';
+import { itemCount, shopPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ITEMS, MERCHANT, type ItemId } from '../../config/economy';
 import { C, H, W, label, panel } from '../theme';
@@ -10,8 +10,8 @@ import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
 
 const PW = 960;
-const PH = 580;
-const ROW_H = 64;
+const PH = 640;
+const ROW_H = 60;
 
 const BLOCK_TEXT: Record<BuyBlock, string> = {
   closed: '오늘은 가게를 닫았다네.',
@@ -109,9 +109,10 @@ export class ShopScene extends Phaser.Scene {
       const name = label(this, x0 + 74, y + 9, def.name, 17, e.left > 0 ? C.text : C.dim, { weight: 900 });
       const owned = e.item === 'heart' ? '' : `  ·  보유 ${itemCount(s, e.item)}`;
       const left = label(this, x0 + 74 + name.width + 10, y + 12, `남은 ${e.left}${owned}`, 12, C.mute, { weight: 700 });
-      const desc = label(this, x0 + 74, y + 37, def.desc, 12, C.mute);
-      const afford = s.gold >= e.price;
-      const price = label(this, x0 + rw - 160, y + ROW_H / 2, `${e.price.toLocaleString()}G`, 18, afford ? C.goldHi : C.dim, { weight: 900, origin: [1, 0.5] });
+      const desc = label(this, x0 + 74, y + 34, def.desc, 12, C.mute);
+      const cost = shopPrice(s, e);
+      const afford = s.gold >= cost;
+      const price = label(this, x0 + rw - 160, y + ROW_H / 2, `${cost.toLocaleString()}G${cost < e.price ? ` (−${Math.round((1 - cost / e.price) * 100)}%)` : ''}`, 18, afford ? C.goldHi : C.dim, { weight: 900, origin: [1, 0.5] });
       const blocked = e.left <= 0 || !afford || (e.item === 'heart' && s.lives >= MERCHANT.maxLives);
       const btn = new Button(this, x0 + rw - 76, y + ROW_H / 2, 128, 46, e.left > 0 ? '구매' : '품절', {
         variant: blocked ? 'dark' : 'gold',
