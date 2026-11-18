@@ -1,6 +1,24 @@
 services:
+  # The game (static, never sleeps).
   - type: web
     name: forge-the-night
     runtime: static
     buildCommand: npm ci && npm run build
     staticPublishPath: ./dist
+
+  # Accounts and the ranking (server/index.js). Free web services sleep after 15 idle minutes;
+  # the game keeps working meanwhile and the ranking loads once it wakes (~30 s).
+  - type: web
+    name: forge-the-night-api
+    runtime: node
+    plan: free
+    buildCommand: npm ci --omit=dev
+    startCommand: node server/index.js
+    healthCheckPath: /healthz
+    envVars:
+      # Google OAuth web client id (…apps.googleusercontent.com). Turns on Google sign-in.
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      # Postgres connection string (Neon / Supabase / Render). Keeps the ranking across restarts.
+      - key: DATABASE_URL
+        sync: false

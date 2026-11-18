@@ -19,6 +19,7 @@ import type { NightData } from './NightScene';
 import type { CinematicData } from './CinematicScene';
 import { INTRO } from '../../config/cinematics';
 import { weaponDisplayName } from '../../config/swordNames';
+import { openRanking } from '../../online/ui';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
@@ -220,11 +221,12 @@ export class ForgeScene extends Phaser.Scene {
     g.lineStyle(1, C.edge, 1);
     g.lineBetween(0, 64.5, W, 64.5);
     label(this, 24, 32, 'FORGE THE NIGHT', 20, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
-    this.dayText = label(this, 640, 32, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
+    this.dayText = label(this, 664, 32, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
     this.goldText = label(this, W - 24, 32, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
-    new Button(this, 500, 32, 110, 36, '인트로 보기', {
+    new Button(this, 573, 32, 84, 36, '🏆 랭킹', { variant: 'gold', size: 13, onClick: () => void openRanking() });
+    new Button(this, 479, 32, 96, 36, '인트로 보기', {
       variant: 'ghost',
       size: 13,
       onClick: () => {

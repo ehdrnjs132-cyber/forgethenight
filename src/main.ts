@@ -11,6 +11,9 @@ import { SkillScene } from './presentation/scenes/SkillScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { H, W } from './presentation/theme';
 import { setupInstall } from './install';
+import { account, submitBest } from './online/account';
+import { showLoginIfNeeded } from './online/ui';
+import { weaponDisplayName } from './config/swordNames';
 
 async function fontsReady() {
   const wanted = ['400 18px "Noto Sans KR"', '700 18px "Noto Sans KR"', '900 18px "Noto Sans KR"', '800 18px Cinzel'];
@@ -41,6 +44,24 @@ function goFullscreenOnTouch() {
   document.addEventListener('pointerup', enter);
 }
 
+/** Login screen on first launch, and every new personal best goes to the ranking (real save slot only). */
+function setupOnline(core: GameCore) {
+  if (new URLSearchParams(location.search).has('slot')) return;
+  showLoginIfNeeded();
+  const report = (level: number, weapon: string) => void submitBest(level, weapon, core.state.day);
+  core.on('enhanced', (r) => {
+    if (r.weaponAfter) report(r.weaponAfter.level, `${weaponDisplayName(r.weaponAfter)}`);
+  });
+  // a best made offline (or before signing in) is sent once an account exists
+  const catchUp = () => {
+    const best = core.records.bestLevel;
+    const held = core.state.weapons.find((w) => w.level === best);
+    if (best > 0) report(best, held ? weaponDisplayName(held) : '');
+  };
+  account.onChange(catchUp);
+  catchUp();
+}
+
 async function boot() {
   await fontsReady();
   const core = new GameCore(browserStorage(new URLSearchParams(location.search).get('slot')));
@@ -61,6 +82,7 @@ async function boot() {
   });
   goFullscreenOnTouch();
   setupInstall();
+  setupOnline(core);
   // Debug handle for manual testing in the browser console.
   (window as unknown as { __ftn: unknown }).__ftn = { core, game };
   document.getElementById('boot')?.remove();
