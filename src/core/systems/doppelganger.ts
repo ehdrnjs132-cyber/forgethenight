@@ -3,6 +3,7 @@
 import { ENHANCE_TABLE, type Outcome } from '../../config/enhancement';
 import { CLASS_WORD, ELEMENT_TITLE, ELEMENT_WORD, ROLES, TEMPERAMENTS, nightPlan, type Temperament } from '../../config/doppelganger';
 import { ELEMENTS, MAX_LEVEL, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
+import { weaponDisplayName } from '../../config/swordNames';
 import { Rng } from '../rng';
 import { levelAfter, rollOutcome } from './enhancement';
 
@@ -113,6 +114,8 @@ export function generateNight(day: number, seed: number): { doppelgangers: Doppe
 
 /** "FIRE SWORD +??" before the showdown, "+43 THUNDER SPEAR" after. */
 export function weaponLabel(d: Doppelganger, revealed: boolean): string {
-  const w = `${ELEMENT_WORD[d.weapon.element]} ${CLASS_WORD[d.weapon.cls]}`;
-  return revealed ? `+${d.weapon.level} ${w}` : `${w} +??`;
+  // Hidden: only element and class (a sword's form name would give its level away).
+  if (!revealed) return `${ELEMENT_WORD[d.weapon.element]} ${CLASS_WORD[d.weapon.cls]} +??`;
+  const w = d.weapon.cls === 'sword' ? weaponDisplayName(d.weapon) : `${ELEMENT_WORD[d.weapon.element]} ${CLASS_WORD[d.weapon.cls]}`;
+  return `+${d.weapon.level} ${w}`;
 }

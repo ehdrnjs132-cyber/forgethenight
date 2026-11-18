@@ -9,7 +9,8 @@ import { weaponLabel, type Doppelganger } from '../../core/systems/doppelganger'
 import { skillTotals } from '../../core/systems/skills';
 import { formatDamage, hits, weaponDamage, xpToNext, addXp } from '../../combat/rules';
 import { HAMMER, type AttackShape } from '../../config/combat';
-import { CLASS_INFO, ELEMENT_INFO, type Element } from '../../config/weapons';
+import { ELEMENT_INFO, type Element } from '../../config/weapons';
+import { weaponDisplayName } from '../../config/swordNames';
 import { DOPPEL_COMBAT, REVEAL, TEMPERAMENTS } from '../../config/doppelganger';
 import { COMBOS, COMBO_COUNTER_WINDOW, DASH, DOPPEL_AI, ELEMENT_SKILL, HEAVY, HITSTOP, PLAYER_COMBAT, type MoveClass } from '../../config/hackslash';
 import { ITEMS, REVIVE } from '../../config/economy';
@@ -225,7 +226,7 @@ export class NightScene extends Phaser.Scene {
 
   private buildHud() {
     const nw = this.nd.weapon;
-    const name = nw.kind === 'weapon' ? `${ELEMENT_INFO[nw.weapon.element].name} ${CLASS_INFO[nw.weapon.cls].name} +${nw.weapon.level}` : HAMMER.name;
+    const name = nw.kind === 'weapon' ? `${weaponDisplayName(nw.weapon)} +${nw.weapon.level}` : HAMMER.name;
     const fix = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) => o.setScrollFactor(0).setDepth(100);
     const back = fix(this.add.graphics());
     back.fillStyle(0x000000, 0.55);

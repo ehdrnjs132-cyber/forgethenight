@@ -6,7 +6,7 @@ import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement
 import { equippedWeapon, findWeapon } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, appearanceStage } from '../../config/appearance';
-import { CLASS_INFO, ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
+import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
 import { START_LIVES } from '../../config/rules';
 import { C, DISPLAY, H, W, css, label, panel } from '../theme';
 import { Button } from '../ui/button';
@@ -18,6 +18,7 @@ import type { ModalData, ModalRequest } from './ModalScene';
 import type { NightData } from './NightScene';
 import type { CinematicData } from './CinematicScene';
 import { INTRO } from '../../config/cinematics';
+import { weaponDisplayName } from '../../config/swordNames';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
@@ -69,7 +70,7 @@ const ANVIL_X = 600;
 const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
 
-const weaponName = (w: Weapon) => `${ELEMENT_INFO[w.element].name} ${CLASS_INFO[w.cls].name}`;
+const weaponName = (w: Weapon) => weaponDisplayName(w);
 
 export class ForgeScene extends Phaser.Scene {
   private core!: GameCore;

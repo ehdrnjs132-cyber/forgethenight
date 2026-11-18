@@ -2,7 +2,8 @@
 // It only plays back a result the core already decided and saved (§6.4); it never rolls anything.
 import Phaser from 'phaser';
 import { OUTCOME_INFO } from '../../config/enhancement';
-import { CLASS_INFO, ELEMENT_INFO } from '../../config/weapons';
+import { ELEMENT_INFO } from '../../config/weapons';
+import { weaponDisplayName } from '../../config/swordNames';
 import { milestoneTier } from '../../config/appearance';
 import type { EnhanceResult } from '../../core/systems/enhancement';
 import { C, DISPLAY, FONT, css } from '../theme';
@@ -144,6 +145,10 @@ export class EnhancementPresentation {
     const before = result.weaponBefore.level;
     const after = result.weaponAfter?.level ?? null;
 
+    // A sword that reaches a new form shows its new name under the result.
+    const newName = result.weaponAfter ? weaponDisplayName(result.weaponAfter) : '';
+    const renamed = result.weaponAfter !== null && newName !== weaponDisplayName(result.weaponBefore) ? `  ·  「${newName}」` : '';
+
     // 1–2: raise, then a fast drop
     sfx.raise();
     await swing.raise();
@@ -167,14 +172,14 @@ export class EnhancementPresentation {
         this.ring(0xffffff, 1.8, 300);
         this.burst(Math.round(70 * density), [0xffd34d, 0xffe9a8, 0xffffff], { speed: [200, 680], life: 800 });
         weapon.flare(0xffd34d, 1.4);
-        this.banner(`${info.name}!`, `+${before} → +${after}`, info.color, 64);
+        this.banner(`${info.name}!`, `+${before} → +${after}${renamed}`, info.color, 64);
         break;
       case 'success':
         sfx.success();
         this.ring(0xff9a3c, 2.2);
         this.burst(Math.round(36 * density), [0xff9a3c, 0xffc46b, 0xff6a1f]);
         weapon.flare(0xff9a3c, 0.8);
-        this.banner(info.name, `+${before} → +${after}`, info.color);
+        this.banner(info.name, `+${before} → +${after}${renamed}`, info.color);
         break;
       case 'keep':
         sfx.keep();
@@ -185,7 +190,7 @@ export class EnhancementPresentation {
         sfx.down();
         this.crack();
         this.burst(Math.round(14 * density), [0xff4a4a, 0x8a1a1a], { speed: [80, 260] });
-        this.banner(info.name, `+${before} → +${after}`, info.color, 50);
+        this.banner(info.name, `+${before} → +${after}${renamed}`, info.color, 50);
         break;
       case 'destroy':
         sfx.shatter();
@@ -195,7 +200,7 @@ export class EnhancementPresentation {
         this.shatter(result);
         this.banner(
           info.name,
-          `${ELEMENT_INFO[result.weaponBefore.element].name} ${CLASS_INFO[result.weaponBefore.cls].name} +${before}이(가) 영구히 사라졌습니다`,
+          `${weaponDisplayName(result.weaponBefore)} +${before}이(가) 영구히 사라졌습니다`,
           C.dangerHi,
           60,
         );
