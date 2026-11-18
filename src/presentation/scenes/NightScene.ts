@@ -71,6 +71,8 @@ export class NightScene extends Phaser.Scene {
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private heroLight!: Phaser.GameObjects.Graphics;
+  /** 'hero_sword' etc. when the Higgsfield sheets for this weapon class are loaded. */
+  private heroAnim: string | null = null;
   private enemies!: Phaser.Physics.Arcade.Group;
   private gems: Phaser.GameObjects.Image[] = [];
   private swingImg!: Phaser.GameObjects.Image;
@@ -160,6 +162,7 @@ export class NightScene extends Phaser.Scene {
     edge.lineStyle(6, 0x3b2d1e, 1);
     edge.strokeRect(3, 3, WORLD.width - 6, WORLD.height - 6);
 
+    this.heroAnim = this.textures.exists(`anim-hero_${this.cls}_walk`) ? `hero_${this.cls}` : null;
     const heroArt = this.textures.exists('art-player_top');
     // Lantern light around the smith, so he reads instantly in a crowd.
     this.heroLight = this.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
@@ -168,7 +171,18 @@ export class NightScene extends Phaser.Scene {
       this.heroLight.fillCircle(0, 0, 36 + i * 22);
     }
     this.player = this.physics.add.sprite(WORLD.width / 2, WORLD.height / 2, heroArt ? 'art-player_top' : 'player').setDepth(10);
-    if (heroArt) {
+    if (this.heroAnim) {
+      // Higgsfield walk/attack sheets: the smith holds his actual weapon class and swings it himself.
+      this.player.setTexture(`anim-${this.heroAnim}_walk`, 0);
+      const k = 92 / this.player.height;
+      this.player.setScale(k);
+      const r = PLAYER.radius / k;
+      this.player.setCircle(r, this.player.width / 2 - r, this.player.height - r * 2.3);
+      this.player.play(`anim-${this.heroAnim}_walk`);
+      this.player.on(Phaser.Animations.Events.ANIMATION_COMPLETE, (anim: Phaser.Animations.Animation) => {
+        if (anim.key.endsWith('_attack')) this.player.play(`anim-${this.heroAnim}_walk`);
+      });
+    } else if (heroArt) {
       // 150 px art shown ~72 px tall; the body circle is given in texture pixels.
       const k = 72 / this.player.height;
       this.player.setScale(k);
@@ -325,7 +339,14 @@ export class NightScene extends Phaser.Scene {
     }
     const speed = PLAYER.speed * (1 + this.sk.moveSpeed);
     this.player.setVelocity(dir.x * speed, dir.y * speed);
-    if (dir.x !== 0) this.player.setFlipX(dir.x < 0);
+    const attacking = !!this.heroAnim && this.player.anims.currentAnim?.key.endsWith('_attack') && this.player.anims.isPlaying;
+    if (dir.x !== 0 && !attacking) this.player.setFlipX(dir.x < 0);
+    if (this.heroAnim && !attacking) {
+      // walk while moving, stand on the first frame when still
+      if (dir.lengthSq() > 0) {
+        if (!this.player.anims.isPlaying) this.player.play(`anim-${this.heroAnim}_walk`);
+      } else if (this.player.anims.isPlaying) this.player.anims.stop();
+    }
     this.player.setAlpha(this.invuln > 0 && this.dodgeT <= 0 ? 0.55 + 0.45 * Math.sin(this.elapsed * 40) : 1);
   }
 
@@ -389,13 +410,19 @@ export class NightScene extends Phaser.Scene {
     const d = Phaser.Math.Between(SPAWN.minDist, SPAWN.maxDist);
     const x = Phaser.Math.Clamp(this.player.x + Math.cos(a) * d, 40, WORLD.width - 40);
     const y = Phaser.Math.Clamp(this.player.y + Math.sin(a) * d, 40, WORLD.height - 40);
-    const tex = this.textures.exists(`art-${kind}`) ? `art-${kind}` : `enemy-${kind}`;
+    const walk = `anim-${kind}_walk`;
+    const animated = this.textures.exists(walk);
+    const tex = animated ? walk : this.textures.exists(`art-${kind}`) ? `art-${kind}` : `enemy-${kind}`;
     const e = this.enemies.get(x, y, tex) as Enemy | null;
     if (!e) return;
     const stats = enemyStats(kind, this.nd.day);
-    e.setTexture(tex).setActive(true).setVisible(true).setAlpha(1).clearTint().setDepth(8);
-    // Higgsfield sprites are drawn larger than the body; show them ~2.9× the body radius tall.
-    const k = tex.startsWith('art-') ? (def.radius * 3.4) / e.height : 1;
+    e.setTexture(tex, 0).setActive(true).setVisible(true).setAlpha(1).clearTint().setDepth(8);
+    if (animated) {
+      // each enemy starts its walk cycle at a different point so a crowd doesn't march in lockstep
+      e.play({ key: walk, startFrame: Phaser.Math.Between(0, Math.max(0, this.textures.get(walk).frameTotal - 2)), timeScale: Phaser.Math.FloatBetween(0.85, 1.15) });
+    } else e.anims?.stop();
+    // Higgsfield sprites are drawn larger than the body; show them ~3.4× the body radius tall.
+    const k = tex.startsWith('art-') || animated ? (def.radius * 3.6) / e.height : 1;
     e.setScale(k);
     e.enableBody(true, x, y, true, true);
     const r = def.radius / k;
@@ -431,7 +458,28 @@ export class NightScene extends Phaser.Scene {
     this.attackT = this.shape.interval;
     this.attackCount++;
     this.facing = Math.atan2(target.y - this.player.y, target.x - this.player.x);
+    if (this.heroAnim) {
+      // The smith swings for real: the attack sheet is squeezed into the attack interval and the
+      // blow lands on its impact frame (~45% in), together with the slash trail.
+      const key = `anim-${this.heroAnim}_attack`;
+      const anim = this.anims.get(key);
+      const natural = anim ? anim.duration : 400;
+      const ms = Math.min(natural, this.shape.interval * 1000 * 0.9);
+      this.player.setFlipX(Math.cos(this.facing) < 0);
+      this.player.play({ key, timeScale: natural / ms });
+      this.time.delayedCall(ms * 0.45, () => {
+        if (this.ended) return;
+        this.swingFx(this.facing);
+        this.resolveHit();
+      });
+      return;
+    }
     this.swingFx(this.facing);
+    this.resolveHit();
+  }
+
+  /** Apply the current swing to everything inside the attack shape. */
+  private resolveHit() {
     const px = this.player.x;
     const py = this.player.y;
     const hit: Enemy[] = [];
@@ -582,7 +630,9 @@ export class NightScene extends Phaser.Scene {
 
   private placeSwing() {
     const s = this.swing;
-    this.swingImg.setAlpha(s.alpha);
+    // with the animated smith, the weapon is in his hands: no separate floating weapon image
+    this.swingImg.setAlpha(this.heroAnim ? 0 : s.alpha);
+    if (this.heroAnim) return;
     if (s.alpha <= 0) return;
     this.swingImg.setRotation(s.rot);
     this.swingImg.setPosition(this.player.x + Math.cos(s.rot) * s.off, this.player.y + 6 + Math.sin(s.rot) * s.off);

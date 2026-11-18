@@ -6,7 +6,7 @@ import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement
 import { equippedWeapon, findWeapon } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, appearanceStage } from '../../config/appearance';
-import { CLASS_INFO, ELEMENT_INFO, MAX_LEVEL } from '../../config/weapons';
+import { CLASS_INFO, ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
 import { START_LIVES } from '../../config/rules';
 import { C, DISPLAY, H, W, css, label, panel } from '../theme';
 import { Button } from '../ui/button';
@@ -22,9 +22,42 @@ import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } 
 import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
 
-const LIST = { x: 24, y: 84, w: 316, h: 612, cardH: 66, gap: 8, top: 136 };
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
-const VISIBLE_CARDS = 7;
+/** Weapon rack on the left wall: 2 × 4 planks (8 slots, INVENTORY_CAP), the locked ones padlocked. */
+const RACK = { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
+/** Selected-weapon card under the rack. */
+const CARD = { x: 24, y: 490, w: 500, h: 226 };
+/**
+ * The blacksmith behind the anvil (one Higgsfield image or sprite sheet). `fx/fy` locate the anvil face
+ * inside each texture (fractions of its width/height), so the weapon lies exactly where the hammer lands.
+ */
+const STAGE = { x: 724, bottom: 714, height: 520 };
+
+/**
+ * Shelf centres and sizes measured on the painted rack in forge_rack_bg (1280×720 screen space),
+ * in slot order: left column top to bottom = 0,2,4,6 … laid out row by row (0 1 / 2 3 / 4 5 / 6 7).
+ */
+const PAINTED_SLOTS: { x: number; y: number; w: number; h: number }[] = [172, 257, 340, 422].flatMap((y) => [
+  { x: 200, y, w: 206, h: 72 },
+  { x: 417, y, w: 180, h: 72 },
+]);
+
+function rackSlot(i: number): { x: number; y: number; w: number; h: number } {
+  const p = PAINTED_SLOTS[i];
+  if (p) return p;
+  const col = i % RACK.cols;
+  const row = Math.floor(i / RACK.cols);
+  return {
+    x: RACK.x + col * (RACK.slotW + RACK.gapX) + RACK.slotW / 2,
+    y: RACK.y + row * (RACK.slotH + RACK.gapY) + RACK.slotH / 2,
+    w: RACK.slotW,
+    h: RACK.slotH,
+  };
+}
+const ANVIL_FACE: Record<string, { fx: number; fy: number }> = {
+  'art-smith_anvil': { fx: 0.62, fy: 0.585 },
+  'anim-forge_strike': { fx: 0.5, fy: 0.625 },
+};
 /** Anvil centre and the blacksmith standing to its right (hammer comes down from his right). */
 const ANVIL_X = 600;
 /**
@@ -42,15 +75,18 @@ export class ForgeScene extends Phaser.Scene {
   private fx!: EnhancementPresentation;
   private selectedId: string | null = null;
   private animating = false;
-  private listOffset = 0;
   /** Weapon the player already confirmed risking as their last one (asked once, §7.5 / §21.4). */
   private lastConfirmedId: string | null = null;
 
   private dayText!: Phaser.GameObjects.Text;
   private goldText!: Phaser.GameObjects.Text;
   private livesG!: Phaser.GameObjects.Graphics;
-  private listTitle!: Phaser.GameObjects.Text;
-  private list!: Phaser.GameObjects.Container;
+  private rackTitle!: Phaser.GameObjects.Text;
+  /** The rack is part of the background painting (forge_rack_bg). */
+  private painted = false;
+  private rack!: Phaser.GameObjects.Container;
+  /** Where the weapon lies on the anvil (and where the hammer lands). */
+  private face = { x: 640, y: 450 };
   private weaponView!: WeaponView;
   private hammer!: Phaser.GameObjects.Container;
   private swing!: Swing;
@@ -88,16 +124,17 @@ export class ForgeScene extends Phaser.Scene {
     this.skillPulse = null;
     this.buildBackground();
     this.buildTopBar();
-    this.buildInventory();
+    this.buildRack();
     this.buildAnvil();
     this.buildOdds();
     this.buildToast();
 
+    const staged = this.stageKey() !== null;
     this.fx = new EnhancementPresentation(this, {
       weapon: this.weaponView,
       swing: this.swing,
-      impact: this.textures.exists('art-anvil') ? IMPACT : { x: 686, y: 432 },
-      bannerAt: { x: 640, y: 292 },
+      impact: staged ? { x: this.face.x, y: this.face.y - 6 } : this.textures.exists('art-anvil') ? IMPACT : { x: 686, y: 432 },
+      bannerAt: staged ? { x: STAGE.x, y: 140 } : { x: 640, y: 292 },
       sfx: this.sfx,
     });
 
@@ -114,9 +151,6 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-S', () => this.trySell());
     kb.on('keydown-M', () => this.openShop());
     kb.on('keydown-K', () => this.openSkills());
-    this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (p.x < LIST.x + LIST.w) this.scroll(Math.sign(dy));
-    });
 
     this.leaving = false;
     this.refresh();
@@ -143,13 +177,15 @@ export class ForgeScene extends Phaser.Scene {
 
   // ───────────────────────── layout
   private buildBackground() {
-    if (this.textures.exists('art-forge_bg')) {
-      // Higgsfield forge interior; the furnace glow breathes on top of it.
-      this.add.image(W / 2, H / 2, 'art-forge_bg').setDisplaySize(W, H);
+    const bgKey = this.textures.exists('art-forge_rack_bg') ? 'art-forge_rack_bg' : 'art-forge_bg';
+    if (this.textures.exists(bgKey)) {
+      // Higgsfield forge interior (with the weapon rack painted on the wall); the furnace glow breathes on top.
+      this.add.image(W / 2, H / 2, bgKey).setDisplaySize(W, H);
       const fire = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
       for (let i = 5; i >= 1; i--) {
         fire.fillStyle(0xff7a2a, 0.02 * i);
-        fire.fillEllipse(W / 2, 250, 160 + i * 70, 120 + i * 40);
+        if (bgKey === 'art-forge_rack_bg') fire.fillEllipse(740, 330, 120 + i * 60, 90 + i * 36);
+        else fire.fillEllipse(W / 2, 250, 160 + i * 70, 120 + i * 40);
       }
       this.tweens.add({ targets: fire, alpha: 0.35, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const shade = this.add.graphics();
@@ -203,15 +239,43 @@ export class ForgeScene extends Phaser.Scene {
     }
   }
 
-  private buildInventory() {
-    const g = this.add.graphics();
-    panel(g, LIST.x, LIST.y, LIST.w, LIST.h);
-    this.listTitle = label(this, LIST.x + 20, LIST.y + 18, '', 16, C.gold, { weight: 900 });
-    label(this, LIST.x + LIST.w - 20, LIST.y + 20, '↑↓ 선택', 12, C.dim, { origin: [1, 0] });
-    this.list = this.add.container(0, 0);
+  /** The weapon rack hangs on the forge wall: no list window, the weapons themselves are the buttons. */
+  private buildRack() {
+    this.painted = this.textures.exists('art-forge_rack_bg');
+    if (!this.painted) {
+      // no painted rack yet: a plain timber board stands in for it
+      const g = this.add.graphics();
+      const w = RACK.cols * RACK.slotW + (RACK.cols - 1) * RACK.gapX + 20;
+      const h = (INVENTORY_CAP / RACK.cols) * (RACK.slotH + RACK.gapY) - RACK.gapY + 44;
+      g.fillStyle(0x1a110b, 0.82);
+      g.fillRoundedRect(RACK.x - 10, RACK.y - 34, w, h, 10);
+    }
+    // the rack belongs to the painting: only a small carved-sign style caption, no window
+    const t = rackSlot(0);
+    this.rackTitle = label(this, t.x - t.w / 2, t.y - t.h / 2 - 22, '', 15, C.goldHi, { weight: 900, origin: [0, 0.5] });
+    this.rackTitle.setStroke('#140a05', 6);
+    this.rack = this.add.container(0, 0);
+    // soft shadow behind the selected-weapon readout instead of a panel
+    const shade = this.add.graphics();
+    for (let i = 0; i < 8; i++) {
+      shade.fillStyle(0x000000, 0.07);
+      shade.fillRoundedRect(CARD.x - 10 + i * 6, CARD.y + 8 + i * 4, CARD.w + 20 - i * 12, CARD.h - 16 - i * 8, 30);
+    }
+  }
+
+  private stageKey(): string | null {
+    if (this.textures.exists('anim-forge_strike')) return 'anim-forge_strike';
+    if (this.textures.exists('art-smith_anvil')) return 'art-smith_anvil';
+    return null;
   }
 
   private buildAnvil() {
+    const key = this.stageKey();
+    if (key) {
+      this.buildStage(key);
+      this.buildAnvilTexts();
+      return;
+    }
     const g = this.add.graphics();
     const cx = ANVIL_X;
     // shadow under anvil and smith
@@ -287,6 +351,74 @@ export class ForgeScene extends Phaser.Scene {
     this.buildAnvilTexts();
   }
 
+  /**
+   * Front view: the blacksmith stands behind the anvil, so the weapon lies in front of him.
+   * With the Higgsfield strike sheet the hammer is a real animation (lift = the strike played backwards);
+   * with only the still image the pose squashes and stretches.
+   */
+  private buildStage(key: string) {
+    const isAnim = key.startsWith('anim-');
+    const shadow = this.add.graphics();
+    shadow.fillStyle(0x000000, 0.45);
+    shadow.fillEllipse(STAGE.x, STAGE.bottom - 6, 300, 36);
+    const s = isAnim ? this.add.sprite(STAGE.x, STAGE.bottom, key) : this.add.image(STAGE.x, STAGE.bottom, key);
+    s.setOrigin(0.5, 1);
+    const frames = isAnim ? this.textures.get(key).frameTotal - 1 : 1;
+    // idle: hammer raised and ready (frame 0), so the weapon on the anvil is fully visible
+    if (isAnim) (s as Phaser.GameObjects.Sprite).setFrame(0);
+    const k = STAGE.height / s.height;
+    s.setScale(k);
+    const f = ANVIL_FACE[key] ?? { fx: 0.6, fy: 0.58 };
+    this.face = { x: STAGE.x + (f.fx - 0.5) * s.width * k, y: STAGE.bottom - (1 - f.fy) * s.height * k };
+    // the weapon lies on the anvil, in front of the smith
+    this.weaponView = new WeaponView(this, this.face.x - 6, this.face.y - 4, 300);
+    const breathe = this.tweens.add({ targets: s, scaleY: k * 1.008, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+
+    if (isAnim) {
+      const sp = s as Phaser.GameObjects.Sprite;
+      // The Higgsfield clip: frames 0–8 swing the hammer back over his head, 9+ bring it down.
+      const SLAM = Math.min(9, frames - 2);
+      const mk = (name: string, from: number, to: number) => {
+        if (!this.anims.exists(name)) this.anims.create({ key: name, frames: this.anims.generateFrameNumbers(key, { start: from, end: to }), frameRate: 24 });
+      };
+      mk('forge-windup', 0, SLAM - 1);
+      mk('forge-slam', SLAM, frames - 1);
+      const play = (name: string, ms: number) =>
+        new Promise<void>((resolve) => {
+          sp.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => resolve());
+          const n = this.anims.get(name).frames.length;
+          sp.play({ key: name, frameRate: Math.max(8, (n * 1000) / ms) });
+        });
+      let back: Phaser.Time.TimerEvent | null = null;
+      this.swing = {
+        raise: () => {
+          breathe.pause();
+          back?.remove();
+          sp.setScale(k).setFrame(0);
+          return play('forge-windup', 300);
+        },
+        strike: () => play('forge-slam', 110),
+        recover: () => {
+          // hold the blow on the anvil for a beat, then lift back to the ready pose
+          back = this.time.delayedCall(650, () => {
+            sp.setFrame(0);
+            sp.setScale(k * 1.02, k * 0.97);
+            this.tweens.add({ targets: sp, scaleX: k, scaleY: k, duration: 220, ease: 'Back.easeOut', onComplete: () => breathe.resume() });
+          });
+        },
+      };
+      return;
+    }
+    this.swing = {
+      raise: () => {
+        breathe.pause();
+        return new Promise((r) => this.tweens.add({ targets: s, y: STAGE.bottom - 12, scaleY: k * 1.03, scaleX: k * 0.98, duration: 220, ease: 'Cubic.easeOut', onComplete: () => r() }));
+      },
+      strike: () => new Promise((r) => this.tweens.add({ targets: s, y: STAGE.bottom + 4, scaleY: k * 0.95, scaleX: k * 1.03, duration: 80, ease: 'Cubic.easeIn', onComplete: () => r() })),
+      recover: () => this.tweens.add({ targets: s, y: STAGE.bottom, scaleX: k, scaleY: k, duration: 360, ease: 'Back.easeOut', onComplete: () => breathe.resume() }),
+    };
+  }
+
   /** The blacksmith himself swings the hammer: two Higgsfield poses swapped on the beat. */
   private buildSmith() {
     const hasStrike = this.textures.exists('art-smith_strike');
@@ -323,18 +455,25 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private buildAnvilTexts() {
-    this.nameText = label(this, 640, 104, '', 24, C.text, { weight: 900, origin: [0.5, 0.5] });
+    // With the staged smith the readout lives in the card under the rack; otherwise above the anvil.
+    const staged = this.stageKey() !== null;
+    const cx = staged ? CARD.x + CARD.w / 2 : 640;
+    const y0 = staged ? CARD.y + 26 : 104;
+    const gap = staged ? { lv: 50, next: 98, dmg: 130, undo: 176 } : { lv: 64, next: 118, dmg: 152, undo: 196 };
+    this.nameText = label(this, cx, y0, '', 22, C.text, { weight: 900, origin: [0.5, 0.5] });
+    this.nameText.setStroke('#140a05', 6);
     this.levelText = this.add
-      .text(640, 168, '', { fontFamily: DISPLAY, fontSize: '76px', fontStyle: '800', color: css(C.goldHi), stroke: '#000000', strokeThickness: 8, resolution: 2 })
+      .text(cx, y0 + gap.lv, '', { fontFamily: DISPLAY, fontSize: staged ? '64px' : '76px', fontStyle: '800', color: css(C.goldHi), stroke: '#000000', strokeThickness: 8, resolution: 2 })
       .setOrigin(0.5);
-    this.nextText = label(this, 640, 222, '', 15, C.text, { weight: 700, origin: [0.5, 0.5] });
+    this.nextText = label(this, cx, y0 + gap.next, '', 14, C.text, { weight: 700, origin: [0.5, 0.5] });
+    this.nextText.setStroke('#140a05', 5);
     // How hard this weapon hits: the direct, readable payoff of every enhancement.
     this.damageText = this.add
-      .text(640, 256, '', { fontFamily: DISPLAY, fontSize: '26px', fontStyle: '900', color: '#ffe9a8', stroke: '#140a05', strokeThickness: 7, resolution: 2 })
+      .text(cx, y0 + gap.dmg, '', { fontFamily: DISPLAY, fontSize: '26px', fontStyle: '900', color: '#ffe9a8', stroke: '#140a05', strokeThickness: 7, resolution: 2 })
       .setOrigin(0.5);
-    this.starterHammer = this.add.image(ANVIL_X, 410, 'weapon-hammer').setScale(0.9).setVisible(false);
-    this.emptyText = label(this, 640, 300, '', 16, C.text, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: 560, lineSpacing: 8 });
-    this.undoBtn = new Button(this, 640, 300, 250, 40, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
+    this.starterHammer = this.add.image(staged ? this.face.x : ANVIL_X, staged ? this.face.y - 10 : 410, 'weapon-hammer').setScale(staged ? 0.62 : 0.9).setVisible(false);
+    this.emptyText = label(this, cx, y0 + gap.dmg, '', 14, C.text, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: CARD.w - 30, lineSpacing: 6 });
+    this.undoBtn = new Button(this, cx, y0 + gap.undo, 250, 36, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
   }
 
   private buildOdds() {
@@ -410,53 +549,106 @@ export class ForgeScene extends Phaser.Scene {
     this.dayText.setText(`DAY ${s.day}`);
     this.goldText.setText(`${s.gold.toLocaleString()} G`);
     this.drawLives(s.lives);
-    this.renderList();
+    this.renderRack();
     this.renderCenter();
     this.renderOdds();
   }
 
-  private renderList() {
+  /** 8 planks: weapons hang on the open ones in order, the rest are padlocked until a key is bought. */
+  private renderRack() {
     const s = this.core.state;
-    this.listTitle.setText(`무기 보관함  ${s.weapons.length} / ${s.inventoryCap}`);
-    this.list.removeAll(true);
-    const maxOffset = Math.max(0, s.weapons.length - VISIBLE_CARDS);
-    this.listOffset = Phaser.Math.Clamp(this.listOffset, 0, maxOffset);
-    s.weapons.slice(this.listOffset, this.listOffset + VISIBLE_CARDS).forEach((w, i) => {
-      const x = LIST.x + 12;
-      const y = LIST.top + i * (LIST.cardH + LIST.gap);
-      const sel = w.id === this.selectedId;
-      const eq = w.id === s.equippedId;
-      const card = this.add.container(x, y);
-      const bg = this.add.graphics();
-      bg.fillStyle(sel ? 0x2a2017 : 0x17130f, 1);
-      bg.fillRoundedRect(0, 0, LIST.w - 24, LIST.cardH, 8);
-      bg.lineStyle(sel ? 2 : 1, sel ? C.gold : C.edge, 1);
-      bg.strokeRoundedRect(0.5, 0.5, LIST.w - 25, LIST.cardH - 1, 8);
-      bg.fillStyle(ELEMENT_INFO[w.element].color, 1);
-      bg.fillRect(0, 10, 4, LIST.cardH - 20);
-      const tex = weaponTexture(w.cls, w.element);
-      let art: Phaser.GameObjects.GameObject;
-      if (this.textures.exists(tex)) {
-        const img = this.add.image(72, LIST.cardH / 2, tex);
-        img.setScale(Math.min(118 / img.width, (LIST.cardH - 12) / img.height));
-        if (glowStrength(w.level) > 0) img.preFX?.addGlow(ELEMENT_INFO[w.element].glow, Math.min(4, glowStrength(w.level) * 0.5), 0, false, 0.1, 8);
-        art = img;
-      } else {
-        const g = this.add.graphics({ x: 72, y: LIST.cardH / 2 });
-        drawWeapon(g, w, 118);
-        art = g;
+    this.rackTitle.setText(`무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  클릭해 선택`);
+    this.rack.removeAll(true);
+    const plank = !this.painted && this.textures.exists('art-rack_slot');
+    for (let i = 0; i < INVENTORY_CAP; i++) {
+      const r = rackSlot(i);
+      const SW = r.w;
+      const SH = r.h;
+      const slot = this.add.container(r.x, r.y);
+      const locked = i >= s.inventoryCap;
+      const w = locked ? undefined : s.weapons[i];
+      const sel = !!w && w.id === this.selectedId;
+      const eq = !!w && w.id === s.equippedId;
+      const parts: Phaser.GameObjects.GameObject[] = [];
+
+      if (sel) {
+        // firelight on the chosen weapon instead of a selection box
+        const glow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+        for (let k = 4; k >= 1; k--) {
+          glow.fillStyle(C.goldHi, 0.06 * k);
+          glow.fillEllipse(0, -8, SW * (0.7 + k * 0.12), SH * (0.5 + k * 0.18));
+        }
+        parts.push(glow);
+        this.tweens.add({ targets: glow, alpha: 0.55, duration: 700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       }
-      const nm = label(this, 140, 14, weaponName(w), 16, C.text, { weight: 700 });
-      const sub = label(this, 140, 38, eq ? '장착 중' : `DAY ${w.bornDay} 지급`, 12, eq ? C.gold : C.dim, { weight: 700 });
-      const lv = label(this, LIST.w - 40, LIST.cardH / 2, `+${w.level}`, 24, w.level >= 10 ? C.goldHi : C.text, { display: true, weight: 900, origin: [1, 0.5] });
-      const hit = this.add.zone(0, 0, LIST.w - 24, LIST.cardH).setOrigin(0).setInteractive({ useHandCursor: true });
-      hit.on('pointerup', () => this.select(w.id));
-      card.add([bg, art, nm, sub, lv, hit]);
-      this.list.add(card);
-    });
-    if (maxOffset > 0) {
-      const more = label(this, LIST.x + LIST.w / 2, LIST.y + LIST.h - 16, `휠로 스크롤 · ${this.listOffset + 1}–${Math.min(s.weapons.length, this.listOffset + VISIBLE_CARDS)}`, 12, C.dim, { origin: [0.5, 0.5] });
-      this.list.add(more);
+      if (plank) {
+        const p = this.add.image(0, 10, 'art-rack_slot');
+        p.setScale(SW / p.width).setTint(locked ? 0x5a5048 : 0xffffff);
+        parts.push(p);
+      } else if (!this.painted) {
+        const p = this.add.graphics();
+        p.fillStyle(locked ? 0x2a2018 : 0x4a3220, 1);
+        p.fillRoundedRect(-SW / 2, -6, SW, 30, 6);
+        parts.push(p);
+      }
+
+      if (locked) {
+        // the painted shelf sinks into shadow, and a padlock hangs from its hooks
+        const dark = this.add.graphics();
+        dark.fillStyle(0x000000, 0.45);
+        dark.fillRoundedRect(-SW / 2, -SH / 2 + 6, SW, SH - 4, 8);
+        const chain = this.add.graphics();
+        chain.lineStyle(3, 0x1e1a17, 1);
+        chain.lineBetween(-SW / 2 + 14, -6, -16, 2);
+        chain.lineBetween(SW / 2 - 14, -6, 16, 2);
+        parts.push(dark, chain);
+        if (this.textures.exists('art-padlock')) parts.push(this.add.image(0, 0, 'art-padlock').setScale(0.42));
+        if (i === s.inventoryCap) {
+          const t = label(this, 0, SH / 2 - 2, '상인의 열쇠로 열기', 11, C.text, { weight: 700, origin: [0.5, 0.5] });
+          t.setStroke('#140a05', 4);
+          parts.push(t);
+        }
+      } else if (w) {
+        const tex = weaponTexture(w.cls, w.element);
+        if (this.textures.exists(tex)) {
+          // hangs on the painted hooks, resting just above the shelf
+          const img = this.add.image(0, -10, tex);
+          img.setScale(Math.min((SW - 8) / img.width, 50 / img.height) * (sel ? 1.06 : 1));
+          const strength = glowStrength(w.level);
+          if (strength > 0) img.preFX?.addGlow(ELEMENT_INFO[w.element].glow, Math.min(5, strength * 0.6), 0, false, 0.1, 10);
+          parts.push(img);
+        } else {
+          const g = this.add.graphics({ x: -6, y: -4 });
+          drawWeapon(g, w, 170);
+          parts.push(g);
+        }
+        parts.push(
+          this.add
+            .text(SW / 2 - 8, -SH / 2 + 4, `+${w.level}`, { fontFamily: DISPLAY, fontSize: '22px', fontStyle: '900', color: css(w.level >= 10 ? C.goldHi : C.text), stroke: '#140a05', strokeThickness: 6, resolution: 2 })
+            .setOrigin(1, 0),
+        );
+        if (eq) {
+          const t = label(this, -SW / 2 + 4, -SH / 2 + 4, '장착', 13, C.goldHi, { weight: 900, origin: [0, 0] });
+          t.setStroke('#140a05', 5);
+          parts.push(t);
+        }
+      } else if (!this.painted) {
+        parts.push(label(this, 0, -4, '빈 걸이', 12, C.dim, { weight: 700, origin: [0.5, 0.5] }));
+      }
+
+      const hit = this.add.zone(0, 0, SW, SH).setInteractive({ useHandCursor: !!w || locked });
+      hit.on('pointerup', () => {
+        if (w) this.select(w.id);
+        else if (locked) {
+          this.sfx.denied();
+          this.toast(`잠긴 걸이입니다 · 상인 ${MERCHANT.name}에게서 무기보관함 열쇠를 사면 한 칸씩 열립니다`, C.mute);
+        }
+      });
+      hit.on('pointerover', () => w && slot.setScale(1.03));
+      hit.on('pointerout', () => slot.setScale(1));
+      parts.push(hit);
+      slot.add(parts);
+      this.rack.add(slot);
     }
   }
 
@@ -482,7 +674,7 @@ export class ForgeScene extends Phaser.Scene {
     this.tweens.add({ targets: this.damageText, scale: 1, duration: 420, ease: 'Back.easeOut', onComplete: () => this.damageText.setColor('#ffe9a8') });
     const pct = Math.round((d1 / d0 - 1) * 100);
     const t = this.add
-      .text(ANVIL_X + 40, 360, `${up ? '▲' : '▼'} ${formatDamage(d0)} → ${formatDamage(d1)}  (${up ? '+' : ''}${pct}%)`, {
+      .text(this.face.x, this.face.y - 110, `${up ? '▲' : '▼'} ${formatDamage(d0)} → ${formatDamage(d1)}  (${up ? '+' : ''}${pct}%)`, {
         fontFamily: DISPLAY,
         fontSize: up ? '30px' : '24px',
         fontStyle: '900',
@@ -495,7 +687,7 @@ export class ForgeScene extends Phaser.Scene {
       .setDepth(31)
       .setScale(0.6);
     this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: t, y: 320, alpha: 0, delay: 1100, duration: 500, onComplete: () => t.destroy() });
+    this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, delay: 1100, duration: 500, onComplete: () => t.destroy() });
   }
 
   private renderCenter() {
@@ -709,15 +901,9 @@ export class ForgeScene extends Phaser.Scene {
     if (!ws.length || this.animating) return;
     const i = Math.max(0, ws.findIndex((w) => w.id === this.selectedId));
     const ni = Phaser.Math.Clamp(i + dir, 0, ws.length - 1);
-    if (ni < this.listOffset) this.listOffset = ni;
-    if (ni >= this.listOffset + VISIBLE_CARDS) this.listOffset = ni - VISIBLE_CARDS + 1;
     this.select(ws[ni].id);
   }
 
-  private scroll(dir: number) {
-    this.listOffset += dir;
-    this.renderList();
-  }
 
   private equipSelected() {
     const w = this.selected();

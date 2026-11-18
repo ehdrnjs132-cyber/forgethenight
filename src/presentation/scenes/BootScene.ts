@@ -6,8 +6,18 @@ import { weaponImagePath, weaponTexture } from '../weaponArt';
 export const WORLD_ART = [
   'forge_bg', 'night_ground', 'anvil', 'smith_raise', 'smith_strike', 'skeleton', 'slime', 'player_top', 'morr',
   'prop_0', 'prop_1', 'prop_2', 'prop_3', 'prop_4', 'prop_5',
+  'forge_rack_bg', 'smith_anvil', 'rack_slot', 'padlock', 'lock_key', 'hero_sword', 'hero_spear', 'hero_axe', 'hero_hammer',
 ] as const;
 export const PROP_COUNT = 6;
+
+interface AnimSheet {
+  key: string;
+  frameW: number;
+  frameH: number;
+  frames: number;
+  fps: number;
+  loop: boolean;
+}
 
 /** Loads weapon art, generates the small effect textures, then opens the forge. */
 export class BootScene extends Phaser.Scene {
@@ -32,6 +42,23 @@ export class BootScene extends Phaser.Scene {
     // Higgsfield world art (tools/art/assets.ts). Missing files fall back to the drawn placeholders.
     for (const key of WORLD_ART) this.load.image(`art-${key}`, `assets/world/${key}.png`);
     this.load.image('weapon-hammer', 'assets/world/hammer.png');
+    // Higgsfield video → sprite sheets (tools/art/process-anims.ts). The manifest lists what exists.
+    this.load.json('anim-manifest', 'assets/anim/manifest.json');
+    this.load.once('filecomplete-json-anim-manifest', (_k: string, _t: string, data: AnimSheet[]) => {
+      if (!Array.isArray(data)) return;
+      for (const a of data) this.load.spritesheet(`anim-${a.key}`, `assets/anim/${a.key}.png`, { frameWidth: a.frameW, frameHeight: a.frameH });
+    });
+  }
+
+  /** Phaser animations named after the sheet: anim-<key>. */
+  private makeAnims() {
+    const data = this.cache.json.get('anim-manifest') as AnimSheet[] | undefined;
+    if (!Array.isArray(data)) return;
+    for (const a of data) {
+      const key = `anim-${a.key}`;
+      if (!this.textures.exists(key) || this.anims.exists(key)) continue;
+      this.anims.create({ key, frames: this.anims.generateFrameNumbers(key, { start: 0, end: a.frames - 1 }), frameRate: a.fps, repeat: a.loop ? -1 : 0 });
+    }
   }
 
   create() {
@@ -68,6 +95,7 @@ export class BootScene extends Phaser.Scene {
     g.generateTexture('ring', 128, 128);
     g.clear();
 
+    this.makeAnims();
     this.makeNightTextures(g);
     if (!this.textures.exists('weapon-hammer') || this.textures.get('weapon-hammer').key === '__MISSING') this.makeHammerTexture(g);
     g.destroy();

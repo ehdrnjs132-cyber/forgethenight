@@ -21,6 +21,13 @@ const SMITH =
   'a stocky middle-aged human blacksmith hero with a thick braided auburn beard, bald head with a soot smudge, ' +
   'muscular forearms, rolled-up linen sleeves, heavy brown leather apron, thick work gloves, sturdy boots';
 
+const HERO_WEAPON = {
+  sword: 'holding a plain steel longsword in his right hand, blade pointing forward and slightly down',
+  spear: 'holding a long wooden spear with a steel spearhead in both hands, pointing forward',
+  axe: 'holding a heavy steel battle axe in both hands at his side',
+  hammer: 'holding a heavy blacksmith forging hammer in his right hand',
+} as const;
+
 export const ASSETS: AssetSpec[] = [
   {
     key: 'forge_bg',
@@ -31,6 +38,19 @@ export const ASSETS: AssetSpec[] = [
       'tools, tongs and finished weapons hanging on the walls, barrels and a quench bucket, warm orange firelight spilling over a worn stone floor. ' +
       'The centre foreground floor is open and empty (an anvil will be placed there). The far left and far right edges are darker and calmer. ' +
       `${STYLE_V2} No characters, no text.`,
+  },
+  {
+    key: 'forge_rack_bg',
+    aspect: '16:9',
+    transparent: false,
+    refs: ['forge_bg'],
+    prompt:
+      'The same cozy blacksmith forge interior as the reference image, same style and colours, front view, at night. ' +
+      'On the LEFT wall hangs one large wooden weapon display rack, built into the wall: a sturdy timber frame with exactly 8 empty horizontal display shelves, ' +
+      'arranged as 2 columns by 4 rows, each shelf a dark wooden plank with two empty iron hooks for hanging one weapon horizontally. All 8 shelves are EMPTY, evenly spaced, clearly separated. ' +
+      'The rack fills the left 40 percent of the picture from near the top to the lower third. The glowing furnace is in the back centre-right. ' +
+      'The centre-right foreground floor is open and empty (a blacksmith and anvil will stand there). The far right edge is darker and calmer. ' +
+      `${STYLE_V2} No characters, no weapons on the rack, no text.`,
   },
   {
     key: 'night_ground',
@@ -93,6 +113,51 @@ export const ASSETS: AssetSpec[] = [
     refs: ['forge_bg'],
     prompt: 'Upper body portrait of a mysterious hooded travelling merchant with a long grey beard, glowing amber eyes in the shadow of the hood, a big patched backpack full of trinkets, holding a small lantern, sly friendly smile. ' + `${SPRITE} ${STYLE_V2}`,
   },
+  // 2026-11-18 round 2: front-view forge composition, weapon rack, armed hero key poses
+  {
+    key: 'smith_anvil',
+    aspect: '3:4',
+    transparent: true,
+    refs: ['smith_raise', 'anvil'],
+    prompt:
+      'Front view, camera facing the scene: the same blacksmith as the first reference image, identical design and colours, standing directly BEHIND the same heavy iron anvil on a tree stump as the second reference image. ' +
+      'The anvil is in the foreground and covers his legs; its flat top face is clear and empty at chest height of the viewer. Both his hands grip the forging hammer raised high above his head, ready to strike straight down onto the centre of the anvil. ' +
+      `Whole figure and whole anvil fully visible with empty margin above the hammer and around everything. ${SPRITE} ${STYLE_V2}`,
+  },
+  {
+    key: 'rack_slot',
+    aspect: '21:9',
+    transparent: true,
+    refs: ['forge_bg'],
+    prompt:
+      'A single empty wall-mounted weapon display board: a horizontal dark wooden plank with iron corner brackets and two empty iron hooks on top to hang one weapon horizontally, seen from the front. ' +
+      `Plain, no weapon on it. ${SPRITE} ${STYLE_V2}`,
+  },
+  {
+    key: 'padlock',
+    aspect: '1:1',
+    transparent: true,
+    refs: ['forge_bg'],
+    prompt: 'A big heavy old iron padlock with a keyhole and a rusty shackle, wrapped with a short length of iron chain, front view. ' + `${SPRITE} ${STYLE_V2}`,
+  },
+  {
+    key: 'lock_key',
+    aspect: '1:1',
+    transparent: true,
+    refs: ['forge_bg'],
+    prompt: 'An ornate antique iron-and-brass key for a weapon rack lock, Nordic knot pattern on the bow, lying diagonally. ' + `${SPRITE} ${STYLE_V2}`,
+  },
+  ...(['sword', 'spear', 'axe', 'hammer'] as const).map(
+    (w): AssetSpec => ({
+      key: `hero_${w}`,
+      aspect: '1:1',
+      transparent: true,
+      refs: ['player_top'],
+      prompt:
+        `The same blacksmith character as the reference image, identical design and colours, small game character seen from a top-down three-quarter view, facing right, ` +
+        `${HERO_WEAPON[w]}, ready combat stance. Full body in frame with wide empty margin on all sides for the weapon swing. ${SPRITE} ${STYLE_V2}`,
+    }),
+  ),
   // second wave: poses that must match the first smith image
   {
     key: 'smith_strike',

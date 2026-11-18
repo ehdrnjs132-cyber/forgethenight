@@ -13,6 +13,7 @@ type Box = { x0: number; y0: number; x1: number; y1: number };
 /** key → how to size it: a max width and/or height in px; `trim` crops transparent margins. */
 const JOBS: Record<string, { w?: number; h?: number; trim: boolean }> = {
   forge_bg: { w: 1280, trim: false },
+  forge_rack_bg: { w: 1280, trim: false },
   night_ground: { w: 768, trim: false },
   anvil: { w: 440, trim: true },
   hammer: { w: 420, trim: true },
@@ -22,6 +23,14 @@ const JOBS: Record<string, { w?: number; h?: number; trim: boolean }> = {
   slime: { h: 120, trim: true },
   player_top: { h: 150, trim: true },
   morr: { h: 380, trim: true },
+  smith_anvil: { h: 560, trim: true },
+  rack_slot: { w: 260, trim: true },
+  padlock: { h: 120, trim: true },
+  lock_key: { h: 120, trim: true },
+  hero_sword: { h: 300, trim: true },
+  hero_spear: { h: 300, trim: true },
+  hero_axe: { h: 300, trim: true },
+  hero_hammer: { h: 300, trim: true },
 };
 
 function alphaBox(png: PNG, b: Box = { x0: 0, y0: 0, x1: png.width - 1, y1: png.height - 1 }): Box {

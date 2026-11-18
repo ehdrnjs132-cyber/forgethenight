@@ -41,7 +41,7 @@ export const MAX_LEVEL = 50;
 /** Decision #3: one sword, one spear and one axe per day, element random. */
 export const DAILY_GRANT: readonly WeaponClass[] = WEAPON_CLASSES;
 
-/** Inventory: starts at 3 slots, bought up to 20 from the merchant (user decision 2026-11-18). */
+/** Weapon rack: 8 slots, 3 open at the start; each merchant key opens one more (user decision 2026-11-18). */
 export const INVENTORY_START = 3;
-export const INVENTORY_CAP = 20;
-export const INVENTORY_STEP = 2;
+export const INVENTORY_CAP = 8;
+export const INVENTORY_STEP = 1;

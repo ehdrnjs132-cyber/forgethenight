@@ -1,0 +1,90 @@
+[
+  {
+    "key": "forge_strike",
+    "frameW": 246,
+    "frameH": 560,
+    "frames": 14,
+    "fps": 24,
+    "loop": false
+  },
+  {
+    "key": "hero_sword_walk",
+    "frameW": 235,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 12,
+    "loop": true
+  },
+  {
+    "key": "hero_spear_walk",
+    "frameW": 291,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 12,
+    "loop": true
+  },
+  {
+    "key": "hero_axe_walk",
+    "frameW": 214,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 12,
+    "loop": true
+  },
+  {
+    "key": "hero_sword_attack",
+    "frameW": 297,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 24,
+    "loop": false
+  },
+  {
+    "key": "hero_spear_attack",
+    "frameW": 404,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 24,
+    "loop": false
+  },
+  {
+    "key": "hero_axe_attack",
+    "frameW": 226,
+    "frameH": 220,
+    "frames": 14,
+    "fps": 24,
+    "loop": false
+  },
+  {
+    "key": "hero_hammer_walk",
+    "frameW": 190,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 12,
+    "loop": true
+  },
+  {
+    "key": "hero_hammer_attack",
+    "frameW": 221,
+    "frameH": 220,
+    "frames": 12,
+    "fps": 24,
+    "loop": false
+  },
+  {
+    "key": "skeleton_walk",
+    "frameW": 131,
+    "frameH": 160,
+    "frames": 10,
+    "fps": 10,
+    "loop": true
+  },
+  {
+    "key": "slime_walk",
+    "frameW": 149,
+    "frameH": 150,
+    "frames": 10,
+    "fps": 12,
+    "loop": true
+  }
+]

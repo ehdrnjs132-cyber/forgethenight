@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { runWith, seedFor } from './helpers';
-import { bagPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
+import { keyPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
 import { effectiveRow, enhance } from '../src/core/systems/enhancement';
 import { ENHANCE_TABLE } from '../src/config/enhancement';
 import { GameCore } from '../src/core/game';
@@ -207,14 +207,14 @@ describe('enhancement cost and inventory upgrades (2026-11-18 feedback)', () => 
     expect(enhance({ ...s, gold: 0 }, 'w1')).toMatchObject({ ok: false, blocked: 'gold' });
   });
 
-  it('the bag adds two slots and the next one costs double', () => {
+  it('a key opens one rack slot and the next one costs double', () => {
     let s = { ...runWith([]), day: 3, gold: 10_000, inventoryCap: 3 };
     s = openMerchant({ ...s, merchant: null });
-    const bag = s.merchant!.stock.find((e) => e.item === 'bag')!;
-    expect(bag.price).toBe(bagPrice(s));
-    const r = buy(s, 'bag');
+    const key = s.merchant!.stock.find((e) => e.item === 'key')!;
+    expect(key.price).toBe(keyPrice(s));
+    const r = buy(s, 'key');
     if (!r.ok) throw new Error();
-    expect(r.state.inventoryCap).toBe(5);
-    expect(bagPrice(r.state)).toBe(bag.price * 2);
+    expect(r.state.inventoryCap).toBe(4);
+    expect(keyPrice(r.state)).toBe(key.price * 2);
   });
 });
