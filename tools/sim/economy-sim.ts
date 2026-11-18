@@ -2,27 +2,29 @@
 // 실행: npx tsx tools/sim/economy-sim.ts  →  docs/sim/economy-report.md
 import { writeFileSync } from 'node:fs';
 import { effectiveRow, levelAfter, rollOutcome } from '../../src/core/systems/enhancement';
-import { salePrice } from '../../src/core/systems/economy';
+import { enhanceCost, salePrice } from '../../src/core/systems/economy';
 import { ITEMS, MERCHANT } from '../../src/config/economy';
 
 const RUNS = 200_000;
 
-/** Push one +0 weapon until it reaches `target` (sell) or breaks (0 gold). */
-function run(target: number): { gold: number; tries: number } {
+/** Net gold: sale price minus the gold spent on attempts (enhancing costs gold since 2026-11-18). */
+function run(target: number): { gold: number; tries: number; sold: boolean } {
   let level = 0;
   let tries = 0;
+  let spent = 0;
   while (level < target) {
     tries++;
+    spent += enhanceCost(level);
     const next = levelAfter(level, rollOutcome(effectiveRow(level), Math.random()));
-    if (next === null) return { gold: 0, tries };
+    if (next === null) return { gold: -spent, tries, sold: false };
     level = next;
   }
-  return { gold: salePrice(level), tries };
+  return { gold: salePrice(level) - spent, tries, sold: true };
 }
 
 const lines: string[] = [];
 lines.push('# 경제 시뮬레이션 (§14)', '');
-lines.push(`무기 1자루를 목표 단계까지 강화한 뒤 판매, 도중에 파괴되면 0G. ${RUNS.toLocaleString()}회 몬테카를로. 하루 무기 3자루, 상인은 ${MERCHANT.every}일마다.`, '');
+lines.push(`무기 1자루를 목표 단계까지 강화한 뒤 판매, 도중에 파괴되면 판매액 0G. 표의 금액은 강화 비용을 뺀 순수익. ${RUNS.toLocaleString()}회 몬테카를로. 하루 무기 3자루, 상인은 ${MERCHANT.every}일마다.`, '');
 lines.push('| 목표 | 도달 확률 | 기대 판매액/자루 | 하루 기대 수입 | 상인 방문당(3일) | 평균 강화 횟수 |');
 lines.push('|---:|---:|---:|---:|---:|---:|');
 let best = { target: 0, ev: 0 };
@@ -34,7 +36,7 @@ for (const target of [0, 3, 5, 8, 10, 12, 15, 18, 20, 22, 25, 30]) {
     const r = run(target);
     gold += r.gold;
     tries += r.tries;
-    if (r.gold > 0) hit++;
+    if (r.sold) hit++;
   }
   const ev = gold / RUNS;
   if (ev > best.ev) best = { target, ev };

@@ -6,24 +6,33 @@ import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement
 import { equippedWeapon, findWeapon } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, appearanceStage } from '../../config/appearance';
-import { CLASS_INFO, ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
+import { CLASS_INFO, ELEMENT_INFO, MAX_LEVEL } from '../../config/weapons';
 import { START_LIVES } from '../../config/rules';
 import { C, DISPLAY, H, W, css, label, panel } from '../theme';
 import { Button } from '../ui/button';
 import { WeaponView } from '../ui/weaponView';
 import { drawWeapon, glowStrength, weaponTexture } from '../weaponArt';
 import { Sfx } from '../audio/sfx';
-import { EnhancementPresentation, HAMMER_IDLE } from '../fx/EnhancementPresentation';
+import { EnhancementPresentation, HAMMER_IDLE, type Swing } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
 import type { NightData } from './NightScene';
-import { canUndo, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
+import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
 import { StoneChip } from '../ui/stoneChip';
+import { formatDamage, weaponDamage } from '../../combat/rules';
 
 const LIST = { x: 24, y: 84, w: 316, h: 612, cardH: 66, gap: 8, top: 136 };
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
 const VISIBLE_CARDS = 7;
+/** Anvil centre and the blacksmith standing to its right (hammer comes down from his right). */
+const ANVIL_X = 600;
+/**
+ * He stands a little further back in the room (feet at y 548) so that his strike pose brings the hammer
+ * head down onto the anvil face. `strikeOriginX` keeps his body in place when the wider strike pose swaps in.
+ */
+const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
+const IMPACT = { x: 672, y: 462 };
 
 const weaponName = (w: Weapon) => `${ELEMENT_INFO[w.element].name} ${CLASS_INFO[w.cls].name}`;
 
@@ -44,6 +53,8 @@ export class ForgeScene extends Phaser.Scene {
   private list!: Phaser.GameObjects.Container;
   private weaponView!: WeaponView;
   private hammer!: Phaser.GameObjects.Container;
+  private swing!: Swing;
+  private damageText!: Phaser.GameObjects.Text;
   private nameText!: Phaser.GameObjects.Text;
   private levelText!: Phaser.GameObjects.Text;
   private nextText!: Phaser.GameObjects.Text;
@@ -84,8 +95,8 @@ export class ForgeScene extends Phaser.Scene {
 
     this.fx = new EnhancementPresentation(this, {
       weapon: this.weaponView,
-      hammer: this.hammer,
-      impact: { x: 686, y: 432 },
+      swing: this.swing,
+      impact: this.textures.exists('art-anvil') ? IMPACT : { x: 686, y: 432 },
       bannerAt: { x: 640, y: 292 },
       sfx: this.sfx,
     });
@@ -112,28 +123,43 @@ export class ForgeScene extends Phaser.Scene {
     const notice = this.core.notice;
     if (this.core.recoveredFromCorruption) this.toast('저장 데이터가 손상되어 직전 백업에서 복구했습니다.', C.dangerHi);
     else if (notice?.kind === 'abandoned') this.toast(`전투 도중 종료되어 패배로 처리했습니다 · 남은 목숨 ${notice.livesLeft}`, C.dangerHi);
-    else if (this.core.lastGrant.length && merchantHere(this.core.state))
-      this.toast(`DAY ${this.core.state.day} · 무기 ${this.core.lastGrant.length}자루 도착 · 상인 ${MERCHANT.name}가 대장간에 들렀습니다 (오늘 하루)`, C.goldHi);
-    else if (this.core.lastGrant.length) this.toast(`DAY ${this.core.state.day} · 오늘의 무기 ${this.core.lastGrant.length}자루를 받았습니다`, C.goldHi);
+    else {
+      const ov = this.core.lastOverflow;
+      const got = this.core.lastGrant.length;
+      const parts: string[] = [];
+      if (got) parts.push(`오늘의 무기 ${got}자루 도착`);
+      if (ov.count) parts.push(`보관함이 가득 차 ${ov.count}자루는 ${ov.gold}G에 팔았습니다`);
+      if ((got || ov.count) && merchantHere(this.core.state)) parts.push(`상인 ${MERCHANT.name} 방문 중`);
+      if (parts.length) this.toast(`DAY ${this.core.state.day} · ${parts.join(' · ')}`, ov.count ? C.text : C.goldHi);
+    }
     // §8.5 첫 스킬 포인트: a short hint once, after the day's own message.
     if (this.core.state.player.skillPoints > 0 && !isTutorialDone(this.core.state, 'firstSkillPoint'))
       this.time.delayedCall(3200, () => this.toast('첫 스킬 포인트를 얻었습니다 · 상단의 스킬트리(K)에서 별자리를 이어 보세요', 0x7fe9ff));
     this.core.notice = null;
     this.core.recoveredFromCorruption = false;
     this.core.lastGrant = [];
+    this.core.lastOverflow = { count: 0, gold: 0 };
   }
 
   // ───────────────────────── layout
   private buildBackground() {
-    const g = this.add.graphics();
-    g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
-    g.fillRect(0, 0, W, H);
-    const glow = this.add.graphics();
-    for (let i = 6; i >= 1; i--) {
-      glow.fillStyle(C.ember, 0.025 * i);
-      glow.fillEllipse(640, 760, 340 + i * 120, 260 + i * 70);
+    if (this.textures.exists('art-forge_bg')) {
+      // Higgsfield forge interior; the furnace glow breathes on top of it.
+      this.add.image(W / 2, H / 2, 'art-forge_bg').setDisplaySize(W, H);
+      const fire = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
+      for (let i = 5; i >= 1; i--) {
+        fire.fillStyle(0xff7a2a, 0.02 * i);
+        fire.fillEllipse(W / 2, 250, 160 + i * 70, 120 + i * 40);
+      }
+      this.tweens.add({ targets: fire, alpha: 0.35, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      const shade = this.add.graphics();
+      shade.fillStyle(0x000000, 0.28);
+      shade.fillRect(0, 0, W, H);
+    } else {
+      const g = this.add.graphics();
+      g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
+      g.fillRect(0, 0, W, H);
     }
-    this.tweens.add({ targets: glow, alpha: 0.7, duration: 1700, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.add.particles(0, 0, 'ember', {
       x: { min: 260, max: 1020 },
       y: H + 6,
@@ -187,10 +213,18 @@ export class ForgeScene extends Phaser.Scene {
 
   private buildAnvil() {
     const g = this.add.graphics();
-    const cx = 640;
-    // shadow
-    g.fillStyle(0x000000, 0.5);
-    g.fillEllipse(cx, 640, 420, 46);
+    const cx = ANVIL_X;
+    // shadow under anvil and smith
+    if (this.textures.exists('art-anvil')) {
+      g.fillStyle(0x000000, 0.4);
+      g.fillEllipse(SMITH.x + 10, SMITH.y - 4, 200, 26);
+      g.fillEllipse(cx, 706, 330, 34);
+      this.add.image(cx, 714, 'art-anvil').setOrigin(0.5, 1).setScale(0.7);
+      this.weaponView = new WeaponView(this, cx - 8, 454, 360);
+      this.buildSmith();
+      this.buildAnvilTexts();
+      return;
+    }
     // base, waist, body
     g.fillStyle(0x1b1b20, 1);
     g.fillRoundedRect(cx - 150, 590, 300, 44, 8);
@@ -245,15 +279,62 @@ export class ForgeScene extends Phaser.Scene {
     hg.fillPoints([corner(-half, -thick), corner(half, -thick), corner(half, -thick + 7), corner(-half, -thick + 7)].map(([x, y]) => new Phaser.Math.Vector2(x, y)), true);
     this.hammer.add(hg);
     this.hammer.setAngle(HAMMER_IDLE);
+    this.swing = {
+      raise: () => new Promise((r) => this.tweens.add({ targets: this.hammer, angle: 58, duration: 210, ease: 'Cubic.easeOut', onComplete: () => r() })),
+      strike: () => new Promise((r) => this.tweens.add({ targets: this.hammer, angle: 0, duration: 95, ease: 'Cubic.easeIn', onComplete: () => r() })),
+      recover: () => this.tweens.add({ targets: this.hammer, angle: HAMMER_IDLE, duration: 340, ease: 'Back.easeOut' }),
+    };
+    this.buildAnvilTexts();
+  }
 
+  /** The blacksmith himself swings the hammer: two Higgsfield poses swapped on the beat. */
+  private buildSmith() {
+    const hasStrike = this.textures.exists('art-smith_strike');
+    const strikeKey = hasStrike ? 'art-smith_strike' : 'art-smith_raise';
+    const strikeOx = hasStrike ? SMITH.strikeOriginX : 0.5;
+    const s = this.add.image(SMITH.x, SMITH.y, strikeKey).setOrigin(strikeOx, 1).setScale(SMITH.scale);
+    const breathe = this.tweens.add({ targets: s, scaleY: SMITH.scale * 1.012, duration: 1400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.swing = {
+      raise: () => {
+        breathe.pause();
+        s.setTexture('art-smith_raise').setOrigin(0.5, 1).setScale(SMITH.scale);
+        return new Promise((r) =>
+          this.tweens.add({ targets: s, y: SMITH.y - 10, scaleX: SMITH.scale * 0.97, scaleY: SMITH.scale * 1.03, duration: 210, ease: 'Cubic.easeOut', onComplete: () => r() }),
+        );
+      },
+      strike: () => {
+        s.setTexture(strikeKey).setOrigin(strikeOx, 1);
+        return new Promise((r) =>
+          this.tweens.add({ targets: s, y: SMITH.y + 4, x: SMITH.x - 14, scaleX: SMITH.scale * 1.04, scaleY: SMITH.scale * 0.96, duration: 80, ease: 'Cubic.easeIn', onComplete: () => r() }),
+        );
+      },
+      recover: () =>
+        this.tweens.add({
+          targets: s,
+          x: SMITH.x,
+          y: SMITH.y,
+          scaleX: SMITH.scale,
+          scaleY: SMITH.scale,
+          duration: 380,
+          ease: 'Back.easeOut',
+          onComplete: () => breathe.resume(),
+        }),
+    };
+  }
+
+  private buildAnvilTexts() {
     this.nameText = label(this, 640, 104, '', 24, C.text, { weight: 900, origin: [0.5, 0.5] });
     this.levelText = this.add
       .text(640, 168, '', { fontFamily: DISPLAY, fontSize: '76px', fontStyle: '800', color: css(C.goldHi), stroke: '#000000', strokeThickness: 8, resolution: 2 })
       .setOrigin(0.5);
-    this.nextText = label(this, 640, 226, '', 15, C.mute, { weight: 700, origin: [0.5, 0.5] });
-    this.starterHammer = this.add.image(640, 300, 'weapon-hammer').setScale(0.9).setVisible(false);
-    this.emptyText = label(this, 640, 396, '', 16, C.mute, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: 560, lineSpacing: 8 });
-    this.undoBtn = new Button(this, 640, 262, 250, 40, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
+    this.nextText = label(this, 640, 222, '', 15, C.text, { weight: 700, origin: [0.5, 0.5] });
+    // How hard this weapon hits: the direct, readable payoff of every enhancement.
+    this.damageText = this.add
+      .text(640, 256, '', { fontFamily: DISPLAY, fontSize: '26px', fontStyle: '900', color: '#ffe9a8', stroke: '#140a05', strokeThickness: 7, resolution: 2 })
+      .setOrigin(0.5);
+    this.starterHammer = this.add.image(ANVIL_X, 410, 'weapon-hammer').setScale(0.9).setVisible(false);
+    this.emptyText = label(this, 640, 300, '', 16, C.text, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: 560, lineSpacing: 8 });
+    this.undoBtn = new Button(this, 640, 300, 250, 40, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
   }
 
   private buildOdds() {
@@ -336,7 +417,7 @@ export class ForgeScene extends Phaser.Scene {
 
   private renderList() {
     const s = this.core.state;
-    this.listTitle.setText(`무기 보관함  ${s.weapons.length} / ${INVENTORY_CAP}`);
+    this.listTitle.setText(`무기 보관함  ${s.weapons.length} / ${s.inventoryCap}`);
     this.list.removeAll(true);
     const maxOffset = Math.max(0, s.weapons.length - VISIBLE_CARDS);
     this.listOffset = Phaser.Math.Clamp(this.listOffset, 0, maxOffset);
@@ -387,6 +468,34 @@ export class ForgeScene extends Phaser.Scene {
       const next = MILESTONES.find((m) => m.level > w.level);
       this.nextText.setText(w.level >= MAX_LEVEL ? '궁극의 무기 · 더 이상 강화할 수 없습니다' : next ? `다음 각성  +${next.level} ${next.name}  ·  ${next.level - w.level}단계 남음` : '');
     } else this.nextText.setText('');
+    this.damageText.setText(w ? `한 방 피해  ${formatDamage(weaponDamage(w.level, w.cls))}` : '');
+  }
+
+  /** On a level change, pop the damage readout and float the old → new numbers. */
+  private damagePop(before: Weapon, after: Weapon) {
+    const d0 = weaponDamage(before.level, before.cls);
+    const d1 = weaponDamage(after.level, after.cls);
+    if (d0 === d1) return;
+    const up = d1 > d0;
+    const col = up ? '#ffd34d' : '#ff6b6b';
+    this.damageText.setColor(col).setScale(up ? 1.5 : 1.25);
+    this.tweens.add({ targets: this.damageText, scale: 1, duration: 420, ease: 'Back.easeOut', onComplete: () => this.damageText.setColor('#ffe9a8') });
+    const pct = Math.round((d1 / d0 - 1) * 100);
+    const t = this.add
+      .text(ANVIL_X + 40, 360, `${up ? '▲' : '▼'} ${formatDamage(d0)} → ${formatDamage(d1)}  (${up ? '+' : ''}${pct}%)`, {
+        fontFamily: DISPLAY,
+        fontSize: up ? '30px' : '24px',
+        fontStyle: '900',
+        color: col,
+        stroke: '#140a05',
+        strokeThickness: 8,
+        resolution: 2,
+      })
+      .setOrigin(0.5)
+      .setDepth(31)
+      .setScale(0.6);
+    this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: 320, alpha: 0, delay: 1100, duration: 500, onComplete: () => t.destroy() });
   }
 
   private renderCenter() {
@@ -426,7 +535,11 @@ export class ForgeScene extends Phaser.Scene {
     this.statsText.setText(`누적 강화 ${st.enhanceAttempts}회 · 파괴 ${st.destroyed}자루 · 최고 +${st.bestLevel}`);
     const canEnhance = !!w && w.level < MAX_LEVEL && !this.animating;
     this.enhanceBtn.setEnabled(canEnhance);
-    this.enhanceBtn.setLabel(w && w.level >= MAX_LEVEL ? '최대 단계' : '강화', w && w.level >= MAX_LEVEL ? '+50 도달' : '무료 · Space');
+    const cost = w ? enhanceCost(w.level) : 0;
+    this.enhanceBtn.setLabel(
+      w && w.level >= MAX_LEVEL ? '최대 단계' : '강화',
+      w && w.level >= MAX_LEVEL ? '+50 도달' : w ? `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''} · Space` : 'Space',
+    );
     const eq = !!w && this.core.state.equippedId === w.id;
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
     this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? '이 무기로 밤에 싸웁니다' : 'E');
@@ -651,6 +764,10 @@ export class ForgeScene extends Phaser.Scene {
           },
         });
       } else if (res.reason === 'max-level') this.toast('+50에 도달한 무기는 더 강화할 수 없습니다');
+      else if (res.reason === 'gold') {
+        this.sfx.denied();
+        this.toast(`골드가 부족합니다 (강화 ${enhanceCost(w.level).toLocaleString()}G) · 무기를 팔아 골드를 마련하세요`, C.dangerHi);
+      }
       return;
     }
     if (res.type !== 'enhanced') return;
@@ -669,6 +786,7 @@ export class ForgeScene extends Phaser.Scene {
               this.levelText.setScale(r.outcome === 'great' ? 1.5 : 1.22);
               this.tweens.add({ targets: this.levelText, scale: 1, duration: 360, ease: 'Back.easeOut' });
             }
+            this.damagePop(r.weaponBefore, r.weaponAfter);
           }
         },
       })

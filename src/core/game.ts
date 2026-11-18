@@ -68,6 +68,8 @@ export class GameCore {
   recoveredFromCorruption: boolean;
   /** Weapons handed out by the most recent daily grant in this session (for a "you received" notice). */
   lastGrant: Weapon[] = [];
+  /** Deliveries that did not fit this morning and were sold at the +0 price. */
+  lastOverflow = { count: 0, gold: 0 };
   notice: LoadNotice | null = null;
   private readonly save: SaveManager;
   private listeners = new Map<keyof GameEvents, Set<AnyListener>>();
@@ -88,6 +90,7 @@ export class GameCore {
     // Today's weapons, once per day. A no-op if they were already handed out.
     const grant = this.beginDay(this.state);
     this.lastGrant = grant.granted;
+    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
     this.commit(grant.state);
   }
 
@@ -146,6 +149,7 @@ export class GameCore {
       const fresh = this.startRun(randomSeed(), this.state.tutorials);
       const grant = this.beginDay(fresh);
       this.lastGrant = grant.granted;
+    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
       this.commit(grant.state);
     } else {
       this.commit(r.state);
@@ -188,6 +192,7 @@ export class GameCore {
         this.addRecords({ kills: action.kills });
         const grant = this.beginDay(r.state);
         this.lastGrant = grant.granted;
+    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
         this.commit(grant.state);
         this.emit('changed', this.state);
         return {
@@ -211,6 +216,7 @@ export class GameCore {
         const fresh = this.startRun(action.seed ?? randomSeed(), this.state.tutorials);
         const grant = this.beginDay(fresh);
         this.lastGrant = grant.granted;
+    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
         this.commit(grant.state);
         this.emit('changed', this.state);
         return { type: 'ok' };

@@ -1,5 +1,6 @@
 // Selling (§14), the merchant Morr (§15) and the consumables he sells. Pure functions over GameState.
-import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_PRICES, SHOP_ORDER, type EnhanceItem, type ItemId } from '../../config/economy';
+import { BAG_BASE_PRICE, ENHANCE_COST_MIN, ENHANCE_COST_RATE, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_PRICES, SHOP_ORDER, type EnhanceItem, type ItemId } from '../../config/economy';
+import { INVENTORY_CAP, INVENTORY_START, INVENTORY_STEP } from '../../config/weapons';
 import { Rng } from '../rng';
 import type { GameState, StockEntry } from '../state/types';
 import { findWeapon, removeWeapon } from './weapons';
@@ -61,6 +62,17 @@ export function shopPrice(state: GameState, entry: StockEntry): number {
   return d > 0 ? Math.round((entry.price * (1 - d)) / 10) * 10 : entry.price;
 }
 
+/** Gold for one enhancement attempt: a share of the weapon's sale value (user decision 2026-11-18). */
+export function enhanceCost(level: number): number {
+  return Math.max(ENHANCE_COST_MIN, Math.round(salePrice(level) * ENHANCE_COST_RATE));
+}
+
+/** Next inventory upgrade: doubles with every one already bought. */
+export function bagPrice(state: GameState): number {
+  const bought = Math.max(0, Math.round((state.inventoryCap - INVENTORY_START) / INVENTORY_STEP));
+  return BAG_BASE_PRICE * 2 ** bought;
+}
+
 // ───────────────────────── merchant
 
 export function isMerchantDay(day: number): boolean {
@@ -77,7 +89,8 @@ export function openMerchant(prev: GameState): GameState {
     if (prev.day < def.fromDay) continue;
     const chance = def.chance + (item === 'heart' ? skillTotals(prev, null).heartChance : 0);
     if (rng.next() >= chance) continue;
-    stock.push({ item, price: def.price, left: def.perVisit });
+    if (item === 'bag' && prev.inventoryCap >= INVENTORY_CAP) continue;
+    stock.push({ item, price: item === 'bag' ? bagPrice(prev) : def.price, left: def.perVisit });
   }
   return { ...prev, rng: rng.state, merchant: { day: prev.day, stock } };
 }
@@ -101,6 +114,7 @@ export function buy(prev: GameState, item: ItemId): BuyAttempt {
   const stock = prev.merchant!.stock.map((s) => (s.item === item ? { ...s, left: s.left - 1 } : s));
   let state: GameState = { ...prev, gold: prev.gold - price, merchant: { ...prev.merchant!, stock } };
   if (item === 'heart') state = { ...state, lives: state.lives + 1 };
+  else if (item === 'bag') state = { ...state, inventoryCap: Math.min(INVENTORY_CAP, state.inventoryCap + INVENTORY_STEP) };
   else state = { ...state, items: { ...state.items, [item]: itemCount(state, item) + 1 } };
   return { ok: true, state };
 }

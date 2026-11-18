@@ -2,6 +2,7 @@
 // The run and the permanent records are stored separately so a game over wipes only the run.
 import { createRecords, createStats, STATE_VERSION } from '../state/initial';
 import type { GameState, Records } from '../state/types';
+import { INVENTORY_CAP, INVENTORY_START } from '../../config/weapons';
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -61,6 +62,14 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
     // v3 (M4): selling and the merchant. An old undo record has no index, so drop it.
     s = { ...s, version: 3, armed: {}, merchant: null, lastEnhance: null, stats: { ...createStats(), ...s.stats } };
     if (s.nightSnapshot) s.nightSnapshot = { ...s.nightSnapshot, version: 3, armed: {}, merchant: null, lastEnhance: null, stats: { ...createStats(), ...s.nightSnapshot.stats } };
+  }
+  // Defensive defaults: a field added by a later version must never load as undefined.
+  if (typeof s.inventoryCap !== 'number') s = { ...s, inventoryCap: Math.min(INVENTORY_CAP, Math.max(INVENTORY_START, s.weapons.length)) };
+  if (fromVersion < 4) {
+    // v4: bought inventory slots. Older runs keep room for what they already hold.
+    const cap = (x: GameState) => Math.min(INVENTORY_CAP, Math.max(INVENTORY_START, x.weapons.length));
+    s = { ...s, version: 4, inventoryCap: cap(s), stats: { ...createStats(), ...s.stats } };
+    if (s.nightSnapshot) s.nightSnapshot = { ...s.nightSnapshot, version: 4, inventoryCap: cap(s.nightSnapshot as GameState), stats: { ...createStats(), ...s.nightSnapshot.stats } };
   }
   return s;
 }

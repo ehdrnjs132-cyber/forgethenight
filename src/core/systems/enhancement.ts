@@ -6,7 +6,7 @@ import { Rng } from '../rng';
 import type { GameState, Weapon } from '../state/types';
 import { findWeapon, isLastWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
-import { consume, isArmed } from './economy';
+import { consume, enhanceCost, isArmed } from './economy';
 import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 
@@ -76,7 +76,7 @@ export function levelAfter(level: number, outcome: Outcome): number | null {
   return Math.min(MAX_LEVEL, Math.max(0, level + OUTCOME_INFO[outcome].delta));
 }
 
-export type EnhanceBlock = 'no-weapon' | 'max-level' | 'tutorial' | 'confirm-last';
+export type EnhanceBlock = 'no-weapon' | 'max-level' | 'tutorial' | 'gold' | 'confirm-last';
 
 export interface EnhanceOptions {
   /** Player confirmed enhancing their last remaining weapon (§7.5). */
@@ -89,6 +89,7 @@ export function checkEnhance(state: GameState, weaponId: string, opts: EnhanceOp
   if (!weapon) return 'no-weapon';
   if (weapon.level >= MAX_LEVEL) return 'max-level';
   if (!isTutorialDone(state, 'firstEnhance')) return 'tutorial';
+  if (state.gold < enhanceCost(weapon.level)) return 'gold';
   if (isLastWeapon(state, weaponId) && !opts.confirmLast) return 'confirm-last';
   return null;
 }
@@ -130,8 +131,10 @@ export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions 
   if (isArmed(prev, 'master')) used.push('master');
   if (protectedFrom) used.push('protect');
 
+  const cost = enhanceCost(before.level);
   let state: GameState = {
     ...prev,
+    gold: prev.gold - cost,
     rng: rng.state,
     lastEnhance: {
       day: prev.day,
@@ -140,7 +143,7 @@ export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions 
       outcome,
       index: prev.weapons.findIndex((w) => w.id === weaponId),
     },
-    stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1 },
+    stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1, goldSpentEnhancing: prev.stats.goldSpentEnhancing + cost },
   };
   for (const item of used) state = consume(state, item);
 

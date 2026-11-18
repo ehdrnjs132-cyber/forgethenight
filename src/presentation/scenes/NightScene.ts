@@ -11,6 +11,7 @@ import { NIGHT_SECONDS } from '../../config/rules';
 import { ITEMS, REVIVE } from '../../config/economy';
 import { ARMOR_CAP, BLAST, CHAIN, CHILL, CRIT_BASE, HEAL_ON_KILL, LAST_STAND_HP, QUAKE, type SkillEffects } from '../../config/skills';
 import { skillTotals } from '../../core/systems/skills';
+import { PROP_COUNT } from './BootScene';
 import { addXp, aliveTarget, enemyStats, formatDamage, hits, pickEnemy, weaponDamage, xpToNext } from '../../combat/rules';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
@@ -69,6 +70,7 @@ export class NightScene extends Phaser.Scene {
   private sfx = new Sfx();
 
   private player!: Phaser.Physics.Arcade.Sprite;
+  private heroLight!: Phaser.GameObjects.Graphics;
   private enemies!: Phaser.Physics.Arcade.Group;
   private gems: Phaser.GameObjects.Image[] = [];
   private swingImg!: Phaser.GameObjects.Image;
@@ -151,13 +153,28 @@ export class NightScene extends Phaser.Scene {
 
   create() {
     this.physics.world.setBounds(0, 0, WORLD.width, WORLD.height);
-    this.add.tileSprite(0, 0, WORLD.width, WORLD.height, 'ground').setOrigin(0);
+    const art = this.textures.exists('art-night_ground');
+    this.add.tileSprite(0, 0, WORLD.width, WORLD.height, art ? 'art-night_ground' : 'ground').setOrigin(0);
+    if (art) this.scatterProps();
     const edge = this.add.graphics();
     edge.lineStyle(6, 0x3b2d1e, 1);
     edge.strokeRect(3, 3, WORLD.width - 6, WORLD.height - 6);
 
-    this.player = this.physics.add.sprite(WORLD.width / 2, WORLD.height / 2, 'player').setDepth(10);
-    this.player.setCircle(PLAYER.radius, 28 - PLAYER.radius, 32 - PLAYER.radius);
+    const heroArt = this.textures.exists('art-player_top');
+    // Lantern light around the smith, so he reads instantly in a crowd.
+    this.heroLight = this.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
+    for (let i = 5; i >= 1; i--) {
+      this.heroLight.fillStyle(0xffb347, 0.016 * i);
+      this.heroLight.fillCircle(0, 0, 36 + i * 22);
+    }
+    this.player = this.physics.add.sprite(WORLD.width / 2, WORLD.height / 2, heroArt ? 'art-player_top' : 'player').setDepth(10);
+    if (heroArt) {
+      // 150 px art shown ~72 px tall; the body circle is given in texture pixels.
+      const k = 72 / this.player.height;
+      this.player.setScale(k);
+      const r = PLAYER.radius / k;
+      this.player.setCircle(r, this.player.width / 2 - r, this.player.height - r * 2.2);
+    } else this.player.setCircle(PLAYER.radius, 28 - PLAYER.radius, 32 - PLAYER.radius);
     this.player.setCollideWorldBounds(true);
 
     this.enemies = this.physics.add.group({ maxSize: SPAWN.maxAlive });
@@ -167,9 +184,14 @@ export class NightScene extends Phaser.Scene {
     this.swingImg = this.add.image(0, 0, this.weaponKey()).setOrigin(0.1, 0.5).setDepth(12).setAlpha(0);
     this.swingImg.setScale(SWING_WIDTH[this.cls] / this.swingImg.width);
 
-    for (let i = 0; i < 60; i++) {
+    for (let i = 0; i < 90; i++) {
       this.numbers.push(
-        this.add.text(0, 0, '', { fontFamily: DISPLAY, fontSize: '20px', fontStyle: '800', color: '#ffffff', stroke: '#000000', strokeThickness: 5, resolution: 2 }).setOrigin(0.5).setDepth(40).setVisible(false),
+        this.add
+          .text(0, 0, '', { fontFamily: DISPLAY, fontSize: '28px', fontStyle: '900', color: '#ffffff', stroke: '#140a05', strokeThickness: 8, resolution: 2 })
+          .setShadow(0, 4, '#000000', 0, true, true)
+          .setOrigin(0.5)
+          .setDepth(40)
+          .setVisible(false),
       );
     }
 
@@ -186,6 +208,25 @@ export class NightScene extends Phaser.Scene {
     this.buildHud();
     this.intro();
     for (let i = 0; i < aliveTarget(this.nd.day, 0, this.duration); i++) this.spawnOne();
+  }
+
+  /** Dead trees, rune stones, crystals… scattered with a fixed seed per day (decoration only, no collision). */
+  private scatterProps() {
+    const rnd = new Phaser.Math.RandomDataGenerator([`props-${this.nd.day}`]);
+    const keys = Array.from({ length: PROP_COUNT }, (_, i) => `art-prop_${i}`).filter((k) => this.textures.exists(k));
+    if (!keys.length) return;
+    const cx = WORLD.width / 2;
+    const cy = WORLD.height / 2;
+    for (let i = 0; i < 70; i++) {
+      const x = rnd.between(60, WORLD.width - 60);
+      const y = rnd.between(60, WORLD.height - 60);
+      if (Phaser.Math.Distance.Between(x, y, cx, cy) < 220) continue;
+      const key = rnd.pick(keys);
+      const big = key === 'art-prop_0';
+      const img = this.add.image(x, y, key).setOrigin(0.5, 0.9);
+      img.setScale(rnd.realInRange(big ? 0.55 : 0.32, big ? 0.8 : 0.48)).setFlipX(rnd.frac() < 0.5);
+      img.setDepth(y < cy ? 2 : 3).setAlpha(0.95);
+    }
   }
 
   // ───────────────────────── setup helpers
@@ -256,6 +297,7 @@ export class NightScene extends Phaser.Scene {
     this.processBlasts();
     this.collectGems(dt);
     this.placeSwing();
+    this.heroLight.setPosition(this.player.x, this.player.y + 10);
     this.renderHud();
 
     if (this.elapsed >= this.duration) this.dawn();
@@ -288,7 +330,7 @@ export class NightScene extends Phaser.Scene {
   }
 
   private ghost() {
-    const g = this.add.image(this.player.x, this.player.y, 'player').setFlipX(this.player.flipX).setTint(0x7fc8ff).setAlpha(0.45).setDepth(9).setBlendMode(Phaser.BlendModes.ADD);
+    const g = this.add.image(this.player.x, this.player.y, this.player.texture.key).setScale(this.player.scaleX).setFlipX(this.player.flipX).setTint(0x7fc8ff).setAlpha(0.45).setDepth(9).setBlendMode(Phaser.BlendModes.ADD);
     this.tweens.add({ targets: g, alpha: 0, duration: 220, onComplete: () => g.destroy() });
   }
 
@@ -347,12 +389,17 @@ export class NightScene extends Phaser.Scene {
     const d = Phaser.Math.Between(SPAWN.minDist, SPAWN.maxDist);
     const x = Phaser.Math.Clamp(this.player.x + Math.cos(a) * d, 40, WORLD.width - 40);
     const y = Phaser.Math.Clamp(this.player.y + Math.sin(a) * d, 40, WORLD.height - 40);
-    const e = this.enemies.get(x, y, `enemy-${kind}`) as Enemy | null;
+    const tex = this.textures.exists(`art-${kind}`) ? `art-${kind}` : `enemy-${kind}`;
+    const e = this.enemies.get(x, y, tex) as Enemy | null;
     if (!e) return;
     const stats = enemyStats(kind, this.nd.day);
-    e.setTexture(`enemy-${kind}`).setActive(true).setVisible(true).setAlpha(1).clearTint().setDepth(8);
+    e.setTexture(tex).setActive(true).setVisible(true).setAlpha(1).clearTint().setDepth(8);
+    // Higgsfield sprites are drawn larger than the body; show them ~2.9× the body radius tall.
+    const k = tex.startsWith('art-') ? (def.radius * 3.4) / e.height : 1;
+    e.setScale(k);
     e.enableBody(true, x, y, true, true);
-    e.setCircle(def.radius, e.width / 2 - def.radius, e.height / 2 - def.radius);
+    const r = def.radius / k;
+    e.setCircle(r, e.width / 2 - r, e.height / 2 - r + (k < 1 ? r * 0.3 : 0));
     Object.assign(e, { kind, hp: stats.hp, maxHp: stats.hp, atk: stats.atk, speed: def.speed * Phaser.Math.FloatBetween(0.9, 1.15), radius: def.radius, knockT: 0, flashT: 0, ...STATUS_RESET });
   }
 
@@ -548,8 +595,8 @@ export class NightScene extends Phaser.Scene {
     const killed = e.hp <= 0;
     // Riders (burn ticks, blasts) only show a number now and then to keep the screen readable.
     if (!o.quiet || killed || Math.random() < 0.25) {
-      const color = o.crit ? 0xff9a2a : killed ? 0xffd34d : (o.color ?? 0xffffff);
-      this.number(e.x, e.y - 18, o.crit ? `${formatDamage(amount)}!` : formatDamage(amount), color, o.crit ? 28 : killed ? 24 : o.quiet ? 15 : 18);
+      const color = o.crit ? 0xff5a2a : killed ? 0xffb21f : (o.color ?? 0xfff0b8);
+      this.number(e.x, e.y - 22, o.crit ? `${formatDamage(amount)}!` : formatDamage(amount), color, o.crit ? 32 : killed ? 26 : o.quiet ? 17 : 24);
     }
     if (killed) {
       this.killEnemy(e, o.gen ?? 0);
@@ -713,12 +760,28 @@ export class NightScene extends Phaser.Scene {
   }
 
   // ───────────────────────── numbers and HUD
+  /**
+   * Damage numbers are the main proof that enhancing worked (2026-11-18 feedback): big, heavy outline,
+   * size grows with the number itself, a punchy pop, and the newest number always on top.
+   */
   private number(x: number, y: number, text: string, color: number, size: number) {
     const t = this.numbers[this.numberIdx++ % this.numbers.length];
     this.tweens.killTweensOf(t);
-    t.setText(text).setPosition(x + Phaser.Math.Between(-8, 8), y).setColor(css(color)).setFontSize(size).setAlpha(1).setScale(1.25).setVisible(true);
-    this.tweens.add({ targets: t, y: y - 38, scale: 1, duration: 520, ease: 'Cubic.easeOut' });
-    this.tweens.add({ targets: t, alpha: 0, delay: 380, duration: 260, onComplete: () => t.setVisible(false) });
+    const digits = text.replace(/[^0-9]/g, '').length;
+    const big = size >= 24;
+    const px = Math.round(size * 1.35 + (big ? Math.min(14, digits * 1.6) : 0));
+    t.setText(text)
+      .setPosition(x + Phaser.Math.Between(-10, 10), y)
+      .setColor(css(color))
+      .setFontSize(px)
+      .setStroke('#140a05', big ? 9 : 7)
+      .setAlpha(1)
+      .setScale(big ? 1.9 : 1.5)
+      .setDepth(40 + (this.numberIdx % 1000) / 1000)
+      .setVisible(true);
+    this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: y - (big ? 62 : 46), duration: 760, ease: 'Cubic.easeOut' });
+    this.tweens.add({ targets: t, alpha: 0, delay: big ? 620 : 480, duration: 260, onComplete: () => t.setVisible(false) });
   }
 
   private renderHud() {

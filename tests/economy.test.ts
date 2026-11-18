@@ -1,10 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { runWith, seedFor } from './helpers';
-import { buy, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
+import { bagPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
 import { effectiveRow, enhance } from '../src/core/systems/enhancement';
 import { ENHANCE_TABLE } from '../src/config/enhancement';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager } from '../src/core/save/save';
+import { START_GOLD } from '../src/config/rules';
 
 describe('sale prices (§14)', () => {
   it('matches the table rows and grows between them', () => {
@@ -22,7 +23,7 @@ describe('selling (QA 6, 7)', () => {
     const r = sell(s, 'w1');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.gold).toBe(150);
+    expect(r.state.gold).toBe(s.gold + 150);
     expect(r.state.weapons.map((w) => w.id)).toEqual(['w2']);
     expect(r.state.equippedId).toBeNull();
     expect(r.state.stats.sold).toBe(1);
@@ -43,9 +44,9 @@ describe('selling (QA 6, 7)', () => {
     game.dispatch({ type: 'EQUIP', weaponId: b.id });
     game.dispatch({ type: 'START_NIGHT' });
     game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 5 });
-    expect(game.state.gold).toBe(10);
+    expect(game.state.gold).toBe(START_GOLD + 10);
     expect(game.state.weapons).toHaveLength(2);
-    expect(new GameCore(storage).state.gold).toBe(10);
+    expect(new GameCore(storage).state.gold).toBe(START_GOLD + 10);
   });
 
   it('the sale is on disk immediately (§25: closing mid-sale cannot duplicate gold)', () => {
@@ -53,7 +54,7 @@ describe('selling (QA 6, 7)', () => {
     const game = new GameCore(storage, 3);
     game.dispatch({ type: 'SELL', weaponId: game.state.weapons[0].id });
     const saved = new SaveManager(storage).loadRun().state!;
-    expect(saved.gold).toBe(10);
+    expect(saved.gold).toBe(START_GOLD + 10);
     expect(saved.weapons).toHaveLength(2);
   });
 });
@@ -192,5 +193,28 @@ describe('revive stone', () => {
     expect(game.dispatch({ type: 'USE_REVIVE' })).toEqual({ type: 'noRevive' });
     game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 1 });
     expect(game.state.items.revive).toBe(1);
+  });
+});
+
+describe('enhancement cost and inventory upgrades (2026-11-18 feedback)', () => {
+  it('each attempt costs gold, and is refused without enough', () => {
+    const s = { ...runWith([{ level: 10 }, {}]), gold: 1_000 };
+    const a = enhance(s, 'w1');
+    if (!a.ok) throw new Error();
+    expect(a.state.gold).toBe(1_000 - enhanceCost(10));
+    expect(enhanceCost(0)).toBeGreaterThanOrEqual(1);
+    expect(enhanceCost(20)).toBeGreaterThan(enhanceCost(10));
+    expect(enhance({ ...s, gold: 0 }, 'w1')).toMatchObject({ ok: false, blocked: 'gold' });
+  });
+
+  it('the bag adds two slots and the next one costs double', () => {
+    let s = { ...runWith([]), day: 3, gold: 10_000, inventoryCap: 3 };
+    s = openMerchant({ ...s, merchant: null });
+    const bag = s.merchant!.stock.find((e) => e.item === 'bag')!;
+    expect(bag.price).toBe(bagPrice(s));
+    const r = buy(s, 'bag');
+    if (!r.ok) throw new Error();
+    expect(r.state.inventoryCap).toBe(5);
+    expect(bagPrice(r.state)).toBe(bag.price * 2);
   });
 });

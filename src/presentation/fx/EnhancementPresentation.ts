@@ -9,9 +9,16 @@ import { C, DISPLAY, FONT, css } from '../theme';
 import type { Sfx } from '../audio/sfx';
 import type { WeaponView } from '../ui/weaponView';
 
+/** Whoever swings the hammer: the blacksmith sprite, or the drawn hammer as a fallback. */
+export interface Swing {
+  raise(): Promise<void>;
+  strike(): Promise<void>;
+  recover(): void;
+}
+
 export interface PresentationParts {
   weapon: WeaponView;
-  hammer: Phaser.GameObjects.Container;
+  swing: Swing;
   /** World point where the hammer meets the weapon. */
   impact: { x: number; y: number };
   /** Where result banners appear. */
@@ -25,17 +32,12 @@ export interface PlayHooks {
 }
 
 export const HAMMER_IDLE = 32;
-const HAMMER_RAISED = 58;
 
 export class EnhancementPresentation {
   /** Accessibility: shake and flash can be reduced (§21.8). */
   reduceMotion = false;
 
   constructor(private readonly scene: Phaser.Scene, private readonly p: PresentationParts) {}
-
-  private tween(cfg: Phaser.Types.Tweens.TweenBuilderConfig): Promise<void> {
-    return new Promise((resolve) => this.scene.tweens.add({ ...cfg, onComplete: () => resolve() }));
-  }
 
   private wait(ms: number): Promise<void> {
     return new Promise((resolve) => this.scene.time.delayedCall(ms, () => resolve()));
@@ -136,7 +138,7 @@ export class EnhancementPresentation {
   }
 
   async play(result: EnhanceResult, hooks: PlayHooks): Promise<void> {
-    const { hammer, sfx, weapon } = this.p;
+    const { swing, sfx, weapon } = this.p;
     const tier = milestoneTier(result.weaponBefore.level);
     const info = OUTCOME_INFO[result.outcome];
     const before = result.weaponBefore.level;
@@ -144,13 +146,14 @@ export class EnhancementPresentation {
 
     // 1–2: raise, then a fast drop
     sfx.raise();
-    await this.tween({ targets: hammer, angle: HAMMER_RAISED, duration: 210, ease: 'Cubic.easeOut' });
-    await this.tween({ targets: hammer, angle: 0, duration: 95, ease: 'Cubic.easeIn' });
+    await swing.raise();
+    await swing.strike();
 
     // 3–5: impact, shake, metal
     sfx.strike(tier);
     this.shake(140 + tier * 30, 0.004 + tier * 0.0016);
-    this.scene.tweens.add({ targets: hammer, angle: HAMMER_IDLE, duration: 340, ease: 'Back.easeOut' });
+    this.ring(0xffe2a0, 0.9, 160);
+    swing.recover();
     hooks.onImpact();
 
     // 6–7: sparks and the result itself

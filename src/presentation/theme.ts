@@ -72,7 +72,7 @@ export function label(
 
 /** Rounded panel with a thin edge, drawn into a Graphics object. */
 export function panel(g: Phaser.GameObjects.Graphics, x: number, y: number, w: number, h: number, fill: number = C.panel, edge: number = C.edge, radius = 10) {
-  g.fillStyle(fill, 0.92);
+  g.fillStyle(fill, 0.86);
   g.fillRoundedRect(x, y, w, h, radius);
   g.lineStyle(1, edge, 1);
   g.strokeRoundedRect(x + 0.5, y + 0.5, w - 1, h - 1, radius);

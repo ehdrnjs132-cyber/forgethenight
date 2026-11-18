@@ -1,10 +1,11 @@
 import type { GameState, Records } from './types';
-import { START_LIVES } from '../../config/rules';
+import { START_GOLD, START_LIVES } from '../../config/rules';
+import { INVENTORY_START } from '../../config/weapons';
 
-export const STATE_VERSION = 3;
+export const STATE_VERSION = 4;
 
 export function createStats(): GameState['stats'] {
-  return { enhanceAttempts: 0, destroyed: 0, bestLevel: 0, kills: 0, nightSeconds: 0, nightsWon: 0, deaths: 0, bossesKilled: 0, sold: 0, goldEarned: 0 };
+  return { enhanceAttempts: 0, destroyed: 0, bestLevel: 0, kills: 0, nightSeconds: 0, nightsWon: 0, deaths: 0, bossesKilled: 0, sold: 0, goldEarned: 0, goldSpentEnhancing: 0 };
 }
 
 export function createRun(seed: number): GameState {
@@ -14,8 +15,9 @@ export function createRun(seed: number): GameState {
     day: 1,
     phase: 'day',
     lives: START_LIVES,
-    gold: 0,
+    gold: START_GOLD,
     weapons: [],
+    inventoryCap: INVENTORY_START,
     equippedId: null,
     weaponSeq: 0,
     grantedDays: [],

@@ -1,5 +1,6 @@
 // WeaponManager: daily grant, equip, lookup (§4, §24). Pure functions over GameState.
-import { DAILY_GRANT, ELEMENTS, INVENTORY_CAP, type Element, type WeaponClass } from '../../config/weapons';
+import { DAILY_GRANT, ELEMENTS, type Element, type WeaponClass } from '../../config/weapons';
+import { SALE_PRICES } from '../../config/economy';
 import { Rng } from '../rng';
 import type { GameState, Weapon } from '../state/types';
 
@@ -24,8 +25,9 @@ function makeWeapon(state: GameState, cls: WeaponClass, element: Element): Weapo
 export interface GrantResult {
   state: GameState;
   granted: Weapon[];
-  /** Weapons that did not fit in the inventory. */
+  /** Weapons that did not fit in the inventory; they are sold at the +0 price. */
   overflow: number;
+  overflowGold: number;
 }
 
 /**
@@ -33,14 +35,14 @@ export interface GrantResult {
  * Calling it again on the same day — e.g. after dying and retrying — gives nothing.
  */
 export function grantDaily(prev: GameState): GrantResult {
-  if (prev.grantedDays.includes(prev.day)) return { state: prev, granted: [], overflow: 0 };
+  if (prev.grantedDays.includes(prev.day)) return { state: prev, granted: [], overflow: 0, overflowGold: 0 };
   const state: GameState = { ...prev, weapons: [...prev.weapons], grantedDays: [...prev.grantedDays, prev.day] };
   const rng = new Rng(state.rng);
   const granted: Weapon[] = [];
   let overflow = 0;
   for (const cls of DAILY_GRANT) {
     const element = rng.pick(ELEMENTS);
-    if (state.weapons.length >= INVENTORY_CAP) {
+    if (state.weapons.length >= state.inventoryCap) {
       overflow++;
       continue;
     }
@@ -49,7 +51,10 @@ export function grantDaily(prev: GameState): GrantResult {
     granted.push(w);
   }
   state.rng = rng.state;
-  return { state, granted, overflow };
+  // A full inventory sells the extra deliveries straight away (+0 price), so nothing silently vanishes.
+  const overflowGold = overflow * SALE_PRICES[0][1];
+  if (overflowGold) state.gold += overflowGold;
+  return { state, granted, overflow, overflowGold };
 }
 
 export function equip(prev: GameState, id: string): GameState {

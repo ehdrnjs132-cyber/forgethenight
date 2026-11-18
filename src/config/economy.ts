@@ -18,7 +18,17 @@ export const SALE_PRICES: readonly [number, number][] = [
 /** Selling a weapon at or above this level asks for confirmation. */
 export const SALE_CONFIRM_LEVEL = 10;
 
-export type ItemId = 'heart' | 'protect' | 'revive' | 'luck' | 'master' | 'timeStone' | 'resetBook';
+/**
+ * Enhancing costs gold (user decision 2026-11-18, replacing §5 "강화 골드 비용 없음"):
+ * each attempt costs this share of the weapon's current sale price, at least ENHANCE_COST_MIN.
+ */
+export const ENHANCE_COST_RATE = 0.1;
+export const ENHANCE_COST_MIN = 1;
+
+/** Inventory upgrades at the merchant: +INVENTORY_STEP slots, price doubles with each purchase. */
+export const BAG_BASE_PRICE = 300;
+
+export type ItemId = 'heart' | 'protect' | 'revive' | 'luck' | 'master' | 'timeStone' | 'resetBook' | 'bag';
 
 /** Items that can be switched on before an enhancement attempt. */
 export type EnhanceItem = 'protect' | 'luck' | 'master';
@@ -44,11 +54,12 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   luck: { name: '행운 강화석', desc: '켜 두면 다음 강화 대성공 +3%p, 성공 +5%p', price: 800, perVisit: 2, chance: 0.8, fromDay: 1, color: 0x8fe07a },
   master: { name: '장인의 강화석', desc: '켜 두면 다음 강화의 파괴 확률 절반', price: 2_000, perVisit: 1, chance: 0.5, fromDay: 1, color: 0xc89bff },
   timeStone: { name: '시간 역행석', desc: '직전 강화 1회를 되돌림 · 파괴된 무기도 복원', price: 3_000, perVisit: 1, chance: 0.15, fromDay: 15, color: 0x7fe9e0 },
+  bag: { name: '보관함 확장', desc: '무기 보관함 +2칸 (최대 20칸)', price: BAG_BASE_PRICE, perVisit: 1, chance: 1, fromDay: 1, color: 0xc8a06a },
   resetBook: { name: '스킬 초기화 서적', desc: '스킬 포인트를 모두 돌려받아 다시 찍는다', price: 1_000, perVisit: 1, chance: 0.4, fromDay: 1, color: 0xd9c7a0 },
 };
 
 /** Display order in the shop. */
-export const SHOP_ORDER: readonly ItemId[] = ['heart', 'timeStone', 'protect', 'master', 'revive', 'luck', 'resetBook'];
+export const SHOP_ORDER: readonly ItemId[] = ['bag', 'heart', 'timeStone', 'protect', 'master', 'revive', 'luck', 'resetBook'];
 
 export const LUCK_BONUS = { great: 3, success: 5 };
 /** The master stone multiplies the destroy chance by this. */

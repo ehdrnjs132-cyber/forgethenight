@@ -2,6 +2,13 @@ import Phaser from 'phaser';
 import { ELEMENTS, WEAPON_CLASSES } from '../../config/weapons';
 import { weaponImagePath, weaponTexture } from '../weaponArt';
 
+/** Processed world art in public/assets/world (see tools/art/process-assets.ts). */
+export const WORLD_ART = [
+  'forge_bg', 'night_ground', 'anvil', 'smith_raise', 'smith_strike', 'skeleton', 'slime', 'player_top', 'morr',
+  'prop_0', 'prop_1', 'prop_2', 'prop_3', 'prop_4', 'prop_5',
+] as const;
+export const PROP_COUNT = 6;
+
 /** Loads weapon art, generates the small effect textures, then opens the forge. */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -22,6 +29,9 @@ export class BootScene extends Phaser.Scene {
     for (const cls of WEAPON_CLASSES) {
       for (const el of ELEMENTS) this.load.image(weaponTexture(cls, el), weaponImagePath(cls, el));
     }
+    // Higgsfield world art (tools/art/assets.ts). Missing files fall back to the drawn placeholders.
+    for (const key of WORLD_ART) this.load.image(`art-${key}`, `assets/world/${key}.png`);
+    this.load.image('weapon-hammer', 'assets/world/hammer.png');
   }
 
   create() {
@@ -59,7 +69,7 @@ export class BootScene extends Phaser.Scene {
     g.clear();
 
     this.makeNightTextures(g);
-    this.makeHammerTexture(g);
+    if (!this.textures.exists('weapon-hammer') || this.textures.get('weapon-hammer').key === '__MISSING') this.makeHammerTexture(g);
     g.destroy();
 
     const core = this.registry.get('core') as { notice: { kind: string; summary?: unknown } | null } | undefined;

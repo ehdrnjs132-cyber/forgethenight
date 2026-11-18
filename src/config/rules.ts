@@ -6,9 +6,12 @@ export const LAST_DAY = 50;
 export const BOSS_EVERY = 5;
 export const MERCHANT_EVERY = 3;
 
-/** Seconds of survival per night (§3 suggestion, tune by play testing). */
-export const NIGHT_SECONDS = 180;
-export const BOSS_NIGHT_SECONDS = 300;
+/** Seconds of survival per night. §3 suggested 180; halved after play testing (2026-11-18). */
+export const NIGHT_SECONDS = 90;
+export const BOSS_NIGHT_SECONDS = 150;
+
+/** Gold at the start of a run, so the first enhancements can be paid for (enhancing costs gold since 2026-11-18). */
+export const START_GOLD = 100;
 
 /** Suggested presentation length of one enhancement, in ms (§7.2: 0.7–0.9 s). */
 export const ENHANCE_ANIM_MS = 820;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager } from '../src/core/save/save';
-import { START_LIVES } from '../src/config/rules';
+import { START_GOLD, START_LIVES } from '../src/config/rules';
 
 function readyGame(storage = new MemoryStorage()) {
   const game = new GameCore(storage, 11);
@@ -50,7 +50,9 @@ describe('winning a night', () => {
     expect(game.state.day).toBe(2);
     expect(game.state.phase).toBe('day');
     expect(game.state.nightSnapshot).toBeNull();
-    expect(game.state.weapons).toHaveLength(6);
+    // only 3 slots at the start: the new deliveries are sold at the +0 price
+    expect(game.state.weapons).toHaveLength(3);
+    expect(game.state.gold).toBe(START_GOLD + 30);
     expect(game.state.player).toEqual({ level: 2, xp: 150, skillPoints: 1 });
     expect(game.state.stats.kills).toBe(40);
     expect(game.records.kills).toBe(40);
@@ -104,7 +106,7 @@ describe('game over (§13, QA 10)', () => {
     expect(r.gameOver).toEqual({ day: 4, bestLevel: 17, kills: 320, bossesKilled: 0, nightSeconds: 95 });
     expect(game.state.day).toBe(1);
     expect(game.state.lives).toBe(START_LIVES);
-    expect(game.state.gold).toBe(0);
+    expect(game.state.gold).toBe(START_GOLD);
     expect(game.state.weapons).toHaveLength(3);
     expect(game.state.weapons.every((w) => w.level === 0)).toBe(true);
     expect(game.state.tutorials.firstEnhance).toBe(true);

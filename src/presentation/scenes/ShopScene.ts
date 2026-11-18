@@ -48,9 +48,19 @@ export class ShopScene extends Phaser.Scene {
     root.add(g);
 
     // Morr: a hooded travelling trader by lantern light (placeholder art).
-    const portrait = this.add.graphics();
-    this.drawMorr(portrait, x0 + 150, y0 + 220);
-    root.add(portrait);
+    if (this.textures.exists('art-morr')) {
+      const glow = this.add.graphics();
+      for (let i = 5; i >= 1; i--) {
+        glow.fillStyle(0xffb347, 0.025 * i);
+        glow.fillCircle(x0 + 150, y0 + 200, 60 + i * 24);
+      }
+      root.add(glow);
+      root.add(this.add.image(x0 + 150, y0 + 350, 'art-morr').setOrigin(0.5, 1).setScale(0.82));
+    } else {
+      const portrait = this.add.graphics();
+      this.drawMorr(portrait, x0 + 150, y0 + 220);
+      root.add(portrait);
+    }
     root.add(label(this, x0 + 150, y0 + 372, MERCHANT.name, 30, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
     root.add(label(this, x0 + 150, y0 + 402, '떠돌이 상인 · 3일마다 방문', 12, C.mute, { weight: 700, origin: [0.5, 0.5] }));
     const first = !isTutorialDone(this.core.state, 'firstMerchant');

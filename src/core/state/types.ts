@@ -43,6 +43,8 @@ export interface GameState {
   lives: number;
   gold: number;
   weapons: Weapon[];
+  /** Inventory slots owned (3 at the start, more from the merchant). */
+  inventoryCap: number;
   equippedId: string | null;
   /** Monotonic counter for weapon ids. */
   weaponSeq: number;
@@ -80,6 +82,7 @@ export interface RunStats {
   bossesKilled: number;
   sold: number;
   goldEarned: number;
+  goldSpentEnhancing: number;
 }
 
 /** What the game over screen shows (§20). */
