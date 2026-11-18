@@ -1,6 +1,9 @@
 import Phaser from 'phaser';
 import { ELEMENTS, WEAPON_CLASSES } from '../../config/weapons';
 import { weaponImagePath, weaponTexture } from '../weaponArt';
+import type { GameCore } from '../../core/game';
+import { INTRO } from '../../config/cinematics';
+import type { CinematicData } from './CinematicScene';
 
 /** Processed world art in public/assets/world (see tools/art/process-assets.ts). */
 export const WORLD_ART = [
@@ -100,11 +103,15 @@ export class BootScene extends Phaser.Scene {
     if (!this.textures.exists('weapon-hammer') || this.textures.get('weapon-hammer').key === '__MISSING') this.makeHammerTexture(g);
     g.destroy();
 
-    const core = this.registry.get('core') as { notice: { kind: string; summary?: unknown } | null } | undefined;
+    const core = this.registry.get('core') as GameCore | undefined;
     if (core?.notice?.kind === 'gameOver') {
       const summary = core.notice.summary;
       core.notice = null;
       this.scene.start('GameOver', { summary, reason: 'closed' });
+    } else if (core && !core.hasSeen('intro') && !new URLSearchParams(location.search).has('nointro')) {
+      // first launch: the story intro, then the title card, then DAY 1 (spec PART 8)
+      const data: CinematicData = { clips: INTRO, next: 'Forge', titleCard: true, seenId: 'intro' };
+      this.scene.start('Cinematic', data);
     } else this.scene.start('Forge');
   }
 

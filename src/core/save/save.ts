@@ -121,7 +121,8 @@ export class SaveManager {
   }
 
   loadRecords(): Records {
-    return unwrap<Records>(this.storage.getItem(KEYS.records))?.data ?? createRecords();
+    // merge with defaults so fields added later (e.g. `seen`) are never undefined
+    return { ...createRecords(), ...(unwrap<Records>(this.storage.getItem(KEYS.records))?.data ?? {}) };
   }
 }
 
@@ -139,12 +140,23 @@ export class MemoryStorage implements StorageLike {
   }
 }
 
-export function browserStorage(): StorageLike {
+/**
+ * localStorage, optionally under a separate save slot (`?slot=test` keeps test runs away from the real
+ * save: every key gets a `slot:<name>:` prefix).
+ */
+export function browserStorage(slot: string | null = null): StorageLike {
   try {
     const probe = '__ftn_probe__';
     window.localStorage.setItem(probe, '1');
     window.localStorage.removeItem(probe);
-    return window.localStorage;
+    if (!slot) return window.localStorage;
+    const ls = window.localStorage;
+    const p = `slot:${slot}:`;
+    return {
+      getItem: (k) => ls.getItem(p + k),
+      setItem: (k, v) => ls.setItem(p + k, v),
+      removeItem: (k) => ls.removeItem(p + k),
+    };
   } catch {
     return new MemoryStorage();
   }

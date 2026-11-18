@@ -8,6 +8,7 @@ import { NightScene } from './presentation/scenes/NightScene';
 import { GameOverScene } from './presentation/scenes/GameOverScene';
 import { ShopScene } from './presentation/scenes/ShopScene';
 import { SkillScene } from './presentation/scenes/SkillScene';
+import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { H, W } from './presentation/theme';
 
 async function fontsReady() {
@@ -22,7 +23,7 @@ async function fontsReady() {
 
 async function boot() {
   await fontsReady();
-  const core = new GameCore(browserStorage());
+  const core = new GameCore(browserStorage(new URLSearchParams(location.search).get('slot')));
   const game = new Phaser.Game({
     type: Phaser.AUTO,
     parent: 'game',
@@ -35,7 +36,7 @@ async function boot() {
     // so automated checks keep running when the page is not being painted.
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
     physics: { default: 'arcade', arcade: { debug: false } },
-    scene: [BootScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene],
+    scene: [BootScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   // Debug handle for manual testing in the browser console.

@@ -197,14 +197,13 @@ describe('revive stone', () => {
 });
 
 describe('enhancement cost and inventory upgrades (2026-11-18 feedback)', () => {
-  it('each attempt costs gold, and is refused without enough', () => {
-    const s = { ...runWith([{ level: 10 }, {}]), gold: 1_000 };
+  it('enhancing is free (reboot spec) and never blocked by gold; the cost stays a config switch', () => {
+    const s = { ...runWith([{ level: 10 }, {}]), gold: 0 };
     const a = enhance(s, 'w1');
     if (!a.ok) throw new Error();
-    expect(a.state.gold).toBe(1_000 - enhanceCost(10));
-    expect(enhanceCost(0)).toBeGreaterThanOrEqual(1);
-    expect(enhanceCost(20)).toBeGreaterThan(enhanceCost(10));
-    expect(enhance({ ...s, gold: 0 }, 'w1')).toMatchObject({ ok: false, blocked: 'gold' });
+    expect(a.state.gold).toBe(0);
+    expect(enhanceCost(10)).toBe(0);
+    expect(enhanceCost(40)).toBe(0);
   });
 
   it('a key opens one rack slot and the next one costs double', () => {

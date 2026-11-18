@@ -102,4 +102,6 @@ export interface Records {
   deaths: number;
   bossesKilled: string[];
   runs: number;
+  /** Cutscenes already watched (the intro plays automatically only the first time). */
+  seen: string[];
 }

@@ -11,6 +11,7 @@ import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/
 import { completeTutorial, type TutorialId } from './systems/tutorial';
 import { loseNight, startNight, winNight, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
+import { generateNight, type Doppelganger } from './systems/doppelganger';
 
 export type Action =
   | { type: 'ENHANCE'; weaponId: string; confirmLast?: boolean }
@@ -31,7 +32,7 @@ export type Action =
 export type ActionResult =
   | { type: 'enhanced'; result: EnhanceResult }
   | { type: 'blocked'; reason: EnhanceBlock }
-  | { type: 'nightStarted'; weapon: NightWeapon }
+  | { type: 'nightStarted'; weapon: NightWeapon; lineup: Doppelganger[] }
   | { type: 'nightBlocked'; reason: NightBlock }
   | { type: 'nightWon'; day: number; levelBefore: number; level: number; levelsGained: number; granted: number; cleared: boolean }
   | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null }
@@ -135,6 +136,17 @@ export class GameCore {
     }
   }
 
+  /** Remember a watched cutscene (records survive game over, like the intro flag). */
+  markSeen(id: string) {
+    if (this.records.seen.includes(id)) return;
+    this.records = { ...this.records, seen: [...this.records.seen, id] };
+    this.save.saveRecords(this.records);
+  }
+
+  hasSeen(id: string): boolean {
+    return this.records.seen.includes(id);
+  }
+
   private addRecords(p: Partial<Pick<Records, 'kills' | 'deaths'>>) {
     this.records = { ...this.records, kills: this.records.kills + (p.kills ?? 0), deaths: this.records.deaths + (p.deaths ?? 0) };
     this.save.saveRecords(this.records);
@@ -183,8 +195,10 @@ export class GameCore {
         // Night is a new action: the time stone can no longer undo the day's last attempt.
         const r = startNight({ ...this.state, lastEnhance: null });
         if (!r.ok) return { type: 'nightBlocked', reason: r.reason };
-        this.commit(r.state); // phase 'night' is on disk before the fight begins
-        return { type: 'nightStarted', weapon: r.weapon };
+        // Tonight's rivals come from the saved RNG (after the snapshot), so a same-day retry meets the same ones.
+        const g = generateNight(r.state.day, r.state.rng);
+        this.commit({ ...r.state, rng: g.rng }); // phase 'night' is on disk before the fight begins
+        return { type: 'nightStarted', weapon: r.weapon, lineup: g.doppelgangers };
       }
       case 'NIGHT_WON': {
         if (this.state.phase !== 'night') return { type: 'ok' };

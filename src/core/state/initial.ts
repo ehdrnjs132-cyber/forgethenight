@@ -36,5 +36,5 @@ export function createRun(seed: number): GameState {
 }
 
 export function createRecords(): Records {
-  return { bestDay: 0, bestLevel: 0, kills: 0, deaths: 0, bossesKilled: [], runs: 0 };
+  return { bestDay: 0, bestLevel: 0, kills: 0, deaths: 0, bossesKilled: [], runs: 0, seen: [] };
 }

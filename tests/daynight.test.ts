@@ -41,6 +41,19 @@ describe('starting a night', () => {
   });
 });
 
+describe('tonight\'s doppelgangers (reboot)', () => {
+  it('DAY 1 sends three, and a same-day retry meets the very same three', () => {
+    const { game } = readyGame();
+    const first = game.dispatch({ type: 'START_NIGHT' });
+    if (first.type !== 'nightStarted') throw new Error();
+    expect(first.lineup).toHaveLength(3);
+    game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 5 });
+    const again = game.dispatch({ type: 'START_NIGHT' });
+    if (again.type !== 'nightStarted') throw new Error();
+    expect(again.lineup).toEqual(first.lineup);
+  });
+});
+
 describe('winning a night', () => {
   it('advances the day, grants three new weapons and keeps the XP', () => {
     const { game } = readyGame();

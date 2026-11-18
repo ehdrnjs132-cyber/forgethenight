@@ -34,7 +34,7 @@ describe('save and load (QA 17)', () => {
     const storage = new MemoryStorage();
     const save = new SaveManager(storage);
     save.saveRun(createRun(1));
-    save.saveRecords({ bestDay: 4, bestLevel: 22, kills: 10, deaths: 2, bossesKilled: [], runs: 3 });
+    save.saveRecords({ bestDay: 4, bestLevel: 22, kills: 10, deaths: 2, bossesKilled: [], runs: 3, seen: ['intro'] });
     save.clearRun();
     expect(save.loadRun().state).toBeNull();
     expect(save.loadRecords().bestLevel).toBe(22);
@@ -85,6 +85,19 @@ describe('GameCore persistence', () => {
     expect(game.state.equippedId).toBeNull();
     expect(game.state.weapons).toHaveLength(3);
     expect(game.records.runs).toBe(2);
+  });
+
+  it('remembers watched cutscenes across runs, and old records load with an empty list', () => {
+    const storage = new MemoryStorage();
+    const game = new GameCore(storage, 1);
+    expect(game.hasSeen('intro')).toBe(false);
+    game.markSeen('intro');
+    game.dispatch({ type: 'NEW_RUN' });
+    expect(new GameCore(storage).hasSeen('intro')).toBe(true);
+    const legacy = new MemoryStorage();
+    const body = JSON.stringify({ bestDay: 1, bestLevel: 0, kills: 0, deaths: 0, bossesKilled: [], runs: 1 });
+    legacy.setItem(KEYS.records, JSON.stringify({ v: 1, sum: checksum(body), data: JSON.parse(body) }));
+    expect(new SaveManager(legacy).loadRecords().seen).toEqual([]);
   });
 
   it('migrates a version 1 save', () => {

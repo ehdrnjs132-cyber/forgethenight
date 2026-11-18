@@ -16,6 +16,8 @@ import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE, type Swing } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
 import type { NightData } from './NightScene';
+import type { CinematicData } from './CinematicScene';
+import { INTRO } from '../../config/cinematics';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
@@ -221,7 +223,16 @@ export class ForgeScene extends Phaser.Scene {
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
     this.goldText = label(this, W - 24, 32, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
-    this.skillBtn = new Button(this, 340, 32, 170, 42, '스킬트리', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
+    new Button(this, 500, 32, 110, 36, '인트로 보기', {
+      variant: 'ghost',
+      size: 13,
+      onClick: () => {
+        if (this.animating || this.leaving) return;
+        const data: CinematicData = { clips: INTRO, next: 'Forge', titleCard: true };
+        this.scene.start('Cinematic', data);
+      },
+    });
+    this.skillBtn = new Button(this, 340, 32, 170, 42,'스킬트리', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
     this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
@@ -730,7 +741,7 @@ export class ForgeScene extends Phaser.Scene {
     const cost = w ? enhanceCost(w.level) : 0;
     this.enhanceBtn.setLabel(
       w && w.level >= MAX_LEVEL ? '최대 단계' : '강화',
-      w && w.level >= MAX_LEVEL ? '+50 도달' : w ? `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''} · Space` : 'Space',
+      w && w.level >= MAX_LEVEL ? '+50 도달' : !w ? 'Space' : cost === 0 ? '무료 · Space' : `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''} · Space`,
     );
     const eq = !!w && this.core.state.equippedId === w.id;
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
@@ -755,7 +766,7 @@ export class ForgeScene extends Phaser.Scene {
       return;
     }
     this.leaving = true;
-    const data: NightData = { weapon: r.weapon, day: this.core.state.day };
+    const data: NightData = { weapon: r.weapon, day: this.core.state.day, lineup: r.lineup };
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', data));
   }

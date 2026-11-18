@@ -1,6 +1,6 @@
 {
   "note": "Enhancement table (+0..+49), confirmed by the user on 2026-11-18. Percent per outcome; each row sums to 100. Tests verify the sums.",
-  "status": "confirmed",
+  "status": "provisional",
   "confirmedAt": "2026-11-18",
   "params": {
     "great": [
