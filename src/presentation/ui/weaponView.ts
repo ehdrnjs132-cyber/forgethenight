@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { ELEMENT_INFO } from '../../config/weapons';
-import { appearanceStage, milestoneTier } from '../../config/appearance';
+import { milestoneTier, weaponSizeScale } from '../../config/appearance';
 import { drawWeapon, glowStrength, weaponTexture, type WeaponLook } from '../weaponArt';
 
 /**
@@ -35,7 +35,6 @@ export class WeaponView extends Phaser.GameObjects.Container {
 
     const el = ELEMENT_INFO[look.element];
     const tier = milestoneTier(look.level);
-    const stage = appearanceStage(look.level);
     const key = weaponTexture(look.cls, look.element);
 
     if (this.scene.textures.exists(key)) {
@@ -45,7 +44,7 @@ export class WeaponView extends Phaser.GameObjects.Container {
       }
       const img = this.img;
       img.setTexture(key).setVisible(true);
-      img.setScale((this.len / img.width) * (1 + stage * 0.008));
+      img.setScale((this.len / img.width) * weaponSizeScale(look.level));
       const fx = img.preFX;
       if (fx) {
         fx.clear();
@@ -61,7 +60,7 @@ export class WeaponView extends Phaser.GameObjects.Container {
         }
       }
     } else {
-      drawWeapon(this.art, look, this.len);
+      drawWeapon(this.art, look, this.len * weaponSizeScale(look.level));
     }
 
     // No coloured aura around the weapon any more (2026-11-18 feedback): it washed the blacksmith and

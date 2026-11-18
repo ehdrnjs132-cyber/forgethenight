@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SWORD_FORMS, SWORD_NAME_LEVELS, swordForm, swordFormIndex, weaponDisplayName } from '../src/config/swordNames';
 import { ELEMENTS, MAX_LEVEL } from '../src/config/weapons';
+import { WEAPON_SIZE, weaponSizeScale } from '../src/config/appearance';
 
 describe('sword names', () => {
   it('has 30 forms per element and 30 ascending start levels from +0 to the max', () => {
@@ -24,6 +25,12 @@ describe('sword names', () => {
     expect(swordFormIndex(49)).toBe(28);
     expect(swordFormIndex(50)).toBe(29);
     expect(swordForm('fire', 50).name).toBe('우주를 태운 자');
+  });
+
+  it('weapons grow steadily with level, from small at +0 to the max at +50', () => {
+    expect(weaponSizeScale(0)).toBeCloseTo(WEAPON_SIZE.min);
+    expect(weaponSizeScale(50)).toBeCloseTo(WEAPON_SIZE.max);
+    for (let l = 1; l <= 50; l++) expect(weaponSizeScale(l)).toBeGreaterThan(weaponSizeScale(l - 1));
   });
 
   it('only swords get form names', () => {

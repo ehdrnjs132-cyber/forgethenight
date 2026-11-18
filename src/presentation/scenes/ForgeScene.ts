@@ -5,7 +5,7 @@ import type { Weapon } from '../../core/state/types';
 import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement';
 import { equippedWeapon, findWeapon } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS } from '../../config/enhancement';
-import { APPEARANCE_STAGES, MILESTONES, appearanceStage } from '../../config/appearance';
+import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
 import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
 import { START_LIVES } from '../../config/rules';
 import { C, DISPLAY, H, W, css, label, panel } from '../theme';
@@ -628,7 +628,9 @@ export class ForgeScene extends Phaser.Scene {
         if (this.textures.exists(tex)) {
           // hangs on the painted hooks, resting just above the shelf
           const img = this.add.image(0, -10, tex);
-          img.setScale(Math.min((SW - 8) / img.width, 50 / img.height) * (sel ? 1.06 : 1));
+          // bigger with level: 60% of the shelf at +0, spilling past it at +50
+          const grow = 0.6 + (0.55 * (weaponSizeScale(w.level) - WEAPON_SIZE.min)) / (WEAPON_SIZE.max - WEAPON_SIZE.min);
+          img.setScale(Math.min((SW - 8) / img.width, 50 / img.height) * grow * (sel ? 1.06 : 1));
           const strength = glowStrength(w.level);
           if (strength > 0) img.preFX?.addGlow(ELEMENT_INFO[w.element].glow, Math.min(5, strength * 0.6), 0, false, 0.1, 10);
           parts.push(img);

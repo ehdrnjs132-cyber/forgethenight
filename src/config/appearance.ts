@@ -13,6 +13,18 @@ export function appearanceStage(level: number): number {
   return stage;
 }
 
+/**
+ * Display size of a weapon relative to its base length (user decision 2026-11-18: swords must grow a lot).
+ * Small at +0, normal around +10, and about 2.4× the +0 size at +50. Presentation only; reach in combat is unchanged.
+ */
+// max 1.7: at +50 the blade tip just stops short of the right-hand panel in the forge.
+export const WEAPON_SIZE = { min: 0.7, max: 1.7, curve: 0.8 } as const;
+
+export function weaponSizeScale(level: number): number {
+  const t = Math.max(0, Math.min(1, level / 50));
+  return WEAPON_SIZE.min + (WEAPON_SIZE.max - WEAPON_SIZE.min) * Math.pow(t, WEAPON_SIZE.curve);
+}
+
 export interface Milestone {
   level: number;
   name: string;
