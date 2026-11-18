@@ -213,7 +213,7 @@ export class EnhancementPresentation {
       this.ring(0xffd34d, 2.6, 560);
       this.burst(40 + m.tier * 18, [glow, 0xffffff, 0xffd34d], { speed: [150, 520], life: 1000, gravity: 120, spread: [0, 360] });
       weapon.flare(glow, 1.6);
-      this.flash(200, glow);
+      this.flash(160, 0xffffff); // neutral, not the element colour
       this.banner(m.name, `+${m.level} 도달`, 0xffe2a0, 46, 104);
       await this.wait(700);
     }

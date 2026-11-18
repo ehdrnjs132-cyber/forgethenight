@@ -64,23 +64,19 @@ export class WeaponView extends Phaser.GameObjects.Container {
       drawWeapon(this.art, look, this.len);
     }
 
-    if (tier > 0) {
-      for (let i = 4; i >= 1; i--) {
-        this.aura.fillStyle(el.glow, 0.03 * tier);
-        this.aura.fillEllipse(0, 0, this.len * (0.9 + i * 0.12), 40 + i * 18 + tier * 8);
-      }
-      this.aura.setAlpha(0.7);
-      this.tweensOwned.push(this.scene.tweens.add({ targets: this.aura, alpha: 1, duration: 1100, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' }));
-    }
+    // No coloured aura around the weapon any more (2026-11-18 feedback): it washed the blacksmith and
+    // the anvil in the element colour. The weapon's own outline glow (above) carries the element.
+    void tier;
   }
 
-  /** Brief bright pulse used on success results and milestones. */
-  flare(color: number, strength = 1) {
-    const g = this.scene.add.graphics();
-    g.fillStyle(color, 0.35 * strength);
-    g.fillEllipse(0, 0, this.len * 1.15, 90);
-    this.add(g);
-    this.sendToBack(g);
-    this.scene.tweens.add({ targets: g, alpha: 0, scaleX: 1.15, scaleY: 1.5, duration: 520, ease: 'Cubic.easeOut', onComplete: () => g.destroy() });
+  /** Brief bright pulse on the weapon itself (never tints the scene around it). */
+  flare(_color: number, strength = 1) {
+    const img = this.img;
+    if (!img || !img.visible) return;
+    img.setTintFill(0xffffff);
+    this.scene.time.delayedCall(70 + strength * 40, () => img.clearTint());
+    const base = img.scale;
+    img.setScale(base * (1 + 0.06 * strength));
+    this.scene.tweens.add({ targets: img, scale: base, duration: 260, ease: 'Back.easeOut' });
   }
 }

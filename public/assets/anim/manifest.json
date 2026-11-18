@@ -1,7 +1,7 @@
 [
   {
     "key": "forge_strike",
-    "frameW": 246,
+    "frameW": 245,
     "frameH": 560,
     "frames": 14,
     "fps": 24,
@@ -9,7 +9,7 @@
   },
   {
     "key": "hero_sword_walk",
-    "frameW": 235,
+    "frameW": 234,
     "frameH": 220,
     "frames": 12,
     "fps": 12,
@@ -17,7 +17,7 @@
   },
   {
     "key": "hero_spear_walk",
-    "frameW": 291,
+    "frameW": 290,
     "frameH": 220,
     "frames": 12,
     "fps": 12,

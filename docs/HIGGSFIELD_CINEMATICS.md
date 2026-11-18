@@ -1,5 +1,19 @@
 # FORGE THE NIGHT — Higgsfield 컷신 제작 가이드
 
+## 현재 사용: 짧은 인트로 3장면 (2026-11-18 사용자 결정)
+
+게임 그림체(손그림 카툰), 장면당 5초, 자막 한 줄. **보스 컷신과 엔딩은 없음.** 아래 2장 이후의 사실적 12장면 계획은 보관용이며 쓰지 않는다 (만든 영상은 `tools/art/out/cine/raw/realistic_*.mp4`).
+
+| 파일 | 장면 | 자막 |
+|---|---|---|
+| `intro_1.mp4` | 떠 있는 여러 세계, 세계마다 대장장이가 망치질 (얼굴형만 같고 인종·옷은 다름) | 모든 세계에는 같은 대장장이가 산다. |
+| `intro_2.mp4` | 왕좌의 THE FIRST가 명령, 보라색 균열이 열림 | THE FIRST가 명령했다. / 다른 세계의 너를 죽여라. |
+| `intro_3.mp4` | 우리 대장간에 균열, 다른 세계 대장장이 셋이 걸어 나옴 | 밤이 오면, 그들이 온다. / 몇 강을 벼려 왔는지는 아무도 모른다. |
+
+프롬프트는 `tools/art/cinematics-spec.ts`의 `GAME_FRAMES`, `GAME_VIDEOS`. 제작: `npx.cmd tsx tools/art/gen-cine.ts gframes` → `gvideos` (Kling 4.0, 5초, 720p), 그다음 `tools/art/compress-cine.sh`.
+
+---
+
 게임은 이 문서의 파일 이름으로 영상을 찾는다. 파일이 없으면 임시 화면(배경 이미지 + 자막)으로 대신 재생하므로, 영상이 하나도 없어도 게임은 돌아간다.
 
 ## 1. 파일 규칙
@@ -45,9 +59,9 @@
 
 > Character reference sheet of an ancient blacksmith emperor: the SAME face structure and braided beard as the protagonist but aged, grey and scarred, wearing a cracked golden mask over the upper face, dark ceremonial plate armor with forge-runes glowing faint violet, a cloak of black iron chain. Neutral background, realistic dark fantasy, no text.
 
-**기준 이미지 3 — 다른 세계의 대장장이 4명** (같은 얼굴, 다른 인생)
+**기준 이미지 3 — 다른 세계의 대장장이 4명** (2026-11-18 사용자 지시: **얼굴 생김새만 같고, 인종·피부색·머리·옷 디자인은 모두 다르게**)
 
-> Four alternate versions of the same blacksmith (same face and beard as the reference): a golden armored king, a battle-scarred warrior with a broken helm, a corrupted smith whose skin is cracked with molten metal, a hooded wanderer with a lantern. Lined up side by side, neutral background, realistic dark fantasy, no text.
+> Four alternate-universe versions of the same blacksmith. They share ONLY the same facial structure (eye shape, nose, jaw, brow); each is a different ethnicity with a different skin tone and hair and wears a completely different outfit from a different culture: a Black African blacksmith-king in gold and bronze ceremonial armor; an East Asian scarred warrior-smith in lacquered lamellar armor and a broken horned helm; a pale Nordic corrupted smith cracked with glowing molten metal in charred iron plates; a South Asian hooded wanderer-smith in saffron and indigo robes with a lantern. Full bodies, dark background, realistic dark fantasy, no text.
 
 **기준 이미지 4 — 심장의 모루 (THE HEART ANVIL)**
 

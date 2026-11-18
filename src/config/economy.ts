@@ -22,9 +22,10 @@ export const SALE_CONFIRM_LEVEL = 10;
  * Enhancing costs gold (user decision 2026-11-18, replacing §5 "강화 골드 비용 없음"):
  * each attempt costs this share of the weapon's current sale price, at least ENHANCE_COST_MIN.
  */
-// Reboot spec (2026-11-18): the Heart Anvil enhances for free. Set RATE 0.1 / MIN 1 to bring the gold cost back.
-export const ENHANCE_COST_RATE = 0;
-export const ENHANCE_COST_MIN = 0;
+// User decision 2026-11-18 (after the reboot spec said free): enhancing costs gold again.
+// Set both to 0 to make the Heart Anvil free.
+export const ENHANCE_COST_RATE = 0.1;
+export const ENHANCE_COST_MIN = 1;
 
 /** Rack keys at the merchant: each opens one locked slot; price doubles with each key bought. */
 export const KEY_BASE_PRICE = 300;

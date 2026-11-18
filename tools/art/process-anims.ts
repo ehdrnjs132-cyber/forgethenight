@@ -84,7 +84,11 @@ function matte(p: PNG) {
   for (let i = 0; i < p.data.length; i += 4) {
     const r = p.data[i], g = p.data[i + 1], b = p.data[i + 2];
     const d = Math.hypot(r - kr, g - kg, b - kb);
-    const a = Math.max(0, Math.min(1, (d - T0) / (T1 - T0)));
+    let a = Math.max(0, Math.min(1, (d - T0) / (T1 - T0)));
+    // Dominance key: the video model lights the screen unevenly (yellow-green patches between arms),
+    // so anything clearly dominated by the key hue is background too. None of our subjects use that hue.
+    const excess = kg > kr && kg > kb ? g - Math.max(r, b) : kr > kg && kb > kg ? Math.min(r, b) - g : 0;
+    if (excess > 18) a = Math.min(a, Math.max(0, 1 - (excess - 18) / 30));
     if (a <= 0) {
       p.data[i + 3] = 0;
       continue;

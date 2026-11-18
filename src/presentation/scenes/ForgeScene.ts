@@ -374,7 +374,10 @@ export class ForgeScene extends Phaser.Scene {
     shadow.fillEllipse(STAGE.x, STAGE.bottom - 6, 300, 36);
     const s = isAnim ? this.add.sprite(STAGE.x, STAGE.bottom, key) : this.add.image(STAGE.x, STAGE.bottom, key);
     s.setOrigin(0.5, 1);
-    const frames = isAnim ? this.textures.get(key).frameTotal - 1 : 1;
+    // Real frame count from the sheet manifest: the grid has empty trailing cells (14 frames in 4×4),
+    // and playing those made the blacksmith vanish at the end of the strike.
+    const manifest = (this.cache.json.get('anim-manifest') as { key: string; frames: number }[] | undefined) ?? [];
+    const frames = isAnim ? (manifest.find((m) => `anim-${m.key}` === key)?.frames ?? this.textures.get(key).frameTotal - 1) : 1;
     // idle: hammer raised and ready (frame 0), so the weapon on the anvil is fully visible
     if (isAnim) (s as Phaser.GameObjects.Sprite).setFrame(0);
     const k = STAGE.height / s.height;

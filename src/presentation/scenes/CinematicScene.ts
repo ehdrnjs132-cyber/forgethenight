@@ -6,7 +6,6 @@ import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { CLIPS, type Clip } from '../../config/cinematics';
 import { C, H, W, label } from '../theme';
-import { Button } from '../ui/button';
 
 export interface CinematicData {
   clips: string[];
@@ -26,8 +25,11 @@ export class CinematicScene extends Phaser.Scene {
   private index = 0;
   private video: HTMLVideoElement | null = null;
   private still: Phaser.GameObjects.Image | null = null;
-  private subtitle!: Phaser.GameObjects.Text;
-  private speaker!: Phaser.GameObjects.Text;
+  private overlay: HTMLDivElement | null = null;
+  private btnBar: HTMLDivElement | null = null;
+  private subBox: HTMLDivElement | null = null;
+  private subEl: HTMLDivElement | null = null;
+  private spkEl: HTMLDivElement | null = null;
   private timers: Phaser.Time.TimerEvent[] = [];
   private finished = false;
   private clipToken = 0;
@@ -41,11 +43,12 @@ export class CinematicScene extends Phaser.Scene {
     this.index = 0;
     this.finished = false;
     this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 1).setInteractive(); // swallow all clicks
-    this.speaker = label(this, W / 2, H - 112, '', 15, C.goldHi, { weight: 900, origin: [0.5, 0.5] }).setDepth(20);
-    this.subtitle = label(this, W / 2, H - 80, '', 24, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 200 }).setDepth(20);
-    this.subtitle.setStroke('#000000', 6);
-    this.speaker.setStroke('#000000', 5);
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.removeVideo());
+    // Subtitles and skip buttons live in an HTML layer above the <video> (which covers the canvas).
+    this.buildOverlay();
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.removeVideo();
+      this.removeOverlay();
+    });
 
     // Browsers block sound (and often video) until the page is clicked: ask for that click first.
     const t = label(this, W / 2, H / 2 - 20, '클릭하여 시작', 30, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] });
@@ -65,9 +68,60 @@ export class CinematicScene extends Phaser.Scene {
     });
   }
 
+  private buildOverlay() {
+    const o = document.createElement('div');
+    Object.assign(o.style, { position: 'fixed', zIndex: '6', pointerEvents: 'none', fontFamily: '"Noto Sans KR", sans-serif' });
+    const btns = document.createElement('div');
+    Object.assign(btns.style, { position: 'absolute', top: '3%', right: '2%', display: 'none', gap: '8px', pointerEvents: 'auto' });
+    const mk = (text: string, fn: () => void) => {
+      const b = document.createElement('button');
+      b.textContent = text;
+      Object.assign(b.style, { background: 'rgba(0,0,0,0.55)', color: '#efe6d6', border: '1px solid #6a5236', borderRadius: '8px', padding: '6px 12px', cursor: 'pointer', font: 'inherit', fontSize: '13px' });
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fn();
+      });
+      btns.appendChild(b);
+    };
+    mk('건너뛰기 ▶', () => this.nextClip());
+    mk('전체 건너뛰기', () => this.finish());
+    const box = document.createElement('div');
+    Object.assign(box.style, { position: 'absolute', left: '8%', right: '8%', bottom: '7%', textAlign: 'center', transition: 'opacity 0.25s', opacity: '0' });
+    this.spkEl = document.createElement('div');
+    Object.assign(this.spkEl.style, { color: '#ffd27a', fontWeight: '900', fontSize: '1.0em', textShadow: '0 0 6px #000, 0 2px 3px #000' });
+    this.subEl = document.createElement('div');
+    Object.assign(this.subEl.style, { color: '#fff7ea', fontWeight: '700', fontSize: '1.6em', textShadow: '0 0 8px #000, 0 2px 4px #000, 0 0 2px #000' });
+    box.append(this.spkEl, this.subEl);
+    o.append(btns, box);
+    document.body.appendChild(o);
+    this.overlay = o;
+    this.btnBar = btns;
+    this.subBox = box;
+    this.placeOverlay();
+    window.addEventListener('resize', this.placeOverlay);
+  }
+
+  private placeOverlay = () => {
+    if (!this.overlay) return;
+    const r = this.game.canvas.getBoundingClientRect();
+    Object.assign(this.overlay.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, fontSize: `${(r.width / W) * 16}px` });
+  };
+
+  private removeOverlay() {
+    window.removeEventListener('resize', this.placeOverlay);
+    this.overlay?.remove();
+    this.overlay = null;
+  }
+
+  private setSub(text: string, speaker = '') {
+    if (!this.subEl || !this.subBox) return;
+    this.spkEl!.textContent = speaker;
+    this.subEl.textContent = text;
+    this.subBox.style.opacity = text ? '1' : '0';
+  }
+
   private buildControls() {
-    new Button(this, W - 230, 40, 140, 40, '건너뛰기 ▶', { variant: 'ghost', size: 14, onClick: () => this.nextClip() }).setDepth(30);
-    new Button(this, W - 84, 40, 130, 40, '전체 건너뛰기', { variant: 'ghost', size: 13, onClick: () => this.finish() }).setDepth(30);
+    if (this.btnBar) this.btnBar.style.display = 'flex';
     const kb = this.input.keyboard!;
     kb.on('keydown-SPACE', () => this.nextClip());
     kb.on('keydown-ENTER', () => this.nextClip());
@@ -136,15 +190,10 @@ export class CinematicScene extends Phaser.Scene {
     clip.subtitles.forEach((s, i) => {
       const next = clip.subtitles[i + 1];
       this.timers.push(
-        this.time.delayedCall(s.at * 1000, () => {
-          if (token !== this.clipToken) return;
-          this.speaker.setText(s.speaker ?? '');
-          this.subtitle.setText(s.text).setAlpha(0);
-          this.tweens.add({ targets: this.subtitle, alpha: 1, duration: 250 });
-        }),
+        this.time.delayedCall(s.at * 1000, () => token === this.clipToken && this.setSub(s.text, s.speaker ?? '')),
       );
-      const end = next ? next.at : clip.seconds - 0.3;
-      this.timers.push(this.time.delayedCall(end * 1000, () => token === this.clipToken && this.tweens.add({ targets: this.subtitle, alpha: 0, duration: 200 })));
+      const end = next ? next.at - 0.05 : clip.seconds - 0.3;
+      this.timers.push(this.time.delayedCall(end * 1000, () => token === this.clipToken && this.setSub('')));
     });
   }
 
@@ -158,8 +207,7 @@ export class CinematicScene extends Phaser.Scene {
   private clearClip() {
     this.timers.forEach((t) => t.remove());
     this.timers = [];
-    this.subtitle.setText('');
-    this.speaker.setText('');
+    this.setSub('');
     this.still?.destroy();
     this.still = null;
     this.removeVideo();
@@ -186,6 +234,7 @@ export class CinematicScene extends Phaser.Scene {
     this.finished = true;
     this.clipToken++;
     this.clearClip();
+    this.removeOverlay();
     const core = this.registry.get('core') as GameCore;
     if (this.data_.seenId) core.markSeen(this.data_.seenId);
     if (!this.data_.titleCard) {
