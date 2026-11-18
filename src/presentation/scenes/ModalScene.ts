@@ -23,7 +23,18 @@ export interface ConfirmModal {
   onCancel?: () => void;
 }
 
-export type ModalRequest = TutorialModal | ConfirmModal;
+export interface ResultModal {
+  kind: 'result';
+  title: string;
+  subtitle: string;
+  tone: 'victory' | 'defeat';
+  rows: [string, string][];
+  note?: string;
+  buttonLabel: string;
+  onClose: () => void;
+}
+
+export type ModalRequest = TutorialModal | ConfirmModal | ResultModal;
 export type ModalData = ModalRequest & { returnTo: string };
 
 export class ModalScene extends Phaser.Scene {
@@ -46,7 +57,28 @@ export class ModalScene extends Phaser.Scene {
     this.root = this.add.container(W / 2, H / 2).setAlpha(0).setScale(0.97);
     this.tweens.add({ targets: this.root, alpha: 1, scale: 1, duration: 200, ease: 'Cubic.easeOut' });
     if (data.kind === 'tutorial') this.buildTutorial(data);
-    else this.buildConfirm(data);
+    else if (data.kind === 'confirm') this.buildConfirm(data);
+    else this.buildResult(data);
+  }
+
+  // ───────────────────────── night result
+  private buildResult(data: ResultModal) {
+    const pw = 560;
+    const ph = 170 + data.rows.length * 40 + (data.note ? 56 : 0);
+    const accent = data.tone === 'victory' ? C.gold : C.danger;
+    this.frame(pw, ph, accent);
+    const top = -ph / 2;
+    this.root.add(label(this, 0, top + 46, data.title, 30, data.tone === 'victory' ? C.goldHi : C.dangerHi, { weight: 900, origin: [0.5, 0.5] }));
+    this.root.add(label(this, 0, top + 82, data.subtitle, 15, C.mute, { weight: 700, origin: [0.5, 0.5] }));
+    data.rows.forEach(([k, v], i) => {
+      const y = top + 124 + i * 40;
+      this.root.add(label(this, -pw / 2 + 60, y, k, 17, C.mute, { weight: 700, origin: [0, 0.5] }));
+      this.root.add(label(this, pw / 2 - 60, y, v, 20, C.text, { weight: 900, origin: [1, 0.5] }));
+    });
+    if (data.note) this.root.add(label(this, 0, top + 124 + data.rows.length * 40 + 8, data.note, 13, C.dim, { origin: [0.5, 0.5], align: 'center', wrap: pw - 60 }));
+    const btn = new Button(this, 0, ph / 2 - 46, 240, 52, data.buttonLabel, { variant: 'gold', sub: 'Enter', onClick: () => this.close(data.onClose) });
+    this.root.add(btn);
+    this.input.keyboard!.on('keydown-ENTER', () => this.close(data.onClose));
   }
 
   private close(after?: () => void) {

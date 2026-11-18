@@ -118,4 +118,48 @@ export class Sfx {
   click() {
     this.tone(1400, 0.05, { type: 'square', gain: 0.03 });
   }
+
+  // ───────── night combat (§22 전투 사운드)
+  swing(heavy: boolean) {
+    this.noise(heavy ? 0.22 : 0.14, { gain: heavy ? 0.12 : 0.08, freq: heavy ? 700 : 1400, sweepTo: heavy ? 300 : 3200, q: 1.2 });
+  }
+
+  hit(count: number) {
+    const g = Math.min(0.16, 0.06 + count * 0.01);
+    this.noise(0.06, { gain: g, freq: 2400, type: 'highpass' });
+    this.tone(180, 0.09, { gain: g, slideTo: 90 });
+  }
+
+  kill() {
+    this.tone(320 + Math.random() * 80, 0.08, { type: 'square', gain: 0.025, slideTo: 140 });
+  }
+
+  hurt() {
+    this.tone(110, 0.25, { type: 'sawtooth', gain: 0.12, slideTo: 60 });
+  }
+
+  dodge() {
+    this.noise(0.16, { gain: 0.07, freq: 900, sweepTo: 2600, q: 0.7 });
+  }
+
+  gem() {
+    this.tone(1500 + Math.random() * 300, 0.05, { type: 'sine', gain: 0.025 });
+  }
+
+  levelUp() {
+    [659.25, 830.61, 987.77, 1318.5].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', gain: 0.08, when: i * 0.06 }));
+  }
+
+  boom() {
+    this.noise(0.4, { gain: 0.25, freq: 300, type: 'lowpass' });
+    this.tone(70, 0.4, { gain: 0.25, slideTo: 35 });
+  }
+
+  dawn() {
+    [392, 523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone(f, 1.4, { type: 'sine', gain: 0.07, when: i * 0.12 }));
+  }
+
+  fall() {
+    [392, 349.23, 311.13, 261.63].forEach((f, i) => this.tone(f, 0.7, { type: 'triangle', gain: 0.08, when: i * 0.22 }));
+  }
 }

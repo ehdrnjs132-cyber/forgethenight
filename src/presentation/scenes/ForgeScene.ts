@@ -50,6 +50,7 @@ export class ForgeScene extends Phaser.Scene {
   private statsText!: Phaser.GameObjects.Text;
   private enhanceBtn!: Button;
   private equipBtn!: Button;
+  private nightBtn!: Button;
   private toastBox!: Phaser.GameObjects.Container;
 
   constructor() {
@@ -83,6 +84,7 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-UP', () => this.step(-1));
     kb.on('keydown-DOWN', () => this.step(1));
     kb.on('keydown-E', () => this.equipSelected());
+    kb.on('keydown-N', () => this.startNight());
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (p.x < LIST.x + LIST.w) this.scroll(Math.sign(dy));
     });
@@ -255,7 +257,7 @@ export class ForgeScene extends Phaser.Scene {
       onClick: () => this.tryEnhance(),
     });
     this.equipBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 518, 276, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
-    new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 578, 276, 50, '밤 전투 시작', { variant: 'dark', sub: 'M2에서 구현 예정', onClick: () => undefined }).setEnabled(false);
+    this.nightBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 578, 276, 50, '밤 전투 시작', { variant: 'dark', sub: '', onClick: () => this.startNight() });
   }
 
   private buildToast() {
@@ -384,6 +386,16 @@ export class ForgeScene extends Phaser.Scene {
     const eq = !!w && this.core.state.equippedId === w.id;
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
     this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? '이 무기로 밤에 싸웁니다' : 'E');
+    const armed = equippedWeapon(this.core.state);
+    this.nightBtn.setEnabled(!!armed && !this.animating);
+    this.nightBtn.setLabel('밤 전투 시작', armed ? `${weaponName(armed)} +${armed.level} · 시험 전투 (N)` : '먼저 무기를 장착하세요');
+  }
+
+  private startNight() {
+    const armed = equippedWeapon(this.core.state);
+    if (!armed || this.animating) return;
+    this.cameras.main.fadeOut(300, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', { weapon: { ...armed }, day: this.core.state.day }));
   }
 
   // ───────────────────────── input

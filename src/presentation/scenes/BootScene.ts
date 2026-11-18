@@ -56,8 +56,118 @@ export class BootScene extends Phaser.Scene {
     g.lineStyle(4, 0xffffff, 1);
     g.strokeCircle(64, 64, 60);
     g.generateTexture('ring', 128, 128);
+    g.clear();
+
+    this.makeNightTextures(g);
     g.destroy();
 
     this.scene.start('Forge');
+  }
+
+  /** Placeholder night art (principle 8): ground, the smith, enemies, XP gems, vignette. */
+  private makeNightTextures(g: Phaser.GameObjects.Graphics) {
+    // ground: dark flagstones
+    const rnd = new Phaser.Math.RandomDataGenerator(['forge-ground']);
+    g.fillStyle(0x121018, 1);
+    g.fillRect(0, 0, 128, 128);
+    for (let y = 0; y < 128; y += 32) {
+      for (let x = (y / 32) % 2 ? -16 : 0; x < 128; x += 32) {
+        g.fillStyle(rnd.pick([0x18151f, 0x1a1722, 0x16131c, 0x1c1824]), 1);
+        g.fillRect(x + 1, y + 1, 30, 30);
+      }
+    }
+    g.lineStyle(1, 0x0b0a0e, 1);
+    for (let i = 0; i < 5; i++) {
+      const x = rnd.between(0, 120);
+      const y = rnd.between(0, 120);
+      g.lineBetween(x, y, x + rnd.between(-10, 10), y + rnd.between(4, 12));
+    }
+    g.generateTexture('ground', 128, 128);
+    g.clear();
+
+    // the smith: dark cloak, leather apron, grey beard
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(28, 50, 34, 10);
+    g.fillStyle(0x2b2433, 1);
+    g.fillRoundedRect(12, 20, 32, 30, 10);
+    g.fillStyle(0x6b4a2c, 1);
+    g.fillRoundedRect(18, 26, 20, 22, 4);
+    g.fillStyle(0xd9a77a, 1);
+    g.fillCircle(28, 15, 10);
+    g.fillStyle(0xbdb6ad, 1);
+    g.fillTriangle(20, 16, 36, 16, 28, 30);
+    g.fillStyle(0x1a1410, 1);
+    g.fillCircle(24, 13, 1.6);
+    g.fillCircle(32, 13, 1.6);
+    g.lineStyle(2, 0x0a0808, 1);
+    g.strokeRoundedRect(12, 20, 32, 30, 10);
+    g.strokeCircle(28, 15, 10);
+    g.generateTexture('player', 56, 56);
+    g.clear();
+
+    // skeleton
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(20, 37, 26, 8);
+    g.lineStyle(3, 0xd8d0bb, 1);
+    g.lineBetween(14, 26, 12, 36);
+    g.lineBetween(26, 26, 28, 36);
+    g.fillStyle(0xd8d0bb, 1);
+    g.fillRoundedRect(12, 16, 16, 12, 3);
+    g.fillStyle(0x2a2420, 1);
+    for (let i = 0; i < 3; i++) g.fillRect(14, 18 + i * 3, 12, 1);
+    g.fillStyle(0xece6d4, 1);
+    g.fillCircle(20, 10, 9);
+    g.fillStyle(0x140d0d, 1);
+    g.fillCircle(16.5, 10, 2.6);
+    g.fillCircle(23.5, 10, 2.6);
+    g.fillStyle(0xff3b3b, 1);
+    g.fillCircle(16.5, 10, 1);
+    g.fillCircle(23.5, 10, 1);
+    g.lineStyle(2, 0x0a0808, 1);
+    g.strokeCircle(20, 10, 9);
+    g.generateTexture('enemy-skeleton', 40, 40);
+    g.clear();
+
+    // exploding slime: green body with a hot orange core
+    g.fillStyle(0x000000, 0.35);
+    g.fillEllipse(18, 29, 30, 8);
+    g.fillStyle(0x4f9a2c, 1);
+    g.fillEllipse(18, 18, 32, 24);
+    g.fillStyle(0x7ccf4a, 1);
+    g.fillEllipse(17, 15, 26, 16);
+    g.fillStyle(0xff8a2a, 1);
+    g.fillCircle(18, 20, 5);
+    g.fillStyle(0xffe08a, 1);
+    g.fillCircle(18, 20, 2.5);
+    g.fillStyle(0xe8ffd8, 0.8);
+    g.fillEllipse(11, 11, 7, 4);
+    g.fillStyle(0x10200a, 1);
+    g.fillCircle(13, 15, 1.8);
+    g.fillCircle(23, 15, 1.8);
+    g.lineStyle(2, 0x0a1406, 1);
+    g.strokeEllipse(18, 18, 32, 24);
+    g.generateTexture('enemy-slime', 36, 34);
+    g.clear();
+
+    // XP gem
+    g.fillStyle(0x5fe3ff, 1);
+    g.fillTriangle(6, 0, 12, 7, 6, 14);
+    g.fillTriangle(6, 0, 0, 7, 6, 14);
+    g.fillStyle(0xd8fbff, 1);
+    g.fillTriangle(6, 2, 9, 7, 6, 7);
+    g.generateTexture('xp', 12, 14);
+    g.clear();
+
+    // screen vignette
+    const v = this.textures.createCanvas('vignette', 640, 360);
+    if (v) {
+      const ctx = v.getContext();
+      const grad = ctx.createRadialGradient(320, 180, 90, 320, 180, 380);
+      grad.addColorStop(0, 'rgba(0,0,0,0)');
+      grad.addColorStop(1, 'rgba(0,0,8,0.85)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, 640, 360);
+      v.refresh();
+    }
   }
 }

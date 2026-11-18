@@ -4,6 +4,7 @@ import { browserStorage } from './core/save/save';
 import { BootScene } from './presentation/scenes/BootScene';
 import { ForgeScene } from './presentation/scenes/ForgeScene';
 import { ModalScene } from './presentation/scenes/ModalScene';
+import { NightScene } from './presentation/scenes/NightScene';
 import { H, W } from './presentation/theme';
 
 async function fontsReady() {
@@ -30,7 +31,8 @@ async function boot() {
     // `?timer` drives the loop with setTimeout instead of requestAnimationFrame,
     // so automated checks keep running when the page is not being painted.
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
-    scene: [BootScene, ForgeScene, ModalScene],
+    physics: { default: 'arcade', arcade: { debug: false } },
+    scene: [BootScene, ForgeScene, NightScene, ModalScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   // Debug handle for manual testing in the browser console.
