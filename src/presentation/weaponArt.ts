@@ -4,6 +4,7 @@
 import Phaser from 'phaser';
 import { ELEMENT_INFO, type Element, type WeaponClass } from '../config/weapons';
 import { appearanceStage, milestoneTier } from '../config/appearance';
+import { swordFormIndex } from '../config/swordNames';
 import { mix } from './theme';
 
 export interface WeaponLook {
@@ -19,6 +20,23 @@ export function weaponTexture(cls: WeaponClass, element: Element): string {
 
 export function weaponImagePath(cls: WeaponClass, element: Element): string {
   return `assets/weapons/${cls}_${element}.png`;
+}
+
+/** Texture key of one sword form image (public/assets/swords/<element>_<nn>.webp, tools/art/process-swords.ts). */
+export function swordFormTexture(element: Element, form: number): string {
+  return `sword-${element}-${String(form).padStart(2, '0')}`;
+}
+
+/**
+ * The image to draw for a weapon: a sword's own form image when it is loaded, else the class/element base image.
+ * Returns the key even if neither is loaded; callers check `textures.exists` and fall back to drawWeapon.
+ */
+export function weaponLookTexture(scene: Phaser.Scene, look: WeaponLook): string {
+  if (look.cls === 'sword') {
+    const key = swordFormTexture(look.element, swordFormIndex(look.level));
+    if (scene.textures.exists(key)) return key;
+  }
+  return weaponTexture(look.cls, look.element);
 }
 
 /**

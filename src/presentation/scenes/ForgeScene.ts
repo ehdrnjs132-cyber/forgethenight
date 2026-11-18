@@ -11,7 +11,7 @@ import { START_LIVES } from '../../config/rules';
 import { C, DISPLAY, H, W, css, label, panel } from '../theme';
 import { Button } from '../ui/button';
 import { WeaponView } from '../ui/weaponView';
-import { drawWeapon, glowStrength, weaponTexture } from '../weaponArt';
+import { drawWeapon, glowStrength, weaponLookTexture } from '../weaponArt';
 import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE, type Swing } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
@@ -624,7 +624,7 @@ export class ForgeScene extends Phaser.Scene {
           parts.push(t);
         }
       } else if (w) {
-        const tex = weaponTexture(w.cls, w.element);
+        const tex = weaponLookTexture(this, w);
         if (this.textures.exists(tex)) {
           // hangs on the painted hooks, resting just above the shelf
           const img = this.add.image(0, -10, tex);

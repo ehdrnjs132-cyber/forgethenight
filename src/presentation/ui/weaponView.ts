@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { ELEMENT_INFO } from '../../config/weapons';
 import { milestoneTier, weaponSizeScale } from '../../config/appearance';
-import { drawWeapon, glowStrength, weaponTexture, type WeaponLook } from '../weaponArt';
+import { drawWeapon, glowStrength, weaponLookTexture, type WeaponLook } from '../weaponArt';
 
 /**
  * The big weapon lying on the anvil. Uses the Higgsfield base image when it is loaded
@@ -35,7 +35,7 @@ export class WeaponView extends Phaser.GameObjects.Container {
 
     const el = ELEMENT_INFO[look.element];
     const tier = milestoneTier(look.level);
-    const key = weaponTexture(look.cls, look.element);
+    const key = weaponLookTexture(this.scene, look);
 
     if (this.scene.textures.exists(key)) {
       if (!this.img) {

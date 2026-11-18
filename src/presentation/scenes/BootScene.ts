@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import { ELEMENTS, WEAPON_CLASSES } from '../../config/weapons';
-import { weaponImagePath, weaponTexture } from '../weaponArt';
+import { ELEMENTS, WEAPON_CLASSES, type Element } from '../../config/weapons';
+import { swordFormTexture, weaponImagePath, weaponTexture } from '../weaponArt';
 import type { GameCore } from '../../core/game';
 import { INTRO } from '../../config/cinematics';
 import type { CinematicData } from './CinematicScene';
@@ -42,6 +42,15 @@ export class BootScene extends Phaser.Scene {
     for (const cls of WEAPON_CLASSES) {
       for (const el of ELEMENTS) this.load.image(weaponTexture(cls, el), weaponImagePath(cls, el));
     }
+    // Sword form images (30 per element). The manifest lists the ones that exist.
+    this.load.json('sword-manifest', 'assets/swords/manifest.json');
+    this.load.once('filecomplete-json-sword-manifest', (_k: string, _t: string, keys: string[]) => {
+      if (!Array.isArray(keys)) return;
+      for (const k of keys) {
+        const [el, nn] = k.split('_');
+        this.load.image(swordFormTexture(el as Element, Number(nn)), `assets/swords/${k}.webp`);
+      }
+    });
     // Higgsfield world art (tools/art/assets.ts). Missing files fall back to the drawn placeholders.
     for (const key of WORLD_ART) this.load.image(`art-${key}`, `assets/world/${key}.png`);
     this.load.image('weapon-hammer', 'assets/world/hammer.png');
