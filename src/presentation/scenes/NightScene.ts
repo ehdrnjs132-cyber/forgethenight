@@ -19,6 +19,7 @@ import { milestoneTier } from '../../config/appearance';
 import { glowStrength } from '../weaponArt';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
+import { TouchPad, isTouchDevice } from '../ui/touchPad';
 import { PROP_COUNT } from './BootScene';
 import type { ModalData, ModalRequest } from './ModalScene';
 
@@ -68,6 +69,7 @@ export class NightScene extends Phaser.Scene {
   private element: Element | null = null;
   private baseDamage = 100;
   private levelGlow = 0;
+  private touch: TouchPad | null = null;
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private heroAnim: string | null = null;
@@ -192,13 +194,21 @@ export class NightScene extends Phaser.Scene {
     this.keys.E.on('down', () => this.lockedSkill('E'));
     this.keys.R.on('down', () => this.lockedSkill('R'));
     this.input.mouse?.disableContextMenu();
+    this.touch = isTouchDevice()
+      ? new TouchPad(this, {
+          dash: () => this.tryDash(),
+          skill: () => this.elementSkill(),
+          heavyStart: () => !this.ended && this.startCharge(),
+          heavyEnd: () => this.releaseCharge(),
+        })
+      : null;
     this.input.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.ended) return;
+      if (this.ended || this.touch) return;
       if (p.rightButtonDown()) this.startCharge();
       else this.queued = true;
     });
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
-      if (p.button === 2) this.releaseCharge();
+      if (!this.touch && p.button === 2) this.releaseCharge();
     });
 
     this.buildHud();
@@ -246,18 +256,24 @@ export class NightScene extends Phaser.Scene {
     const xpText = fix(label(this, W / 2, H - 30, '', 13, C.text, { weight: 700, origin: [0.5, 0.5] }));
     const skills = fix(this.add.graphics());
     const sx = W / 2 + 310;
-    [['Space', '대시'], ['우클릭', '강공격'], ['Q', '속성'], ['E', '잠김'], ['R', '잠김']].forEach(([k, n], i) => {
-      fix(label(this, sx + i * 62 + 26, H - 64, k, 11, C.text, { weight: 900, origin: [0.5, 0.5] }));
-      fix(label(this, sx + i * 62 + 26, H - 16, n, 10, C.mute, { weight: 700, origin: [0.5, 0.5] }));
-    });
-    fix(label(this, 20, H - 22, `WASD 이동 · 마우스 조준 · 좌클릭 콤보(누르고 있으면 연속) · Esc 포기 | 목숨 ${this.core.state.lives}`, 12, C.dim, { origin: [0, 0.5] }));
+    if (!isTouchDevice()) {
+      [['Space', '대시'], ['우클릭', '강공격'], ['Q', '속성'], ['E', '잠김'], ['R', '잠김']].forEach(([k, n], i) => {
+        fix(label(this, sx + i * 62 + 26, H - 64, k, 11, C.text, { weight: 900, origin: [0.5, 0.5] }));
+        fix(label(this, sx + i * 62 + 26, H - 16, n, 10, C.mute, { weight: 700, origin: [0.5, 0.5] }));
+      });
+      fix(label(this, 20, H - 22, `WASD 이동 · 마우스 조준 · 좌클릭 콤보(누르고 있으면 연속) · Esc 포기 | 목숨 ${this.core.state.lives}`, 12, C.dim, { origin: [0, 0.5] }));
+    } else {
+      // phone: a pause/give-up button instead of Esc, top right
+      const quit = fix(label(this, W - 24, 30, '포기', 16, C.text, { weight: 900, origin: [1, 0.5] }));
+      quit.setStroke('#140a05', 5).setInteractive().on('pointerdown', () => this.askLeave());
+    }
     this.hud = { hpBar, hpText, rivals, combo, xpBar, xpText, skills };
   }
 
   private intro() {
     const t = label(this, W / 2, H / 2 - 70, `DAY ${this.nd.day} · 밤`, 46, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
-    const s2 = label(this, W / 2, H / 2 + 8, '그들이 몇 강을 벼려 왔는지는 아무도 모른다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
+    const s2 = label(this, W / 2, H / 2 + 8, '머리 위 숫자가 그들이 벼려 온 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     for (const o of [t, s, s2]) {
       o.setAlpha(0);
       this.tweens.add({ targets: o, alpha: 1, duration: 300 });
@@ -557,8 +573,11 @@ export class NightScene extends Phaser.Scene {
     if (this.sk.regen > 0) this.hp = Math.min(this.maxHp, this.hp + this.sk.regen * dt);
 
     const p = this.input.activePointer;
-    const wp = p.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
-    this.aim = Math.atan2(wp.y - this.player.y, wp.x - this.player.x);
+    if (this.touch) this.aim = this.touchAim();
+    else {
+      const wp = p.positionToCamera(this.cameras.main) as Phaser.Math.Vector2;
+      this.aim = Math.atan2(wp.y - this.player.y, wp.x - this.player.x);
+    }
 
     this.movePlayer(dt);
     this.attackLoop(dt, p);
@@ -568,10 +587,31 @@ export class NightScene extends Phaser.Scene {
     this.renderHud();
   }
 
-  private movePlayer(dt: number) {
+  /** Keyboard direction plus the touch joystick (length up to 1). */
+  private moveDir(): Phaser.Math.Vector2 {
     const k = this.keys;
     const dir = new Phaser.Math.Vector2((k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0), (k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0));
-    if (dir.lengthSq() > 0) dir.normalize();
+    if (dir.lengthSq() > 0) return dir.normalize();
+    if (this.touch && this.touch.move.lengthSq() > 0.04) return this.touch.move.clone();
+    return dir;
+  }
+
+  /** Touch has no mouse to aim with: face the nearest rival in reach, else the way the thumb is pushing. */
+  private touchAim(): number {
+    let best: Rival | null = null;
+    let bestD = 520;
+    for (const r of this.rivals) {
+      if (r.state === 'dead' || r.state === 'arrive') continue;
+      const d = Phaser.Math.Distance.Between(this.player.x, this.player.y, r.sprite.x, r.sprite.y);
+      if (d < bestD) [best, bestD] = [r, d];
+    }
+    if (best) return Math.atan2(best.sprite.y - this.player.y, best.sprite.x - this.player.x);
+    const m = this.touch!.move;
+    return m.lengthSq() > 0.04 ? Math.atan2(m.y, m.x) : this.aim;
+  }
+
+  private movePlayer(dt: number) {
+    const dir = this.moveDir();
     if (this.dashT > 0) {
       this.dashT -= dt;
       const v = this.dashDir.clone().scale(DASH.distance / DASH.time);
@@ -595,9 +635,8 @@ export class NightScene extends Phaser.Scene {
 
   private tryDash() {
     if (this.ended || this.dashCd > 0) return;
-    const k = this.keys;
-    const dir = new Phaser.Math.Vector2((k.D.isDown ? 1 : 0) - (k.A.isDown ? 1 : 0), (k.S.isDown ? 1 : 0) - (k.W.isDown ? 1 : 0));
-    this.dashDir = dir.lengthSq() > 0 ? dir.normalize() : new Phaser.Math.Vector2(Math.cos(this.aim), Math.sin(this.aim));
+    const dir = this.moveDir();
+    this.dashDir = dir.lengthSq() > 0 ? dir.normalize() :new Phaser.Math.Vector2(Math.cos(this.aim), Math.sin(this.aim));
     this.dashT = DASH.time;
     this.dashCd = DASH.cooldown * (1 - Math.min(0.6, this.sk.dodgeCooldown));
     this.invuln = Math.max(this.invuln, DASH.iframes);
@@ -622,7 +661,9 @@ export class NightScene extends Phaser.Scene {
       this.comboWindow -= dt;
       if (this.comboWindow <= 0) this.comboStep = 0;
     }
-    const wants = this.queued || (p.leftButtonDown() && !this.charging);
+    const held = this.touch ? this.touch.attackHeld : p.leftButtonDown();
+    if (this.touch?.takeTap()) this.queued = true;
+    const wants = this.queued || (held && !this.charging);
     this.queued = false;
     if (!wants || this.charging || this.dashT > 0) return;
     const step = combo.steps[this.comboStep];
@@ -952,6 +993,7 @@ export class NightScene extends Phaser.Scene {
     // skill slots: Space, RMB, Q, E, R
     const g = h.skills;
     g.clear();
+    if (this.touch) return; // on phones the touch buttons sit where the skill bar would be
     const sx = W / 2 + 310;
     const fills = [
       1 - this.dashCd / (DASH.cooldown * (1 - Math.min(0.6, this.sk.dodgeCooldown))),
