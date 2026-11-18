@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GameCore } from '../src/core/game';
-import { KEYS, MemoryStorage, SaveManager } from '../src/core/save/save';
+import { KEYS, MemoryStorage, SaveManager, checksum } from '../src/core/save/save';
 import { createRun } from '../src/core/state/initial';
 
 describe('save and load (QA 17)', () => {
@@ -75,13 +75,29 @@ describe('GameCore persistence', () => {
     expect(b.state.weapons.map((w) => w.id)).toEqual(a.state.weapons.map((w) => w.id));
   });
 
-  it('starting a new run resets the run but counts it in the records', () => {
+  it('starting a new run resets the run, keeps tutorial progress and counts the run', () => {
     const storage = new MemoryStorage();
     const game = new GameCore(storage, 5);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
+    game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     game.dispatch({ type: 'NEW_RUN', seed: 9 });
-    expect(game.state.tutorials.firstEnhance).toBeUndefined();
+    expect(game.state.tutorials.firstEnhance).toBe(true);
+    expect(game.state.equippedId).toBeNull();
     expect(game.state.weapons).toHaveLength(3);
     expect(game.records.runs).toBe(2);
+  });
+
+  it('migrates a version 1 save', () => {
+    const storage = new MemoryStorage();
+    const save = new SaveManager(storage);
+    const v1 = createRun(3) as unknown as Record<string, unknown>;
+    v1.version = 1;
+    v1.stats = { enhanceAttempts: 4, destroyed: 1, bestLevel: 7 };
+    storage.setItem(KEYS.run, JSON.stringify({ v: 1, sum: checksum(JSON.stringify(v1)), data: v1 }));
+    const loaded = save.loadRun().state!;
+    expect(loaded.version).toBe(2);
+    expect(loaded.stats.enhanceAttempts).toBe(4);
+    expect(loaded.stats.kills).toBe(0);
+    expect(loaded.stats.deaths).toBe(0);
   });
 });

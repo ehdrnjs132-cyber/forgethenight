@@ -5,6 +5,7 @@ import { BootScene } from './presentation/scenes/BootScene';
 import { ForgeScene } from './presentation/scenes/ForgeScene';
 import { ModalScene } from './presentation/scenes/ModalScene';
 import { NightScene } from './presentation/scenes/NightScene';
+import { GameOverScene } from './presentation/scenes/GameOverScene';
 import { H, W } from './presentation/theme';
 
 async function fontsReady() {
@@ -32,7 +33,7 @@ async function boot() {
     // so automated checks keep running when the page is not being painted.
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
     physics: { default: 'arcade', arcade: { debug: false } },
-    scene: [BootScene, ForgeScene, NightScene, ModalScene],
+    scene: [BootScene, ForgeScene, NightScene, ModalScene, GameOverScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   // Debug handle for manual testing in the browser console.

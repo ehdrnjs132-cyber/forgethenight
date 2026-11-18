@@ -15,6 +15,7 @@ import { drawWeapon, glowStrength, weaponTexture } from '../weaponArt';
 import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
+import type { NightData } from './NightScene';
 
 const LIST = { x: 24, y: 84, w: 316, h: 612, cardH: 66, gap: 8, top: 136 };
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
@@ -43,7 +44,8 @@ export class ForgeScene extends Phaser.Scene {
   private levelText!: Phaser.GameObjects.Text;
   private nextText!: Phaser.GameObjects.Text;
   private emptyText!: Phaser.GameObjects.Text;
-  private resetBtn!: Button;
+  private starterHammer!: Phaser.GameObjects.Image;
+  private leaving = false;
   private oddsTexts: Record<string, Phaser.GameObjects.Text> = {};
   private oddsBars!: Phaser.GameObjects.Graphics;
   private stageText!: Phaser.GameObjects.Text;
@@ -89,9 +91,14 @@ export class ForgeScene extends Phaser.Scene {
       if (p.x < LIST.x + LIST.w) this.scroll(Math.sign(dy));
     });
 
+    this.leaving = false;
     this.refresh();
+    const notice = this.core.notice;
     if (this.core.recoveredFromCorruption) this.toast('저장 데이터가 손상되어 직전 백업에서 복구했습니다.', C.dangerHi);
+    else if (notice?.kind === 'abandoned') this.toast(`전투 도중 종료되어 패배로 처리했습니다 · 남은 목숨 ${notice.livesLeft}`, C.dangerHi);
     else if (this.core.lastGrant.length) this.toast(`DAY ${this.core.state.day} · 오늘의 무기 ${this.core.lastGrant.length}자루를 받았습니다`, C.goldHi);
+    this.core.notice = null;
+    this.core.recoveredFromCorruption = false;
     this.core.lastGrant = [];
   }
 
@@ -221,8 +228,8 @@ export class ForgeScene extends Phaser.Scene {
       .text(640, 168, '', { fontFamily: DISPLAY, fontSize: '76px', fontStyle: '800', color: css(C.goldHi), stroke: '#000000', strokeThickness: 8, resolution: 2 })
       .setOrigin(0.5);
     this.nextText = label(this, 640, 226, '', 15, C.mute, { weight: 700, origin: [0.5, 0.5] });
-    this.emptyText = label(this, 640, 300, '', 18, C.mute, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: 520, lineSpacing: 8 });
-    this.resetBtn = new Button(this, 640, 372, 260, 46, '새로 시작 (테스트용)', { variant: 'dark', onClick: () => this.core.dispatch({ type: 'NEW_RUN' }) });
+    this.starterHammer = this.add.image(640, 300, 'weapon-hammer').setScale(0.9).setVisible(false);
+    this.emptyText = label(this, 640, 396, '', 16, C.mute, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: 560, lineSpacing: 8 });
   }
 
   private buildOdds() {
@@ -357,8 +364,12 @@ export class ForgeScene extends Phaser.Scene {
     this.weaponView.setLook(w ? { cls: w.cls, element: w.element, level: w.level } : null);
     this.renderHeader(w);
     this.levelText.setScale(1);
-    this.emptyText.setText(none ? '보유한 무기가 없습니다.\n기본 망치와 다음 날 진행은 M3에서 구현됩니다.' : '');
-    this.resetBtn.setVisible(none);
+    if (none) {
+      this.nameText.setText('기본 대장장이 망치').setColor(css(C.text));
+      this.nextText.setText('보유한 무기가 없습니다');
+    }
+    this.emptyText.setText(none ? '강화·판매 불가 · 무기가 없을 때만 사용합니다\n이 망치로 밤을 버티면 내일 아침 새 무기 3자루가 도착합니다' : '');
+    this.starterHammer.setVisible(none);
   }
 
   private renderOdds() {
@@ -387,15 +398,25 @@ export class ForgeScene extends Phaser.Scene {
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
     this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? '이 무기로 밤에 싸웁니다' : 'E');
     const armed = equippedWeapon(this.core.state);
-    this.nightBtn.setEnabled(!!armed && !this.animating);
-    this.nightBtn.setLabel('밤 전투 시작', armed ? `${weaponName(armed)} +${armed.level} · 시험 전투 (N)` : '먼저 무기를 장착하세요');
+    const hammer = this.core.state.weapons.length === 0;
+    this.nightBtn.setEnabled((!!armed || hammer) && !this.animating);
+    this.nightBtn.setLabel(
+      '밤 전투 시작',
+      armed ? `${weaponName(armed)} +${armed.level} (N)` : hammer ? '기본 망치로 싸웁니다 (N)' : '먼저 무기를 장착하세요',
+    );
   }
 
   private startNight() {
-    const armed = equippedWeapon(this.core.state);
-    if (!armed || this.animating) return;
+    if (this.animating || this.leaving) return;
+    const r = this.core.dispatch({ type: 'START_NIGHT' });
+    if (r.type !== 'nightStarted') {
+      if (r.type === 'nightBlocked') this.toast('밤에 들고 갈 무기를 먼저 장착하세요', C.dangerHi);
+      return;
+    }
+    this.leaving = true;
+    const data: NightData = { weapon: r.weapon, day: this.core.state.day };
     this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', { weapon: { ...armed }, day: this.core.state.day }));
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', data));
   }
 
   // ───────────────────────── input

@@ -1,7 +1,11 @@
 import type { GameState, Records } from './types';
 import { START_LIVES } from '../../config/rules';
 
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
+
+export function createStats(): GameState['stats'] {
+  return { enhanceAttempts: 0, destroyed: 0, bestLevel: 0, kills: 0, nightSeconds: 0, nightsWon: 0, deaths: 0, bossesKilled: 0 };
+}
 
 export function createRun(seed: number): GameState {
   return {
@@ -23,7 +27,7 @@ export function createRun(seed: number): GameState {
     nightSnapshot: null,
     lastEnhance: null,
     story: { flags: {} },
-    stats: { enhanceAttempts: 0, destroyed: 0, bestLevel: 0 },
+    stats: createStats(),
   };
 }
 

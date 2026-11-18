@@ -41,6 +41,16 @@ export const WEAPON_ATTACK: Record<WeaponClass, AttackShape> = {
   axe: { kind: 'circle', range: 155, interval: 1.35, damageMul: 1.6, knockback: 220, engage: 1.15 },
 };
 
+/**
+ * The starter blacksmith hammer (§13): only when every weapon is gone. Weaker than a +0 weapon
+ * but enough to fight. Cannot be enhanced or sold.
+ */
+export const HAMMER = {
+  name: '기본 대장장이 망치',
+  damage: 60,
+  attack: { kind: 'arc', range: 105, arcDeg: 110, interval: 1.0, damageMul: 1, knockback: 160, engage: 1.3 } as AttackShape,
+};
+
 export type EnemyKind = 'skeleton' | 'slime';
 
 export interface EnemyDef {

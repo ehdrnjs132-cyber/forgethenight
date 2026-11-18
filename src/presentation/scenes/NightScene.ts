@@ -1,9 +1,11 @@
 // Night combat (§3 NIGHT, §10, §11): WASD movement, dodge, automatic attacks with the equipped
 // weapon, waves of enemies, XP gems, damage numbers and survival until dawn.
-// M2 is a test night: results are shown but not yet written to the run (lives, XP, next day → M3).
+// The outcome goes to the core: a won night advances the day, a lost one costs a life (§13).
 import Phaser from 'phaser';
-import type { Weapon } from '../../core/state/types';
-import { ENEMIES, PLAYER, SPAWN, WEAPON_ATTACK, WORLD, type AttackShape, type EnemyKind } from '../../config/combat';
+import type { GameCore } from '../../core/game';
+import type { NightWeapon } from '../../core/systems/daynight';
+import type { GameOverSummary } from '../../core/state/types';
+import { ENEMIES, HAMMER, PLAYER, SPAWN, WEAPON_ATTACK, WORLD, type AttackShape, type EnemyKind } from '../../config/combat';
 import { CLASS_INFO, ELEMENT_INFO } from '../../config/weapons';
 import { NIGHT_SECONDS } from '../../config/rules';
 import { addXp, aliveTarget, enemyStats, formatDamage, hits, pickEnemy, weaponDamage, xpToNext } from '../../combat/rules';
@@ -13,7 +15,7 @@ import { drawWeapon, weaponTexture } from '../weaponArt';
 import type { ModalData, ModalRequest } from './ModalScene';
 
 export interface NightData {
-  weapon: Weapon;
+  weapon: NightWeapon;
   day: number;
 }
 
@@ -29,9 +31,10 @@ interface EnemyFields {
 }
 type Enemy = Phaser.Physics.Arcade.Sprite & EnemyFields;
 
-const SWING_WIDTH: Record<string, number> = { sword: 118, spear: 214, axe: 128 };
+const SWING_WIDTH: Record<string, number> = { sword: 118, spear: 214, axe: 128, hammer: 96 };
 
 export class NightScene extends Phaser.Scene {
+  private core!: GameCore;
   private nd!: NightData;
   private shape!: AttackShape;
   private damage = 0;
@@ -79,16 +82,27 @@ export class NightScene extends Phaser.Scene {
   }
 
   init(data: NightData) {
+    this.core = this.registry.get('core') as GameCore;
     this.nd = data;
-    this.shape = WEAPON_ATTACK[data.weapon.cls];
-    this.damage = weaponDamage(data.weapon.level, data.weapon.cls);
+    const w = data.weapon;
+    this.shape = w.kind === 'weapon' ? WEAPON_ATTACK[w.weapon.cls] : HAMMER.attack;
+    this.damage = w.kind === 'weapon' ? weaponDamage(w.weapon.level, w.weapon.cls) : HAMMER.damage;
     const override = Number(new URLSearchParams(location.search).get('night'));
     this.duration = override > 0 ? override : NIGHT_SECONDS;
+    const p = this.core.state.player;
     Object.assign(this, {
       hp: PLAYER.maxHp, invuln: 0, dodgeCd: 0, dodgeT: 0, facing: 0, elapsed: 0, attackT: 0.4, spawnT: 0,
-      kills: 0, level: 1, xp: 0, xpTotal: 0, ended: false, damageDealt: 0, hitsTaken: 0, gems: [], numbers: [], numberIdx: 0,
+      kills: 0, level: p.level, xp: p.xp, xpTotal: 0, ended: false, damageDealt: 0, hitsTaken: 0, gems: [], numbers: [], numberIdx: 0,
     });
     this.swing = { rot: 0, off: 0, alpha: 0 };
+  }
+
+  private get cls(): string {
+    return this.nd.weapon.kind === 'weapon' ? this.nd.weapon.weapon.cls : 'hammer';
+  }
+
+  private get glowColor(): number {
+    return this.nd.weapon.kind === 'weapon' ? ELEMENT_INFO[this.nd.weapon.weapon.element].glow : 0xd8d0bb;
   }
 
   create() {
@@ -107,7 +121,7 @@ export class NightScene extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.enemies, (_p, e) => this.touch(e as Enemy));
 
     this.swingImg = this.add.image(0, 0, this.weaponKey()).setOrigin(0.1, 0.5).setDepth(12).setAlpha(0);
-    this.swingImg.setScale(SWING_WIDTH[this.nd.weapon.cls] / this.swingImg.width);
+    this.swingImg.setScale(SWING_WIDTH[this.cls] / this.swingImg.width);
 
     for (let i = 0; i < 60; i++) {
       this.numbers.push(
@@ -132,14 +146,15 @@ export class NightScene extends Phaser.Scene {
 
   // ───────────────────────── setup helpers
   private weaponKey(): string {
-    const { cls, element } = this.nd.weapon;
+    if (this.nd.weapon.kind === 'hammer') return 'weapon-hammer';
+    const { cls, element, level } = this.nd.weapon.weapon;
     const key = weaponTexture(cls, element);
     if (this.textures.exists(key)) return key;
     const fallback = `weapon-fallback-${cls}-${element}`;
     if (!this.textures.exists(fallback)) {
       const g = this.add.graphics();
       g.setPosition(160, 60);
-      drawWeapon(g, { cls, element, level: this.nd.weapon.level }, 300);
+      drawWeapon(g, { cls, element, level }, 300);
       g.generateTexture(fallback, 320, 120);
       g.destroy();
     }
@@ -147,7 +162,9 @@ export class NightScene extends Phaser.Scene {
   }
 
   private buildHud() {
-    const w = this.nd.weapon;
+    const nw = this.nd.weapon;
+    const name = nw.kind === 'weapon' ? `${ELEMENT_INFO[nw.weapon.element].name} ${CLASS_INFO[nw.weapon.cls].name} +${nw.weapon.level}` : HAMMER.name;
+    const style = nw.kind === 'weapon' ? CLASS_INFO[nw.weapon.cls].style : '무기가 없을 때의 임시 무기';
     const fix = <T extends Phaser.GameObjects.Components.ScrollFactor & Phaser.GameObjects.Components.Depth>(o: T) => o.setScrollFactor(0).setDepth(100);
     const back = fix(this.add.graphics());
     back.fillStyle(0x000000, 0.55);
@@ -156,8 +173,8 @@ export class NightScene extends Phaser.Scene {
     back.fillRoundedRect(W / 2 - 90, 10, 180, 70, 10);
     const hpBar = fix(this.add.graphics());
     const hpText = fix(label(this, 32, 22, '', 14, C.text, { weight: 700 }));
-    fix(label(this, 32, 66, `${ELEMENT_INFO[w.element].name} ${CLASS_INFO[w.cls].name} +${w.level}`, 15, ELEMENT_INFO[w.element].glow, { weight: 900 }));
-    fix(label(this, 32, 86, `한 번에 ${formatDamage(this.damage)} · ${CLASS_INFO[w.cls].style}`, 12, C.mute, { weight: 700 }));
+    fix(label(this, 32, 66, name, 15, this.glowColor, { weight: 900 }));
+    fix(label(this, 32, 86, `한 번에 ${formatDamage(this.damage)} · ${style}`, 12, C.mute, { weight: 700 }));
     const dodge = fix(this.add.graphics());
     fix(label(this, W / 2, 22, '새벽까지', 12, C.mute, { weight: 700, origin: [0.5, 0] }));
     const timer = fix(label(this, W / 2, 50, '', 30, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
@@ -165,7 +182,7 @@ export class NightScene extends Phaser.Scene {
     fix(label(this, W - 180, 46, `DAY ${this.nd.day}`, 14, C.mute, { weight: 700, origin: [0, 0.5] }));
     const xpBar = fix(this.add.graphics());
     const xpText = fix(label(this, W / 2, H - 30, '', 13, C.text, { weight: 700, origin: [0.5, 0.5] }));
-    fix(label(this, 20, H - 22, 'WASD 이동 · Space 회피 · Esc 중단   |   M2 시험 전투: 결과는 아직 저장되지 않습니다', 12, C.dim, { origin: [0, 0.5] }));
+    fix(label(this, 20, H - 22, `WASD 이동 · Space 회피 · Esc 포기   |   남은 목숨 ${this.core.state.lives}`, 12, C.dim, { origin: [0, 0.5] }));
     this.hud = { hpBar, hpText, timer, kills, xpBar, xpText, dodge };
   }
 
@@ -316,12 +333,12 @@ export class NightScene extends Phaser.Scene {
   }
 
   private swingFx(angle: number) {
-    const cls = this.nd.weapon.cls;
-    const glow = ELEMENT_INFO[this.nd.weapon.element].glow;
-    this.sfx.swing(cls === 'axe');
+    const cls = this.cls;
+    const glow = this.glowColor;
+    this.sfx.swing(cls === 'axe' || cls === 'hammer');
     this.tweens.killTweensOf(this.swing);
     const s = this.swing;
-    if (cls === 'sword') {
+    if (cls === 'sword' || cls === 'hammer') {
       Object.assign(s, { rot: angle - 1.15, off: 8, alpha: 1 });
       this.tweens.add({ targets: s, rot: angle + 1.15, duration: 150, ease: 'Cubic.easeOut' });
     } else if (cls === 'spear') {
@@ -544,13 +561,21 @@ export class NightScene extends Phaser.Scene {
 
   private askLeave() {
     if (this.ended) return;
+    const lives = this.core.state.lives;
     this.openModal({
       kind: 'confirm',
-      title: '전투를 중단할까요?',
-      body: 'M2 시험 전투라 결과는 기록되지 않습니다.\nM3부터는 중단이 곧 패배가 됩니다.',
-      confirmLabel: '대장간으로',
+      title: '전투를 포기할까요?',
+      body:
+        lives <= 1
+          ? '포기하면 패배로 처리됩니다.\n마지막 목숨입니다 — 모든 성장이 초기화됩니다.'
+          : `포기하면 패배로 처리됩니다 (목숨 −1, 남은 목숨 ${lives - 1}).\n이번 밤의 경험치는 사라지고 같은 날로 돌아갑니다.`,
+      confirmLabel: '포기하기',
       cancelLabel: '계속 싸우기',
-      onConfirm: () => this.scene.start('Forge'),
+      danger: true,
+      onConfirm: () => {
+        this.ended = true;
+        this.lose('abandon');
+      },
     });
   }
 
@@ -560,9 +585,40 @@ export class NightScene extends Phaser.Scene {
     return [
       ['생존 시간', `${m}:${s}`],
       ['처치', `${this.kills}`],
-      ['도달 레벨', `Lv ${this.level} (XP ${this.xpTotal})`],
+      ['획득 경험치', `${this.xpTotal}`],
       ['가한 피해', formatDamage(this.damageDealt)],
     ];
+  }
+
+  /** Records the loss (saved at once) and shows retry or game over. */
+  private lose(reason: 'death' | 'abandon') {
+    const r = this.core.dispatch({ type: 'NIGHT_LOST', reason, kills: this.kills, seconds: this.elapsed });
+    if (r.type !== 'nightLost') {
+      this.scene.start('Forge');
+      return;
+    }
+    if (r.gameOver) {
+      this.goGameOver(r.gameOver);
+      return;
+    }
+    const left = r.livesLeft;
+    this.openModal({
+      kind: 'result',
+      tone: 'defeat',
+      title: reason === 'death' ? '밤에 쓰러졌습니다' : '전투를 포기했습니다',
+      subtitle: `목숨 −1 · 남은 목숨 ${left}`,
+      rows: this.summaryRows(),
+      note:
+        `이번 밤의 경험치는 사라졌습니다. DAY ${this.nd.day} 낮으로 돌아가 다시 준비하세요.` +
+        (left === 1 ? '\n⚠ 마지막 목숨입니다. 다음 패배는 모든 것을 잃습니다.' : ''),
+      buttonLabel: `DAY ${this.nd.day} 다시 도전`,
+      onClose: () => this.scene.start('Forge'),
+    });
+  }
+
+  private goGameOver(summary: GameOverSummary) {
+    this.cameras.main.fadeOut(900, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('GameOver', { summary, reason: 'died' }));
   }
 
   private dawn() {
@@ -581,18 +637,29 @@ export class NightScene extends Phaser.Scene {
     const t = label(this, W / 2, H / 2 - 40, '새벽이 밝았다', 48, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     t.setAlpha(0);
     this.tweens.add({ targets: t, alpha: 1, duration: 400 });
-    this.time.delayedCall(1500, () =>
+    // Save first (§19): the win is kept even if the game closes during the celebration.
+    const r = this.core.dispatch({ type: 'NIGHT_WON', kills: this.kills, seconds: this.elapsed, xp: this.xpTotal });
+    this.time.delayedCall(1500, () => {
+      if (r.type !== 'nightWon') {
+        this.scene.start('Forge');
+        return;
+      }
+      const rows = this.summaryRows();
+      rows.push(['대장장이 레벨', r.levelsGained > 0 ? `Lv ${r.levelBefore} → Lv ${r.level}` : `Lv ${r.level}`]);
+      const notes: string[] = [];
+      if (r.levelsGained > 0) notes.push(`스킬 포인트 +${r.levelsGained}`);
+      notes.push(r.cleared ? '마지막 밤을 버텼습니다.' : `DAY ${r.day} 아침 · 새 무기 ${r.granted}자루가 도착했습니다`);
       this.openModal({
         kind: 'result',
         tone: 'victory',
         title: '살아남았습니다',
         subtitle: `DAY ${this.nd.day}의 밤을 버텼습니다`,
-        rows: this.summaryRows(),
-        note: 'M2 시험 전투: 다음 날 진행, XP 저장, 목숨 반영은 M3에서 연결됩니다.',
-        buttonLabel: '대장간으로',
+        rows,
+        note: notes.join('\n'),
+        buttonLabel: r.cleared ? '대장간으로' : `DAY ${r.day} 시작`,
         onClose: () => this.scene.start('Forge'),
-      }),
-    );
+      });
+    });
   }
 
   private fall() {
@@ -605,18 +672,7 @@ export class NightScene extends Phaser.Scene {
     const t = label(this, W / 2, H / 2 - 40, '쓰러졌습니다', 48, C.dangerHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     t.setAlpha(0);
     this.tweens.add({ targets: t, alpha: 1, duration: 400 });
-    this.time.delayedCall(1500, () =>
-      this.openModal({
-        kind: 'result',
-        tone: 'defeat',
-        title: '밤에 쓰러졌습니다',
-        subtitle: `DAY ${this.nd.day}`,
-        rows: this.summaryRows(),
-        note: 'M2 시험 전투: 목숨 감소와 같은 날 재도전은 M3에서 연결됩니다.',
-        buttonLabel: '대장간으로',
-        onClose: () => this.scene.start('Forge'),
-      }),
-    );
+    this.time.delayedCall(1500, () => this.lose('death'));
   }
 }
 

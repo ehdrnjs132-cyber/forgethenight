@@ -38,11 +38,35 @@ export interface GameState {
   totems: { owned: string[]; equipped: string[] };
   items: Record<string, number>;
   tutorials: Record<string, boolean>;
-  /** State captured when the night begins; restored on death (DECISIONS.md #4). Filled in M3. */
-  nightSnapshot: unknown | null;
+  /** State captured when the night begins; restored on death (DECISIONS.md #4). */
+  nightSnapshot: NightSnapshot | null;
   lastEnhance: EnhanceRecord | null;
   story: { flags: Record<string, boolean> };
-  stats: { enhanceAttempts: number; destroyed: number; bestLevel: number };
+  stats: RunStats;
+}
+
+export type NightSnapshot = Omit<GameState, 'nightSnapshot'>;
+
+/** Per-run totals, shown on the game over screen (§20). */
+export interface RunStats {
+  enhanceAttempts: number;
+  destroyed: number;
+  bestLevel: number;
+  kills: number;
+  /** Seconds survived across all nights of the run. */
+  nightSeconds: number;
+  nightsWon: number;
+  deaths: number;
+  bossesKilled: number;
+}
+
+/** What the game over screen shows (§20). */
+export interface GameOverSummary {
+  day: number;
+  bestLevel: number;
+  kills: number;
+  bossesKilled: number;
+  nightSeconds: number;
 }
 
 /** Kept across game overs (§13 보존 대상). */

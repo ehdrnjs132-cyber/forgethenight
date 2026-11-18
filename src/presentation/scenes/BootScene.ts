@@ -59,9 +59,37 @@ export class BootScene extends Phaser.Scene {
     g.clear();
 
     this.makeNightTextures(g);
+    this.makeHammerTexture(g);
     g.destroy();
 
-    this.scene.start('Forge');
+    const core = this.registry.get('core') as { notice: { kind: string; summary?: unknown } | null } | undefined;
+    if (core?.notice?.kind === 'gameOver') {
+      const summary = core.notice.summary;
+      core.notice = null;
+      this.scene.start('GameOver', { summary, reason: 'closed' });
+    } else this.scene.start('Forge');
+  }
+
+  /** Starter hammer, drawn horizontally like the weapon images (head on the right). */
+  private makeHammerTexture(g: Phaser.GameObjects.Graphics) {
+    g.clear();
+    g.fillStyle(0x0b0907, 1);
+    g.fillRoundedRect(8, 52, 240, 20, 8);
+    g.fillStyle(0x6e4a2c, 1);
+    g.fillRoundedRect(12, 55, 234, 14, 6);
+    g.fillStyle(0x8a5d38, 1);
+    g.fillRect(16, 57, 226, 4);
+    g.fillStyle(0x3a2616, 1);
+    for (let x = 20; x < 80; x += 9) g.fillRect(x, 55, 4, 14);
+    g.fillStyle(0x0b0907, 1);
+    g.fillRoundedRect(226, 14, 74, 96, 10);
+    g.fillStyle(0x50505c, 1);
+    g.fillRoundedRect(231, 19, 64, 86, 8);
+    g.fillStyle(0x8a8a98, 1);
+    g.fillRect(235, 23, 56, 10);
+    g.fillStyle(0x3a3a44, 1);
+    g.fillRect(235, 88, 56, 12);
+    g.generateTexture('weapon-hammer', 308, 124);
   }
 
   /** Placeholder night art (principle 8): ground, the smith, enemies, XP gems, vignette. */

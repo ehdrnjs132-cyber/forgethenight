@@ -1,6 +1,6 @@
 // SaveManager (§25). Versioned, checksummed saves with one rolling backup.
 // The run and the permanent records are stored separately so a game over wipes only the run.
-import { createRecords, STATE_VERSION } from '../state/initial';
+import { createRecords, createStats, STATE_VERSION } from '../state/initial';
 import type { GameState, Records } from '../state/types';
 
 export interface StorageLike {
@@ -49,10 +49,15 @@ function unwrap<T>(text: string | null): { data: T; v: number } | null {
   }
 }
 
-/** Upgrade older saves. Each future version adds a step here. */
+/** Upgrade older saves. Each version adds a step here. */
 export function migrate(data: GameState, fromVersion: number): GameState | null {
   if (fromVersion > STATE_VERSION) return null;
-  return data;
+  let s = data;
+  if (fromVersion < 2) {
+    // v2 (M3): run totals for the game over screen; snapshot is now typed.
+    s = { ...s, version: 2, stats: { ...createStats(), ...s.stats }, nightSnapshot: null };
+  }
+  return s;
 }
 
 export type LoadSource = 'saved' | 'backup' | 'none';
