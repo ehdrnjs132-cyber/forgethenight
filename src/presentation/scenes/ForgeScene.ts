@@ -43,7 +43,8 @@ const CARD = PORTRAIT ? { x: 40, y: 806 + EXTRA, w: 640, h: 170 } : { x: 24, y: 
  * inside each texture (fractions of its width/height), so the weapon lies exactly where the hammer lands.
  */
 // on a taller phone the smith grows into part of the extra room and the lower block moves down
-const STAGE = PORTRAIT ? { x: 360, bottom: 812 + EXTRA, height: 470 + EXTRA * 0.6 } : { x: 724, bottom: 714, height: 520 };
+// Side view (2026-11-19): smith on the left, anvil on the right, so the stage is wider than tall.
+const STAGE = PORTRAIT ? { x: 325, bottom: 812 + EXTRA, height: 520 + EXTRA * 0.5 } : { x: 600, bottom: 702, height: 420 };
 /** Portrait bottom area: odds row, stones, enhance button, action row. */
 const PB = { oddsY: 994 + EXTRA, stonesY: 1084 + EXTRA, enhanceY: 1150 + EXTRA, rowY: 1238 + EXTRA };
 
@@ -69,6 +70,7 @@ function rackSlot(i: number): { x: number; y: number; w: number; h: number } {
   };
 }
 const ANVIL_FACE: Record<string, { fx: number; fy: number }> = {
+  'anim-forge_strike_side': { fx: 0.72, fy: 0.58 },
   'art-smith_anvil': { fx: 0.62, fy: 0.585 },
   'anim-forge_strike': { fx: 0.5, fy: 0.625 },
 };
@@ -81,7 +83,8 @@ const ANVIL_X = 600;
 const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
 /** Tail tip of the smith's speech bubble: beside his head, clear of the hammer and the right panel. */
-const SMITH_BUBBLE = PORTRAIT ? { x: 210, y: 470 + EXTRA * 0.5 } : { x: 770, y: 300 };
+// above the anvil, beside the side-view smith's face
+const SMITH_BUBBLE = PORTRAIT ? { x: 470, y: 500 + EXTRA * 0.7 } : { x: 720, y: 360 };
 /** Toast line position. */
 const TOAST = PORTRAIT ? { x: 360, y: 770 + EXTRA } : { x: 640, y: 676 };
 
@@ -237,7 +240,9 @@ export class ForgeScene extends Phaser.Scene {
   // ───────────────────────── layout
   private buildBackground() {
     // portrait: the plain forge painting (the rack painting's shelves only fit the landscape layout)
-    const bgKey = !PORTRAIT && this.textures.exists('art-forge_rack_bg') ? 'art-forge_rack_bg' : 'art-forge_bg';
+    const bgKey = PORTRAIT
+      ? this.textures.exists('art-forge_bg_portrait') ? 'art-forge_bg_portrait' : 'art-forge_bg'
+      : this.textures.exists('art-forge_rack_bg') ? 'art-forge_rack_bg' : 'art-forge_bg';
     if (this.textures.exists(bgKey)) {
       // Higgsfield forge interior (with the weapon rack painted on the wall); the furnace glow breathes on top.
       const bg = this.add.image(W / 2, H / 2, bgKey);
@@ -368,6 +373,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private stageKey(): string | null {
+    if (this.textures.exists('anim-forge_strike_side')) return 'anim-forge_strike_side';
     if (this.textures.exists('anim-forge_strike')) return 'anim-forge_strike';
     if (this.textures.exists('art-smith_anvil')) return 'art-smith_anvil';
     return null;
@@ -478,7 +484,9 @@ export class ForgeScene extends Phaser.Scene {
     const f = ANVIL_FACE[key] ?? { fx: 0.6, fy: 0.58 };
     this.face = { x: STAGE.x + (f.fx - 0.5) * s.width * k, y: STAGE.bottom - (1 - f.fy) * s.height * k };
     // the weapon lies on the anvil, in front of the smith
-    this.weaponView = new WeaponView(this, this.face.x - 6, this.face.y - 4, 300);
+    // sized so a +50 blade (1.7×) still fits: across the 720-wide portrait screen, and short of the
+    // landscape odds panel
+    this.weaponView = new WeaponView(this, this.face.x - 6, this.face.y - 4, PORTRAIT ? 255 : 260);
     const breathe = this.tweens.add({ targets: s, scaleY: k * 1.008, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     if (isAnim) {

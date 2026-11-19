@@ -86,5 +86,13 @@
     "frames": 10,
     "fps": 12,
     "loop": true
+  },
+  {
+    "key": "forge_strike_side",
+    "frameW": 604,
+    "frameH": 486,
+    "frames": 14,
+    "fps": 24,
+    "loop": false
   }
 ]

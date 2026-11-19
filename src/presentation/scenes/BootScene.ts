@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { ELEMENTS, WEAPON_CLASSES, type Element } from '../../config/weapons';
 import { swordFormTexture, weaponImagePath, weaponTexture } from '../weaponArt';
 import type { GameCore } from '../../core/game';
+import { PORTRAIT } from '../layout';
 import { INTRO } from '../../config/cinematics';
 import type { CinematicData } from './CinematicScene';
 
@@ -54,6 +55,7 @@ export class BootScene extends Phaser.Scene {
     // Higgsfield world art (tools/art/assets.ts). Missing files fall back to the drawn placeholders.
     for (const key of WORLD_ART) this.load.image(`art-${key}`, `assets/world/${key}.png`);
     this.load.image('weapon-hammer', 'assets/world/hammer.png');
+    if (PORTRAIT) this.load.image('art-forge_bg_portrait', 'assets/world/forge_bg_portrait.jpg');
     // Higgsfield video → sprite sheets (tools/art/process-anims.ts). The manifest lists what exists.
     this.load.json('anim-manifest', 'assets/anim/manifest.json');
     this.load.once('filecomplete-json-anim-manifest', (_k: string, _t: string, data: AnimSheet[]) => {

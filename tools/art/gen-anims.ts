@@ -32,7 +32,7 @@ function run(a: AnimSpec): Promise<string> {
     '--prompt', `"${prompt}"`,
     '--aspect_ratio', '1:1',
     '--duration', '5',
-    '--resolution', '1080p',
+    '--resolution', a.resolution ?? '1080p',
     '--wait', '--wait-timeout', '30m',
   ];
   return new Promise((resolve, reject) => {

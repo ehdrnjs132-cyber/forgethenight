@@ -14,6 +14,7 @@ type Box = { x0: number; y0: number; x1: number; y1: number };
 const JOBS: Record<string, { w?: number; h?: number; trim: boolean }> = {
   forge_bg: { w: 1280, trim: false },
   forge_rack_bg: { w: 1280, trim: false },
+  forge_bg_portrait: { w: 900, trim: false },
   night_ground: { w: 768, trim: false },
   anvil: { w: 440, trim: true },
   hammer: { w: 420, trim: true },

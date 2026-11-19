@@ -14,6 +14,8 @@ export interface AnimSpec {
   /** Sheet cell height in px (width follows the union box). */
   cellH: number;
   action: string;
+  /** Video resolution (default 1080p); 720p costs fewer credits and is plenty for a sprite sheet. */
+  resolution?: '720p' | '1080p';
 }
 
 /** Appended to every motion prompt (camera lock, prop inertia, facing lock). */
@@ -38,6 +40,19 @@ export const ANIMS: AnimSpec[] = [
     cellH: 560,
     action:
       'the blacksmith brings the raised hammer straight down in one heavy blow onto the top of the anvil, the hammer stops on the anvil face and stays resting there; the anvil itself never moves',
+  },
+  // 2026-11-19: side view (user found the front view confrontational); one handle on the hammer
+  {
+    key: 'forge_strike_side',
+    subject: 'smith_side',
+    loop: false,
+    frames: 14,
+    fps: 24,
+    chroma: '00b050',
+    cellH: 560,
+    resolution: '720p',
+    action:
+      'the blacksmith swings the raised hammer forward and down in one heavy arc onto the middle of the anvil top, the hammer head stops on the anvil face and stays resting there; the anvil itself never moves, his feet stay planted',
   },
   ...hero('sword', 'performs one single fast horizontal sword slash to the right, strong wind-up, sharp swing, short follow-through, then stops', 12),
   ...hero('spear', 'performs one single fast forward spear thrust to the right, the spear stabs out and pulls back once', 12),
