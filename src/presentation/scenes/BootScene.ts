@@ -3,6 +3,7 @@ import { ELEMENTS, WEAPON_CLASSES, type Element } from '../../config/weapons';
 import { swordFormTexture, weaponImagePath, weaponTexture } from '../weaponArt';
 import type { GameCore } from '../../core/game';
 import { PORTRAIT } from '../layout';
+import { H, W } from '../theme';
 import { INTRO } from '../../config/cinematics';
 import type { CinematicData } from './CinematicScene';
 
@@ -30,13 +31,18 @@ export class BootScene extends Phaser.Scene {
   }
 
   preload() {
+    // centred on whatever canvas size this device uses (portrait phones are 720 wide and taller)
+    const bw = Math.min(400, W * 0.6);
+    const bx = (W - bw) / 2;
+    const by = H / 2;
+    this.add.text(W / 2, by - 28, 'LOADING', { fontFamily: '"Noto Sans KR", sans-serif', fontSize: '18px', fontStyle: '700', color: '#8a7a5c', letterSpacing: 4 }).setOrigin(0.5);
     const bar = this.add.graphics();
     this.load.on('progress', (p: number) => {
       bar.clear();
       bar.fillStyle(0x3b2d1e, 1);
-      bar.fillRect(440, 356, 400, 8);
+      bar.fillRect(bx, by, bw, 8);
       bar.fillStyle(0xe9b65c, 1);
-      bar.fillRect(440, 356, 400 * p, 8);
+      bar.fillRect(bx, by, bw * p, 8);
     });
     // A missing image is fine: WeaponView falls back to the placeholder drawing.
     this.load.on('loaderror', (file: Phaser.Loader.File) => console.warn(`art missing: ${file.src}`));
