@@ -8,10 +8,18 @@ import { ITEMS, MERCHANT, type ItemId } from '../../config/economy';
 import { C, H, W, label, panel } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
+import { PORTRAIT } from '../layout';
 
-const PW = 960;
-const PH = 640;
-const ROW_H = 60;
+// Landscape: Morr on the left, the shelf on the right. Portrait: Morr on top, the shelf below.
+const PW = PORTRAIT ? W - 40 : 960;
+const PH = PORTRAIT ? Math.min(H - 100, 1200) : 640;
+const ROW_H = PORTRAIT ? 70 : 60;
+/** Shelf origin inside the panel. */
+const LX = PORTRAIT ? 20 : 300;
+const LY = PORTRAIT ? 520 : 92;
+/** Morr's column centre and the y of his feet inside the panel. */
+const MX = PORTRAIT ? PW / 2 : 150;
+const MY = PORTRAIT ? 300 : 350;
 
 const BLOCK_TEXT: Record<BuyBlock, string> = {
   closed: '오늘은 가게를 닫았다네.',
@@ -52,40 +60,42 @@ export class ShopScene extends Phaser.Scene {
       const glow = this.add.graphics();
       for (let i = 5; i >= 1; i--) {
         glow.fillStyle(0xffb347, 0.025 * i);
-        glow.fillCircle(x0 + 150, y0 + 200, 60 + i * 24);
+        glow.fillCircle(x0 + MX, y0 + MY - 150, 60 + i * 24);
       }
       root.add(glow);
-      root.add(this.add.image(x0 + 150, y0 + 350, 'art-morr').setOrigin(0.5, 1).setScale(0.82));
+      root.add(this.add.image(x0 + MX, y0 + MY, 'art-morr').setOrigin(0.5, 1).setScale(PORTRAIT ? 0.66 : 0.82));
     } else {
       const portrait = this.add.graphics();
-      this.drawMorr(portrait, x0 + 150, y0 + 220);
+      this.drawMorr(portrait, x0 + MX, y0 + MY - 130);
       root.add(portrait);
     }
-    root.add(label(this, x0 + 150, y0 + 372, MERCHANT.name, 30, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
-    root.add(label(this, x0 + 150, y0 + 402, '떠돌이 상인 · 3일마다 방문', 12, C.mute, { weight: 700, origin: [0.5, 0.5] }));
+    root.add(label(this, x0 + MX, y0 + MY + 22, MERCHANT.name, 30, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
+    root.add(label(this, x0 + MX, y0 + MY + 52, '떠돌이 상인 · 3일마다 방문', 12, C.mute, { weight: 700, origin: [0.5, 0.5] }));
     const first = !isTutorialDone(this.core.state, 'firstMerchant');
     this.speech = label(
       this,
-      x0 + 150,
-      y0 + 460,
+      x0 + MX,
+      y0 + MY + (PORTRAIT ? 104 : 110),
       first
         ? '처음 보는 얼굴이군. 사흘마다 들르지.\n골드는 무기를 팔아서 만들고,\n물건은 오늘 하루만 판다네.'
         : '또 왔군. 오늘 물건은 오늘뿐이야.',
       13,
       C.text,
-      { origin: [0.5, 0.5], align: 'center', wrap: 250, lineSpacing: 6 },
+      { origin: [0.5, 0.5], align: 'center', wrap: PORTRAIT ? PW - 80 : 250, lineSpacing: 6 },
     );
     root.add(this.speech);
     if (first) this.core.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstMerchant' });
 
-    const lx = x0 + 300;
-    root.add(label(this, lx, y0 + 30, `DAY ${this.core.state.day}의 진열대`, 20, C.gold, { weight: 900 }));
+    const lx = x0 + LX;
+    root.add(label(this, lx, y0 + (PORTRAIT ? LY - 40 : 30), `DAY ${this.core.state.day}의 진열대`, 20, C.gold, { weight: 900 }));
     this.goldText = label(this, x0 + PW - 30, y0 + 30, '', 20, C.goldHi, { weight: 900, origin: [1, 0] });
     this.livesText = label(this, x0 + PW - 30, y0 + 58, '', 13, C.mute, { weight: 700, origin: [1, 0] });
     root.add([this.goldText, this.livesText]);
     this.rows = this.add.container(0, 0);
     root.add(this.rows);
-    const close = new Button(this, x0 + 150, y0 + PH - 50, 220, 50, '대장간으로', { variant: 'dark', sub: 'Esc', onClick: () => this.close() });
+    const close = PORTRAIT
+      ? new Button(this, x0 + PW / 2, y0 + PH - 50, PW - 40, 60, '대장간으로', { variant: 'dark', sub: '', onClick: () => this.close() })
+      : new Button(this, x0 + 150, y0 + PH - 50, 220, 50, '대장간으로', { variant: 'dark', sub: 'Esc', onClick: () => this.close() });
     root.add(close);
     this.tweens.add({ targets: root, alpha: 1, duration: 220 });
 
@@ -99,8 +109,8 @@ export class ShopScene extends Phaser.Scene {
     this.goldText.setText(`${s.gold.toLocaleString()} G`);
     this.livesText.setText(`목숨 ${s.lives} / ${MERCHANT.maxLives}`);
     this.rows.removeAll(true);
-    const x0 = (W - PW) / 2 + 300;
-    const y0 = (H - PH) / 2 + 92;
+    const x0 = (W - PW) / 2 + LX;
+    const y0 = (H - PH) / 2 + LY;
     const stock = s.merchant?.day === s.day ? s.merchant.stock : [];
     if (!stock.length) {
       this.rows.add(label(this, x0, y0 + 20, '오늘은 팔 물건이 없다네.', 16, C.mute, { weight: 700 }));
@@ -109,7 +119,7 @@ export class ShopScene extends Phaser.Scene {
     stock.forEach((e, i) => {
       const def = ITEMS[e.item];
       const y = y0 + i * (ROW_H + 6);
-      const rw = PW - 300 - 30;
+      const rw = PW - LX - (PORTRAIT ? 20 : 30);
       const g = this.add.graphics();
       g.fillStyle(0x1b1511, 1);
       g.fillRoundedRect(x0, y, rw, ROW_H, 10);

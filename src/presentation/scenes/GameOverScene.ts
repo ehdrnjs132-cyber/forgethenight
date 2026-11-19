@@ -33,9 +33,13 @@ export class GameOverScene extends Phaser.Scene {
     }
     this.tweens.add({ targets: ember, alpha: 0.35, duration: 2400, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
-    const title = label(this, W / 2, 132, 'YOUR FORGE HAS FALLEN', 46, C.dangerHi, { display: true, weight: 900, origin: [0.5, 0.5] });
-    const line = label(this, W / 2, 190, '불꽃은 꺼졌다. 하지만 아버지의 맹세는 사라지지 않는다.', 19, C.text, { weight: 700, origin: [0.5, 0.5] });
-    const why = label(this, W / 2, 222, data.reason === 'closed' ? '마지막 목숨이 남은 밤에 게임이 종료되어 패배로 처리되었습니다.' : '마지막 목숨을 잃었습니다. 모든 성장이 초기화되었습니다.', 14, C.mute, { origin: [0.5, 0.5] });
+    // portrait (narrow, tall): the block sits lower and the long lines wrap
+    const narrow = W < 1000;
+    const OY = narrow ? Math.round((H - 720) / 2) - 40 : 0;
+    const wrap = { align: 'center' as const, wrap: W - 60 };
+    const title = label(this, W / 2, 132 + OY, 'YOUR FORGE HAS FALLEN', narrow ? 38 : 46, C.dangerHi, { display: true, weight: 900, origin: [0.5, 0.5] });
+    const line = label(this, W / 2, 190 + OY, '불꽃은 꺼졌다. 하지만 아버지의 맹세는 사라지지 않는다.', 19, C.text, { weight: 700, origin: [0.5, 0.5], ...wrap });
+    const why = label(this, W / 2, 222 + OY + (narrow ? 14 : 0), data.reason === 'closed' ? '마지막 목숨이 남은 밤에 게임이 종료되어 패배로 처리되었습니다.' : '마지막 목숨을 잃었습니다. 모든 성장이 초기화되었습니다.', 14, C.mute, { origin: [0.5, 0.5], ...wrap });
 
     const m = Math.floor(s.nightSeconds / 60);
     const sec = String(Math.floor(s.nightSeconds % 60)).padStart(2, '0');
@@ -49,12 +53,13 @@ export class GameOverScene extends Phaser.Scene {
     const items: Phaser.GameObjects.GameObject[] = [title, line, why];
     const panel = this.add.graphics();
     panel.fillStyle(0x000000, 0.45);
-    panel.fillRoundedRect(W / 2 - 260, 262, 520, rows.length * 44 + 28, 12);
+    const py = 262 + OY + (narrow ? 30 : 0);
+    panel.fillRoundedRect(W / 2 - 260, py, 520, rows.length * 44 + 28, 12);
     panel.lineStyle(1, 0x5a1a1a, 1);
-    panel.strokeRoundedRect(W / 2 - 259.5, 262.5, 519, rows.length * 44 + 27, 12);
+    panel.strokeRoundedRect(W / 2 - 259.5, py + 0.5, 519, rows.length * 44 + 27, 12);
     items.push(panel);
     rows.forEach(([k, v], i) => {
-      const y = 296 + i * 44;
+      const y = py + 34 + i * 44;
       items.push(label(this, W / 2 - 220, y, k, 17, C.mute, { weight: 700, origin: [0, 0.5] }));
       items.push(label(this, W / 2 + 220, y, v, 22, C.text, { weight: 900, origin: [1, 0.5] }));
     });

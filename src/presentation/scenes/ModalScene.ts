@@ -115,8 +115,9 @@ export class ModalScene extends Phaser.Scene {
   // ───────────────────────── first-enhance tutorial (§8.2)
   private buildTutorial(data: TutorialModal) {
     const spec = FIRST_ENHANCE_TUTORIAL;
-    const pw = 720;
-    const ph = 440;
+    // portrait: as wide as the phone allows, and taller for the wrapped text
+    const pw = Math.min(720, W - 40);
+    const ph = W < 1000 ? 560 : 440;
     let step = 0;
     let checked = data.replay === true;
 

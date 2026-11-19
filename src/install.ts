@@ -18,6 +18,7 @@ const CSS = `
 #install-btn { position: fixed; left: max(10px, env(safe-area-inset-left)); bottom: max(10px, env(safe-area-inset-bottom)); z-index: 20;
   display: none; align-items: center; gap: 6px; padding: 9px 14px; border-radius: 999px; border: 2px solid #e9b65c;
   background: rgba(20, 12, 6, .88); color: #ffe2a0; font: 800 14px "Noto Sans KR", sans-serif; cursor: pointer; }
+body.portrait-mode #install-btn { bottom: auto; top: max(4px, env(safe-area-inset-top)); left: 6px; padding: 5px 10px; font-size: 12px; }
 #install-btn .x { margin-left: 4px; opacity: .6; font-weight: 400; padding: 0 2px; }
 #install-help { position: fixed; inset: 0; z-index: 30; display: none; place-items: center; background: rgba(0,0,0,.7); }
 #install-help > div { max-width: 420px; margin: 16px; padding: 20px 22px; border-radius: 14px; background: #1b1410; border: 2px solid #e9b65c;

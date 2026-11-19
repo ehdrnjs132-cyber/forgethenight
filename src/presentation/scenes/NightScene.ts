@@ -20,6 +20,7 @@ import { glowStrength } from '../weaponArt';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
 import { TouchPad, isTouchDevice } from '../ui/touchPad';
+import { PORTRAIT } from '../layout';
 import { Bubble, RIVAL_STYLE, SMITH_STYLE } from '../ui/speech';
 import { LevelBadge } from '../ui/levelBadge';
 import { LAST_WORDS, NARRATOR_LINES, TAUNTS, pick } from '../../config/dialogue';
@@ -63,7 +64,10 @@ interface Rival {
   anim: string;
 }
 
-const ARENA = DOPPEL_AI.arena;
+/** Portrait: a taller field, so the tall phone screen never runs past its bottom edge. */
+const ARENA = PORTRAIT ? { width: 1400, height: 2300 } : DOPPEL_AI.arena;
+/** HUD title box (DAY · rivals left): beside the HP box in landscape, under it in portrait. */
+const TITLE_Y = PORTRAIT ? 112 : 0;
 /** Other-world tint so rivals never read as the player. */
 const RIVAL_TINT = 0xc9b2ff;
 
@@ -253,13 +257,13 @@ export class NightScene extends Phaser.Scene {
     const back = fix(this.add.graphics());
     back.fillStyle(0x000000, 0.55);
     back.fillRoundedRect(16, 14, 320, 92, 10);
-    back.fillRoundedRect(W / 2 - 130, 10, 260, 56, 10);
+    back.fillRoundedRect(W / 2 - 130, 10 + TITLE_Y, 260, 56, 10);
     const hpBar = fix(this.add.graphics());
     const hpText = fix(label(this, 32, 22, '', 14, C.text, { weight: 700 }));
     fix(label(this, 32, 66, name, 15, this.glowColor, { weight: 900 }));
     fix(label(this, 32, 86, `기본 피해 ${formatDamage(this.baseDamage)} · ${COMBOS[this.cls].steps.length}연타 콤보`, 12, C.mute, { weight: 700 }));
-    fix(label(this, W / 2, 20, `DAY ${this.nd.day} · 다른 세계의 대장장이`, 12, C.mute, { weight: 700, origin: [0.5, 0] }));
-    const rivals = fix(label(this, W / 2, 46, '', 22, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
+    fix(label(this, W / 2, 20 + TITLE_Y, `DAY ${this.nd.day} · 다른 세계의 대장장이`, 12, C.mute, { weight: 700, origin: [0.5, 0] }));
+    const rivals = fix(label(this, W / 2, 46 + TITLE_Y, '', 22, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
     const combo = fix(label(this, W - 40, 150, '', 40, C.goldHi, { display: true, weight: 900, origin: [1, 0.5] }));
     combo.setStroke('#140a05', 8);
     const xpBar = fix(this.add.graphics());
@@ -282,8 +286,8 @@ export class NightScene extends Phaser.Scene {
 
   private intro() {
     const t = label(this, W / 2, H / 2 - 70, `DAY ${this.nd.day} · 밤`, 46, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
-    const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
-    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 벼려 온 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
+    const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
+    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 벼려 온 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
     for (const o of [t, s, s2]) {
       o.setAlpha(0);
       this.tweens.add({ targets: o, alpha: 1, duration: 300 });
@@ -1091,7 +1095,7 @@ export class NightScene extends Phaser.Scene {
     if (r.prologue) {
       // the scripted first defeat: last words, a line of narration, then DAY 1 again with new weapons
       void new Bubble(this, SMITH_STYLE, 130).say(pick(LAST_WORDS), this.player.x, this.player.y - 70, 2.2);
-      const n = label(this, W / 2, H / 2 + 120, NARRATOR_LINES.prologueDeath, 20, C.goldHi, { weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(130);
+      const n = label(this, W / 2, H / 2 + 120, NARRATOR_LINES.prologueDeath, 20, C.goldHi, { weight: 900, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(130);
       n.setStroke('#140a05', 6).setAlpha(0);
       this.tweens.add({ targets: n, alpha: 1, delay: 1200, duration: 500 });
       this.registry.set('afterPrologue', true);

@@ -10,10 +10,26 @@ import { ELEMENT_INFO } from '../../config/weapons';
 import { C, H, W, css, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
+import { PORTRAIT } from '../layout';
 
-const PANEL_W = 340;
-const VIEW_CX = (W - PANEL_W) / 2;
-const VIEW_CY = H / 2 + 30;
+// Landscape: star map on the left, detail panel on the right. Portrait: map on top, panel at the bottom.
+const PANEL_W = PORTRAIT ? W : 340;
+const PANEL_H = PORTRAIT ? 470 : H;
+const PANEL_X = PORTRAIT ? 0 : W - PANEL_W;
+const PANEL_Y = PORTRAIT ? H - PANEL_H : 0;
+const MAP_W = PORTRAIT ? W : W - PANEL_W;
+const MAP_H = PORTRAIT ? H - PANEL_H : H;
+/** Top bar height: one row in landscape, two (title, filters) in portrait. */
+const TOP_H = PORTRAIT ? 116 : 60;
+const VIEW_CX = MAP_W / 2;
+const VIEW_CY = PORTRAIT ? (TOP_H + MAP_H) / 2 : H / 2 + 30;
+
+/**
+ * Which nodes a node unlocks (its `links`), inverted: a node is revealed once any node that links to it
+ * is learned (user request 2026-11-19: learn one, and the next ones appear).
+ */
+const PARENTS: Record<string, string[]> = {};
+for (const n of SKILL_NODES) for (const id of n.links) (PARENTS[id] ??= []).push(n.id);
 
 const BLOCK_TEXT: Record<LearnBlock, string> = {
   unknown: '',
@@ -47,6 +63,7 @@ interface NodeView {
   node: SkillNode;
   g: Phaser.GameObjects.Graphics;
   name: Phaser.GameObjects.Text;
+  zone: Phaser.GameObjects.Zone;
   x: number;
   y: number;
   r: number;
@@ -68,6 +85,8 @@ export class SkillScene extends Phaser.Scene {
   private resetBtn!: Button;
   private filterBtns: { b: Branch | null; btn: Button }[] = [];
   private closing = false;
+  /** Nodes already shown, so newly revealed ones can pop in. */
+  private shown = new Set<string>();
 
   constructor() {
     super('Skills');
@@ -81,6 +100,7 @@ export class SkillScene extends Phaser.Scene {
     this.selected = null;
     this.filter = null;
     this.query = '';
+    this.shown = new Set();
 
     // night sky
     const bg = this.add.graphics();
@@ -91,21 +111,34 @@ export class SkillScene extends Phaser.Scene {
       bg.fillStyle(0xffffff, rnd.realInRange(0.08, 0.5));
       bg.fillCircle(rnd.between(0, W), rnd.between(0, H), rnd.realInRange(0.5, 1.6));
     }
-    const hit = this.add.zone(0, 0, W - PANEL_W, H).setOrigin(0).setInteractive();
+    const hit = this.add.zone(0, 0, MAP_W, MAP_H).setOrigin(0).setInteractive();
 
     // Start zoomed out enough to see the whole constellation (the attack arm reaches furthest).
-    this.tree = this.add.container(VIEW_CX, VIEW_CY + 45).setScale(0.62);
+    this.tree = this.add.container(VIEW_CX, VIEW_CY + (PORTRAIT ? 0 : 45)).setScale(PORTRAIT ? 0.95 : 0.62);
     this.links = this.add.graphics();
     this.tree.add(this.links);
     for (const node of SKILL_NODES) this.buildNode(node);
 
     this.buildTopBar();
     this.buildPanel();
-    this.buildSearch();
+    if (!PORTRAIT) this.buildSearch(); // no room for a search box on a phone; everything is a tap away
 
     // pan & zoom
     hit.on('pointerdown', (p: Phaser.Input.Pointer) => (this.drag = { x: p.x, y: p.y, tx: this.tree.x, ty: this.tree.y, moved: false }));
+    // two-finger pinch zoom on phones
+    this.input.addPointer(1);
+    let pinch: number | null = null;
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      const a = this.input.pointer1;
+      const b = this.input.pointer2;
+      if (a.isDown && b.isDown) {
+        const d = Phaser.Math.Distance.Between(a.x, a.y, b.x, b.y);
+        if (pinch) this.zoomAt((a.x + b.x) / 2, (a.y + b.y) / 2, d / pinch);
+        pinch = d;
+        this.drag = null;
+        return;
+      }
+      pinch = null;
       if (!this.drag || !p.isDown) return;
       const dx = p.x - this.drag.x;
       const dy = p.y - this.drag.y;
@@ -114,7 +147,7 @@ export class SkillScene extends Phaser.Scene {
     });
     this.input.on('pointerup', () => (this.drag = null));
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (p.x > W - PANEL_W) return;
+      if (p.x > MAP_W || p.y > MAP_H) return;
       this.zoomAt(p.x, p.y, dy > 0 ? 0.88 : 1.14);
     });
 
@@ -146,33 +179,45 @@ export class SkillScene extends Phaser.Scene {
     zone.on('pointerover', () => g.setScale(1.12));
     zone.on('pointerout', () => g.setScale(1));
     this.tree.add([g, name, zone]);
-    this.views.push({ node, g, name, x, y, r });
+    this.views.push({ node, g, name, zone, x, y, r });
   }
 
   private buildTopBar() {
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.55);
-    g.fillRect(0, 0, W - PANEL_W, 60);
+    g.fillRect(0, 0, MAP_W, TOP_H);
     label(this, 24, 30, '별자리 스킬트리', 22, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
-    this.pointsText = label(this, 220, 30, '', 17, 0x7fe9ff, { weight: 900, origin: [0, 0.5] });
+    this.pointsText = label(this, PORTRAIT ? W - 24 : 220, 30, '', 17, 0x7fe9ff, { weight: 900, origin: [PORTRAIT ? 1 : 0, 0.5] });
     const opts: [Branch | null, string][] = [[null, '전체'], ['attack', '공격'], ['survival', '생존'], ['element', '원소'], ['smith', '대장장이']];
     opts.forEach(([b, text], i) => {
-      const btn = new Button(this, 420 + i * 72, 30, 66, 34, text, { variant: 'ghost', size: 13, onClick: () => this.setFilter(b) });
+      const btn = PORTRAIT
+        ? new Button(this, 24 + 66 + i * 136, 84, 128, 40, text, { variant: 'ghost', size: 15, onClick: () => this.setFilter(b) })
+        : new Button(this, 420 + i * 72, 30, 66, 34, text, { variant: 'ghost', size: 13, onClick: () => this.setFilter(b) });
       this.filterBtns.push({ b, btn });
     });
-    label(this, 24, H - 20, '드래그 이동 · 휠 확대/축소 · 노드 클릭 선택, 다시 클릭(또는 Enter) 습득 · K/Esc 닫기', 12, C.dim, { origin: [0, 0.5] });
+    const help = PORTRAIT
+      ? '드래그 이동 · 노드를 눌러 선택, 한 번 더 눌러 습득 · 찍으면 다음 별이 열립니다'
+      : '드래그 이동 · 휠 확대/축소 · 노드 클릭 선택, 다시 클릭(또는 Enter) 습득 · 찍으면 다음 별이 열립니다 · K/Esc 닫기';
+    label(this, 24, MAP_H - 20, help, 12, C.dim, { origin: [0, 0.5] });
   }
 
   private buildPanel() {
-    const x0 = W - PANEL_W;
     const g = this.add.graphics();
     g.fillStyle(0x0f0c0a, 0.96);
-    g.fillRect(x0, 0, PANEL_W, H);
+    g.fillRect(PANEL_X, PANEL_Y, PANEL_W, PANEL_H);
     g.lineStyle(1, C.edge, 1);
-    g.lineBetween(x0 + 0.5, 0, x0 + 0.5, H);
-    this.detail = this.add.container(x0, 0);
-    this.resetBtn = new Button(this, x0 + PANEL_W / 2, H - 112, PANEL_W - 48, 46, '스킬 초기화', { variant: 'dark', size: 15, sub: '', onClick: () => this.reset() });
-    new Button(this, x0 + PANEL_W / 2, H - 52, PANEL_W - 48, 52, '대장간으로', { variant: 'gold', sub: 'K · Esc', onClick: () => this.close() });
+    if (PORTRAIT) g.lineBetween(0, PANEL_Y + 0.5, W, PANEL_Y + 0.5);
+    else g.lineBetween(PANEL_X + 0.5, 0, PANEL_X + 0.5, H);
+    this.detail = this.add.container(PANEL_X, PANEL_Y);
+    if (PORTRAIT) {
+      // reset and close side by side along the bottom of the panel
+      const bw = (W - 60) / 2;
+      this.resetBtn = new Button(this, 24 + bw / 2, H - 50, bw, 56, '스킬 초기화', { variant: 'dark', size: 15, sub: '', onClick: () => this.reset() });
+      new Button(this, W - 24 - bw / 2, H - 50, bw, 56, '대장간으로', { variant: 'gold', sub: '', onClick: () => this.close() });
+    } else {
+      this.resetBtn = new Button(this, PANEL_X + PANEL_W / 2, H - 112, PANEL_W - 48, 46, '스킬 초기화', { variant: 'dark', size: 15, sub: '', onClick: () => this.reset() });
+      new Button(this, PANEL_X + PANEL_W / 2, H - 52, PANEL_W - 48, 52, '대장간으로', { variant: 'gold', sub: 'K · Esc', onClick: () => this.close() });
+    }
   }
 
   /** Native text input over the canvas, so Korean IME works for node search. */
@@ -235,7 +280,14 @@ export class SkillScene extends Phaser.Scene {
   }
 
   // ───────────────────────── state → screen
+  /** Visible on the map: the root, anything learned, and anything a learned node leads to. */
+  private revealed(id: string): boolean {
+    const s = this.core.state;
+    return id === ROOT_ID || isLearned(s, id) || (PARENTS[id] ?? []).some((p) => isLearned(s, p));
+  }
+
   private matches(n: SkillNode): boolean {
+    if (!this.revealed(n.id)) return false;
     if (this.filter && n.branch !== this.filter && n.id !== ROOT_ID) return false;
     if (this.query && !(n.name.includes(this.query) || n.desc.includes(this.query))) return false;
     return true;
@@ -250,7 +302,9 @@ export class SkillScene extends Phaser.Scene {
     const lg = this.links;
     lg.clear();
     for (const v of this.views) {
+      if (!this.revealed(v.node.id)) continue;
       for (const id of v.node.links) {
+        if (!this.revealed(id)) continue; // the way onward stays dark until it opens
         const o = this.views.find((w) => w.node.id === id)!;
         const a = isLearned(s, v.node.id);
         const b = isLearned(s, id);
@@ -264,8 +318,23 @@ export class SkillScene extends Phaser.Scene {
       }
     }
 
+    const fresh: NodeView[] = [];
+    const firstLook = this.shown.size === 0;
     for (const v of this.views) {
       const n = v.node;
+      // hidden until a node leading to it is learned: nothing drawn, not even its name
+      const open = this.revealed(n.id);
+      v.g.setVisible(open);
+      v.name.setVisible(open);
+      v.zone.setVisible(open);
+      if (open) v.zone.setInteractive();
+      else v.zone.disableInteractive();
+      if (!open) continue;
+      if (!this.shown.has(n.id)) {
+        // the first refresh just records what is open; later ones pop new stars in
+        if (!firstLook) fresh.push(v);
+        this.shown.add(n.id);
+      }
       const learned = isLearned(s, n.id);
       const block = checkLearn(s, n.id);
       const available = block === null || block === 'points';
@@ -305,6 +374,8 @@ export class SkillScene extends Phaser.Scene {
       g.setAlpha(show ? 1 : 0.18);
       v.name.setAlpha(show ? 1 : 0.15).setColor(css(learned ? C.text : available ? C.mute : C.dim));
     }
+
+    fresh.forEach((v, i) => this.popIn(v, i));
 
     const books = itemCount(s, 'resetBook');
     this.resetBtn.setLabel(`스킬 초기화 (서적 ${books})`);
@@ -384,6 +455,25 @@ export class SkillScene extends Phaser.Scene {
     this.refresh();
   }
 
+  /** "짠": a newly opened star grows out of nothing with a ring of light and a NEW tag. */
+  private popIn(v: NodeView, i: number) {
+    const col = BRANCHES[v.node.branch].color;
+    const delay = 250 + i * 160;
+    for (const o of [v.g, v.name]) {
+      o.setScale(0).setAlpha(0);
+      this.tweens.add({ targets: o, scale: 1, alpha: 1, delay, duration: 420, ease: 'Back.easeOut' });
+    }
+    const ring = this.add.image(v.x, v.y, 'ring').setTint(col).setBlendMode('ADD').setScale(0.1).setAlpha(0);
+    this.tree.add(ring);
+    this.tweens.add({ targets: ring, alpha: 1, delay, duration: 1 });
+    this.tweens.add({ targets: ring, scale: 1.1, alpha: 0, delay, duration: 700, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+    const tag = label(this, v.x, v.y - v.r - 22, 'NEW', 14, 0xffffff, { weight: 900, origin: [0.5, 0.5] }).setStroke(css(col), 5).setAlpha(0);
+    this.tree.add(tag);
+    this.tweens.add({ targets: tag, alpha: 1, y: tag.y - 8, delay: delay + 200, duration: 300 });
+    this.tweens.add({ targets: tag, alpha: 0, delay: delay + 2200, duration: 500, onComplete: () => tag.destroy() });
+    this.time.delayedCall(delay, () => this.sfx.click());
+  }
+
   private reset() {
     const s = this.core.state;
     const n = spentPoints(s);
@@ -393,6 +483,7 @@ export class SkillScene extends Phaser.Scene {
       this.sfx.coin();
       this.cameras.main.flash(300, 200, 180, 255);
       this.selected = null;
+      this.shown = new Set(); // the map closes up again; stars pop in anew as they are relearned
       this.refresh();
     }
   }

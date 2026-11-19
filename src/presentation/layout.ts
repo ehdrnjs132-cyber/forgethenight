@@ -1,15 +1,15 @@
 // Screen orientation for this session (user decision 2026-11-19: phones get a portrait version,
 // PC stays landscape). Decided once at boot; the game canvas is 720×1280 in portrait, 1280×720 otherwise.
 //
-// While the portrait screens are being built, portrait is opt-in with `?portrait` (and `?landscape`
-// forces the old layout), so the live site keeps working in landscape meanwhile.
+// Phones and tablets (touch-first screens) get portrait; PC keeps landscape. `?portrait` and
+// `?landscape` force one or the other for testing.
 
 function detect(): boolean {
   if (typeof window === 'undefined') return false;
   const q = new URLSearchParams(window.location.search);
   if (q.has('landscape')) return false;
   if (q.has('portrait')) return true;
-  return false; // later: phones held upright → window.matchMedia('(pointer: coarse)').matches && innerHeight > innerWidth
+  return window.matchMedia?.('(pointer: coarse)').matches === true;
 }
 
 export const PORTRAIT = detect();

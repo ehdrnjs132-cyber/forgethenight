@@ -142,7 +142,8 @@ export class CinematicScene extends Phaser.Scene {
     v.src = clip.file;
     v.playsInline = true;
     v.preload = 'auto';
-    Object.assign(v.style, { position: 'fixed', zIndex: '5', background: '#000', objectFit: 'cover', pointerEvents: 'none' });
+    // the clips are 16:9: fill a landscape screen, but show them whole (letterboxed) on a tall phone
+    Object.assign(v.style, { position: 'fixed', zIndex: '5', background: '#000', objectFit: W < H ? 'contain' : 'cover', pointerEvents: 'none' });
     let started = false;
     const fallback = this.time.delayedCall(LOAD_TIMEOUT_MS, () => token === this.clipToken && !started && this.playStill(clip, token));
     v.addEventListener('error', () => {
@@ -242,7 +243,7 @@ export class CinematicScene extends Phaser.Scene {
       return;
     }
     // Title card: logo and slogans drawn by the game, never baked into the AI video (spec PART 7).
-    const title = label(this, W / 2, H / 2 - 40, 'FORGE THE NIGHT', 64, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setDepth(40);
+    const title = label(this, W / 2, H / 2 - 40, 'FORGE THE NIGHT', W < H ? 52 : 64, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setDepth(40);
     const tag = label(this, W / 2, H / 2 + 20, 'Forge Your Power. Survive the Night.', 20, C.text, { display: true, weight: 700, origin: [0.5, 0.5] }).setDepth(40);
     const tag2 = label(this, W / 2, H / 2 + 54, 'You Never Know What They Forged.', 16, 0xc9b2ff, { display: true, weight: 700, origin: [0.5, 0.5] }).setDepth(40);
     for (const o of [title, tag, tag2]) {
