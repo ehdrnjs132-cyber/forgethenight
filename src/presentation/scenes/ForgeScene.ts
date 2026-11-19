@@ -44,7 +44,8 @@ const CARD = PORTRAIT ? { x: 40, y: 806 + EXTRA, w: 640, h: 170 } : { x: 24, y: 
  */
 // on a taller phone the smith grows into part of the extra room and the lower block moves down
 // Side view (2026-11-19): smith on the left, anvil on the right, so the stage is wider than tall.
-const STAGE = PORTRAIT ? { x: 325, bottom: 812 + EXTRA, height: 520 + EXTRA * 0.5 } : { x: 600, bottom: 702, height: 420 };
+// portrait: the camera sits further back (user feedback 2026-11-19: the smith felt too big for the room)
+const STAGE = PORTRAIT ? { x: 340, bottom: 790 + EXTRA, height: 380 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
 /** Portrait bottom area: odds row, stones, enhance button, action row. */
 const PB = { oddsY: 994 + EXTRA, stonesY: 1084 + EXTRA, enhanceY: 1150 + EXTRA, rowY: 1238 + EXTRA };
 
@@ -84,7 +85,7 @@ const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
 /** Tail tip of the smith's speech bubble: beside his head, clear of the hammer and the right panel. */
 // above the anvil, beside the side-view smith's face
-const SMITH_BUBBLE = PORTRAIT ? { x: 470, y: 500 + EXTRA * 0.7 } : { x: 720, y: 360 };
+const SMITH_BUBBLE = PORTRAIT ? { x: 450, y: 560 + EXTRA * 0.8 } : { x: 720, y: 360 };
 /** Toast line position. */
 const TOAST = PORTRAIT ? { x: 360, y: 770 + EXTRA } : { x: 640, y: 676 };
 
@@ -486,7 +487,7 @@ export class ForgeScene extends Phaser.Scene {
     // the weapon lies on the anvil, in front of the smith
     // sized so a +50 blade (1.7×) still fits: across the 720-wide portrait screen, and short of the
     // landscape odds panel
-    this.weaponView = new WeaponView(this, this.face.x - 6, this.face.y - 4, PORTRAIT ? 255 : 260);
+    this.weaponView = new WeaponView(this, this.face.x - 6, this.face.y - 4, PORTRAIT ? 215 : 260);
     const breathe = this.tweens.add({ targets: s, scaleY: k * 1.008, duration: 1500, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
 
     if (isAnim) {
@@ -588,7 +589,7 @@ export class ForgeScene extends Phaser.Scene {
     this.damageText = this.add
       .text(cx, y0 + gap.dmg, '', { fontFamily: DISPLAY, fontSize: '26px', fontStyle: '900', color: '#ffe9a8', stroke: '#140a05', strokeThickness: 7, resolution: 2 })
       .setOrigin(0.5);
-    this.starterHammer = this.add.image(staged ? this.face.x : ANVIL_X, staged ? this.face.y - 10 : 410, 'weapon-hammer').setScale(staged ? 0.62 : 0.9).setVisible(false);
+    this.starterHammer = this.add.image(staged ? this.face.x : ANVIL_X, staged ? this.face.y - 10 : 410, 'weapon-hammer').setScale(PORTRAIT ? 0.46 : staged ? 0.62 : 0.9).setVisible(false);
     this.emptyText = label(this, cx, y0 + gap.dmg, '', 14, C.text, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: CARD.w - 30, lineSpacing: 6 });
     // portrait: beside the level badge, since the rows below belong to the odds and buttons
     this.undoBtn = PORTRAIT
