@@ -33,20 +33,25 @@ export class Bubble extends Phaser.GameObjects.Container {
     scene.add.existing(this);
   }
 
-  /** Show `text` with the tail tip at (x, y). Resolves when it has gone. */
-  say(text: string, x: number, y: number, seconds = readTime(text)): Promise<void> {
+  /**
+   * Show `text` with the tail tip at (x, y). `shift` moves the box sideways from the tail (kept so the
+   * tail still lands on the box). Resolves when it has gone.
+   */
+  say(text: string, x: number, y: number, seconds = readTime(text), shift = 0): Promise<void> {
     this.setPosition(x, y);
     this.t.setText(text);
     const pad = { x: 14, y: 10 };
     const w = this.t.width + pad.x * 2;
     const h = this.t.height + pad.y * 2;
-    const tail = 12;
-    this.t.setPosition(0, -tail - pad.y);
+    const tail = 14;
+    // never shift so far that the tail falls off the box's rounded corner
+    const dx = Math.max(-(w / 2 - 22), Math.min(w / 2 - 22, shift));
+    this.t.setPosition(dx, -tail - pad.y);
     const g = this.g;
     g.clear();
-    g.fillStyle(0x000000, 0.25).fillRoundedRect(-w / 2 + 3, -tail - h + 4, w, h, 12);
-    g.fillStyle(this.style.fill, 0.97).fillRoundedRect(-w / 2, -tail - h, w, h, 12);
-    g.lineStyle(3, this.style.stroke, 1).strokeRoundedRect(-w / 2, -tail - h, w, h, 12);
+    g.fillStyle(0x000000, 0.25).fillRoundedRect(dx - w / 2 + 3, -tail - h + 4, w, h, 12);
+    g.fillStyle(this.style.fill, 0.97).fillRoundedRect(dx - w / 2, -tail - h, w, h, 12);
+    g.lineStyle(3, this.style.stroke, 1).strokeRoundedRect(dx - w / 2, -tail - h, w, h, 12);
     g.fillStyle(this.style.fill, 1).fillTriangle(-9, -tail - 1, 9, -tail - 1, 0, 0);
     g.lineStyle(3, this.style.stroke, 1).lineBetween(-9, -tail, 0, 0).lineBetween(9, -tail, 0, 0);
     this.hideTimer?.remove();

@@ -84,9 +84,16 @@ const ANVIL_X = 600;
  */
 const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
-/** Tail tip of the smith's speech bubble: beside his head, clear of the hammer and the right panel. */
-// above the anvil, beside the side-view smith's face
+/** Fallback tail tip of the smith's speech bubble, when the stage art has no HEAD entry. */
 const SMITH_BUBBLE = PORTRAIT ? { x: 450, y: 520 + EXTRA * 0.8 } : { x: 720, y: 360 };
+/**
+ * Top of the smith's head inside each stage image (fraction of the frame), so the bubble rises from
+ * his head (user request 2026-11-19). The box is shifted right so it never covers the raised hammer.
+ */
+const SMITH_HEAD: Record<string, { fx: number; fy: number }> = {
+  'anim-forge_strike_side': { fx: 0.375, fy: 0.3 },
+};
+const BUBBLE_SHIFT = PORTRAIT ? 90 : 80;
 /** Toast line position. */
 const TOAST = PORTRAIT ? { x: 360, y: 730 + EXTRA } : { x: 640, y: 676 };
 
@@ -95,6 +102,8 @@ const weaponName = (w: Weapon) => weaponDisplayName(w);
 export class ForgeScene extends Phaser.Scene {
   private core!: GameCore;
   private sfx = new Sfx();
+  /** Where the smith's speech bubble points (his head once the stage is built). */
+  private bubbleAt = { ...SMITH_BUBBLE, shift: 0 };
   private fx!: EnhancementPresentation;
   private selectedId: string | null = null;
   private animating = false;
@@ -230,7 +239,8 @@ export class ForgeScene extends Phaser.Scene {
   /** One line over the smith's head (DAY 1 only unless `always`). */
   private say(lines: readonly string[] | string, always = false) {
     if (!always && this.core.state.day !== 1) return;
-    void this.bubble.say(typeof lines === 'string' ? lines : pick(lines), SMITH_BUBBLE.x, SMITH_BUBBLE.y);
+    const b = this.bubbleAt;
+    void this.bubble.say(typeof lines === 'string' ? lines : pick(lines), b.x, b.y, undefined, b.shift);
   }
 
   /** Several lines in a row. */
@@ -240,7 +250,7 @@ export class ForgeScene extends Phaser.Scene {
       // a popup (tutorial, shop, skills) pauses the forge: wait for it instead of dropping the line
       while (this.scene.isPaused()) await new Promise((r) => setTimeout(r, 300));
       if (!this.scene.isActive()) return;
-      await this.bubble.say(l, SMITH_BUBBLE.x, SMITH_BUBBLE.y);
+      await this.bubble.say(l, this.bubbleAt.x, this.bubbleAt.y, undefined, this.bubbleAt.shift);
     }
   }
 
@@ -485,6 +495,8 @@ export class ForgeScene extends Phaser.Scene {
     s.setScale(k);
     const f = ANVIL_FACE[key] ?? { fx: 0.6, fy: 0.58 };
     this.face = { x: STAGE.x + (f.fx - 0.5) * s.width * k, y: STAGE.bottom - (1 - f.fy) * s.height * k };
+    const head = SMITH_HEAD[key];
+    if (head) this.bubbleAt = { x: STAGE.x + (head.fx - 0.5) * s.width * k, y: STAGE.bottom - (1 - head.fy) * s.height * k - 6, shift: BUBBLE_SHIFT };
     // the weapon lies on the anvil, in front of the smith
     // sized so a +50 blade (1.7×) still fits: across the 720-wide portrait screen, and short of the
     // landscape odds panel
