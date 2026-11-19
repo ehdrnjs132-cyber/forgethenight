@@ -1,5 +1,6 @@
 // HTML overlays for the online part: the first-launch login screen (Google / guest nickname / later)
 // and the ranking page (best enhancement level, top 50 + my rank, my account).
+import { canOfferInstall, installApp } from '../install';
 import { account, googleLogin, ranking, refreshMe, rename, serverConfig, signOut, startGuest, type RankRow } from './account';
 
 declare global {
@@ -127,6 +128,7 @@ export async function showLoginIfNeeded(): Promise<void> {
     <div class="ol-row"><input class="ol-input" id="ol-name" maxlength="12" placeholder="닉네임 (2~12자)" /><button class="ol-btn" id="ol-guest">게스트로 시작</button></div>
     <div class="ol-msg" id="ol-msg"></div>
     <div class="ol-row" style="justify-content:center"><button class="ol-btn ghost" id="ol-later">나중에 하기 (랭킹 없이 플레이)</button></div>
+    ${canOfferInstall() ? '<div class="ol-or">홈 화면에 설치하면 주소창 없이 꽉 찬 화면으로 즐길 수 있어요</div><div class="ol-row" style="justify-content:center"><button class="ol-btn" id="ol-install" style="background:#2f7bff;color:#fff">📲 앱 설치하기</button></div>' : ''}
   </div>`;
   document.body.append(back);
   const $ = <T extends HTMLElement>(id: string) => back.querySelector<T>(`#${id}`)!;
@@ -149,6 +151,7 @@ export async function showLoginIfNeeded(): Promise<void> {
       b.disabled = false;
     }
   });
+  back.querySelector('#ol-install')?.addEventListener('click', () => void installApp());
   $('ol-later').addEventListener('click', () => {
     account.skip();
     close();

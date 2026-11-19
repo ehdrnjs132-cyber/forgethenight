@@ -41,31 +41,17 @@ export function setupInstall() {
   btn.innerHTML = '📲 앱 설치 · 전체화면<span class="x" aria-label="닫기">✕</span>';
   document.body.append(btn);
 
-  const help = document.createElement('div');
+  help = document.createElement('div');
   help.id = 'install-help';
-  help.innerHTML = `<div>
-    <b>홈 화면에 앱으로 추가하기</b><br><br>
-    1. Safari 아래쪽(아이패드는 위쪽)의 <b>공유 버튼</b> <span style="font-size:18px">⎋</span> 을 누릅니다.<br>
-    2. 목록에서 <b>홈 화면에 추가</b>를 누릅니다.<br>
-    3. 홈 화면의 <b>FORGE</b> 아이콘으로 실행하면 주소창 없이 꽉 찬 화면으로 열립니다.<br><br>
-    <span style="opacity:.7;font-size:13px">Safari가 아닌 브라우저(카카오톡·크롬 등)라면 Safari로 이 주소를 열어 주세요.</span>
-    <button type="button">확인</button></div>`;
   document.body.append(help);
-  help.querySelector('button')!.addEventListener('click', () => (help.style.display = 'none'));
 
-  let deferred: InstallPromptEvent | null = null;
   const show = () => (btn.style.display = 'flex');
   const hide = () => (btn.style.display = 'none');
 
   btn.addEventListener('click', async (e) => {
     e.stopPropagation();
     if ((e.target as HTMLElement).classList.contains('x')) return hide();
-    if (deferred) {
-      await deferred.prompt();
-      const { outcome } = await deferred.userChoice;
-      if (outcome === 'accepted') hide();
-      deferred = null;
-    } else if (isIos()) help.style.display = 'grid';
+    if ((await installApp()) === 'accepted') hide();
   });
 
   window.addEventListener('beforeinstallprompt', (e) => {
@@ -73,6 +59,45 @@ export function setupInstall() {
     deferred = e as InstallPromptEvent;
     show();
   });
-  window.addEventListener('appinstalled', hide);
+  window.addEventListener('appinstalled', () => {
+    deferred = null;
+    hide();
+  });
   if (isIos()) show();
+}
+
+let deferred: InstallPromptEvent | null = null;
+let help: HTMLDivElement | null = null;
+
+/** Whether an "install" button makes sense here (not already running as the app). */
+export function canOfferInstall(): boolean {
+  return !isApp();
+}
+
+const IOS_HELP = `<b>홈 화면에 앱으로 추가하기</b><br><br>
+  1. Safari 아래쪽(아이패드는 위쪽)의 <b>공유 버튼</b> <span style="font-size:18px">⎋</span> 을 누릅니다.<br>
+  2. 목록에서 <b>홈 화면에 추가</b>를 누릅니다.<br>
+  3. 홈 화면의 <b>FORGE</b> 아이콘으로 실행하면 주소창 없이 꽉 찬 화면으로 열립니다.<br><br>
+  <span style="opacity:.7;font-size:13px">Safari가 아닌 브라우저(카카오톡·크롬 등)라면 Safari로 이 주소를 열어 주세요.</span>`;
+
+const OTHER_HELP = `<b>앱으로 설치하기</b><br><br>
+  1. 브라우저 오른쪽 위(또는 아래)의 <b>메뉴 ⋮</b> 를 누릅니다.<br>
+  2. <b>앱 설치</b> 또는 <b>홈 화면에 추가</b>를 누릅니다.<br>
+  3. 홈 화면의 <b>FORGE</b> 아이콘으로 실행하면 주소창 없이 꽉 찬 화면으로 열립니다.<br><br>
+  <span style="opacity:.7;font-size:13px">카카오톡 같은 앱 안에서 열었다면, 크롬이나 삼성 인터넷으로 이 주소를 열어 주세요.</span>`;
+
+/** Install: the browser's own prompt when it offers one, otherwise step-by-step help. */
+export async function installApp(): Promise<'accepted' | 'dismissed' | 'help'> {
+  if (deferred) {
+    const d = deferred;
+    deferred = null;
+    await d.prompt();
+    return (await d.userChoice).outcome;
+  }
+  if (help) {
+    help.innerHTML = `<div>${isIos() ? IOS_HELP : OTHER_HELP}<button type="button">확인</button></div>`;
+    help.querySelector('button')!.addEventListener('click', () => (help!.style.display = 'none'));
+    help.style.display = 'grid';
+  }
+  return 'help';
 }
