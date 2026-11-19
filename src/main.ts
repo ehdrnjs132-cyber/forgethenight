@@ -82,7 +82,8 @@ async function boot() {
     // so automated checks keep running when the page is not being painted.
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
     physics: { default: 'arcade', arcade: { debug: false } },
-    scene: [BootScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene, LobbyScene],
+    // Lobby sits under Modal in the draw order so its confirm/rules pop-ups appear on top
+    scene: [BootScene, LobbyScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   goFullscreenOnTouch();

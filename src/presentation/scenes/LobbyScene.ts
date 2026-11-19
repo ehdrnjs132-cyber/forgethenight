@@ -34,7 +34,8 @@ export class LobbyScene extends Phaser.Scene {
     this.drawBackground();
 
     const s = this.core.state;
-    const fresh = s.day === 1 && s.weapons.every((w) => w.level === 0) && this.core.records.runs <= 1 && this.core.records.bestLevel === 0;
+    // a run nobody has touched yet: "게임 시작", and nothing to restart
+    const fresh = s.day === 1 && s.weapons.every((w) => w.level === 0) && (s.stats.enhanceAttempts ?? 0) === 0;
 
     // layout: one centred column in portrait, title+weapon left / menu right in landscape
     const colX = PORTRAIT ? W / 2 : 380;
@@ -108,6 +109,10 @@ export class LobbyScene extends Phaser.Scene {
     this.refreshSound();
     if (canOfferInstall()) new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📲 앱 설치', { variant: 'dark', size: 22, onClick: () => void installApp() });
     else new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📖 강화 규칙', { variant: 'dark', size: 22, onClick: () => this.openRules() });
+    if (!fresh) {
+      y += bh + gap;
+      new Button(this, menuX, y, bw, bh, '↺ 처음부터 하기', { variant: 'ghost', size: 22, onClick: () => this.confirmRestart() });
+    }
 
     this.input.keyboard?.once('keydown-ENTER', () => this.enterForge());
   }
@@ -166,6 +171,25 @@ export class LobbyScene extends Phaser.Scene {
   private openRules() {
     this.scene.pause();
     this.scene.launch('Modal', { kind: 'tutorial', replay: true, returnTo: 'Lobby' });
+  }
+
+  /** Abandon the current run and start again from DAY 1 (records and the ranking best stay). */
+  private confirmRestart() {
+    const s = this.core.state;
+    this.scene.pause();
+    this.scene.launch('Modal', {
+      kind: 'confirm',
+      danger: true,
+      title: '처음부터 다시 할까요?',
+      body: `지금 진행 중인 DAY ${s.day}의 무기 ${s.weapons.length}자루, ${s.gold.toLocaleString()}G, 배운 강화 스킬이 모두 사라지고 DAY 1부터 다시 시작합니다.\n최고 기록과 랭킹 기록은 그대로 남습니다.\n\n되돌릴 수 없습니다.`,
+      confirmLabel: '처음부터 시작',
+      cancelLabel: '취소',
+      returnTo: 'Lobby',
+      onConfirm: () => {
+        this.core.dispatch({ type: 'NEW_RUN' });
+        this.scene.restart();
+      },
+    });
   }
 
   private enterForge() {
