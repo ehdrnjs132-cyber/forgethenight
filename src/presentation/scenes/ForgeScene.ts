@@ -8,7 +8,7 @@ import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../.
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
 import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
 import { START_LIVES } from '../../config/rules';
-import { C, DISPLAY, H, W, css, label, panel } from '../theme';
+import { C, DISPLAY, EXTRA, H, W, css, label, panel } from '../theme';
 import { Button } from '../ui/button';
 import { WeaponView } from '../ui/weaponView';
 import { drawWeapon, glowStrength, weaponLookTexture } from '../weaponArt';
@@ -24,22 +24,28 @@ import { inPrologue } from '../../core/systems/prologue';
 import { NARRATOR_LINES, SMITH_LINES, pick } from '../../config/dialogue';
 import { Bubble, SMITH_STYLE } from '../ui/speech';
 import { LevelBadge } from '../ui/levelBadge';
+import { PORTRAIT } from '../layout';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
 import { ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
 import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
 
+// Portrait (720×1280, phones) stacks everything: top bar → rack strip → smith and anvil → weapon card →
+// odds row → big enhance button → equip / sell / night. Landscape keeps the original 1280×720 layout.
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
-/** Weapon rack on the left wall: 2 × 4 planks (8 slots, INVENTORY_CAP), the locked ones padlocked. */
-const RACK = { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
-/** Selected-weapon card under the rack. */
-const CARD = { x: 24, y: 490, w: 500, h: 226 };
+/** Weapon rack: 2 × 4 planks on the left wall (landscape) or a 4 × 2 strip under the top bar (portrait). */
+const RACK = PORTRAIT ? { x: 14, y: 150, cols: 4, slotW: 165, slotH: 78, gapX: 9, gapY: 10 } : { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
+/** Selected-weapon card (name, level badge, next milestone, damage). */
+const CARD = PORTRAIT ? { x: 40, y: 806 + EXTRA, w: 640, h: 170 } : { x: 24, y: 490, w: 500, h: 226 };
 /**
  * The blacksmith behind the anvil (one Higgsfield image or sprite sheet). `fx/fy` locate the anvil face
  * inside each texture (fractions of its width/height), so the weapon lies exactly where the hammer lands.
  */
-const STAGE = { x: 724, bottom: 714, height: 520 };
+// on a taller phone the smith grows into part of the extra room and the lower block moves down
+const STAGE = PORTRAIT ? { x: 360, bottom: 812 + EXTRA, height: 470 + EXTRA * 0.6 } : { x: 724, bottom: 714, height: 520 };
+/** Portrait bottom area: odds row, stones, enhance button, action row. */
+const PB = { oddsY: 994 + EXTRA, stonesY: 1084 + EXTRA, enhanceY: 1150 + EXTRA, rowY: 1238 + EXTRA };
 
 /**
  * Shelf centres and sizes measured on the painted rack in forge_rack_bg (1280×720 screen space),
@@ -51,7 +57,7 @@ const PAINTED_SLOTS: { x: number; y: number; w: number; h: number }[] = [172, 25
 ]);
 
 function rackSlot(i: number): { x: number; y: number; w: number; h: number } {
-  const p = PAINTED_SLOTS[i];
+  const p = PORTRAIT ? undefined : PAINTED_SLOTS[i];
   if (p) return p;
   const col = i % RACK.cols;
   const row = Math.floor(i / RACK.cols);
@@ -75,7 +81,9 @@ const ANVIL_X = 600;
 const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
 /** Tail tip of the smith's speech bubble: beside his head, clear of the hammer and the right panel. */
-const SMITH_BUBBLE = { x: 770, y: 300 };
+const SMITH_BUBBLE = PORTRAIT ? { x: 210, y: 470 + EXTRA * 0.5 } : { x: 770, y: 300 };
+/** Toast line position. */
+const TOAST = PORTRAIT ? { x: 360, y: 770 + EXTRA } : { x: 640, y: 676 };
 
 const weaponName = (w: Weapon) => weaponDisplayName(w);
 
@@ -146,7 +154,7 @@ export class ForgeScene extends Phaser.Scene {
       weapon: this.weaponView,
       swing: this.swing,
       impact: staged ? { x: this.face.x, y: this.face.y - 6 } : this.textures.exists('art-anvil') ? IMPACT : { x: 686, y: 432 },
-      bannerAt: staged ? { x: STAGE.x, y: 140 } : { x: 640, y: 292 },
+      bannerAt: staged ? { x: STAGE.x, y: PORTRAIT ? 390 : 140 } : { x: 640, y: 292 },
       sfx: this.sfx,
     });
 
@@ -228,14 +236,18 @@ export class ForgeScene extends Phaser.Scene {
 
   // ───────────────────────── layout
   private buildBackground() {
-    const bgKey = this.textures.exists('art-forge_rack_bg') ? 'art-forge_rack_bg' : 'art-forge_bg';
+    // portrait: the plain forge painting (the rack painting's shelves only fit the landscape layout)
+    const bgKey = !PORTRAIT && this.textures.exists('art-forge_rack_bg') ? 'art-forge_rack_bg' : 'art-forge_bg';
     if (this.textures.exists(bgKey)) {
       // Higgsfield forge interior (with the weapon rack painted on the wall); the furnace glow breathes on top.
-      this.add.image(W / 2, H / 2, bgKey).setDisplaySize(W, H);
+      const bg = this.add.image(W / 2, H / 2, bgKey);
+      if (PORTRAIT) bg.setScale(Math.max(W / bg.width, H / bg.height)).setY(H * 0.42);
+      else bg.setDisplaySize(W, H);
       const fire = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
       for (let i = 5; i >= 1; i--) {
         fire.fillStyle(0xff7a2a, 0.02 * i);
-        if (bgKey === 'art-forge_rack_bg') fire.fillEllipse(740, 330, 120 + i * 60, 90 + i * 36);
+        if (PORTRAIT) fire.fillEllipse(W / 2, 470 + EXTRA * 0.5, 160 + i * 70, 120 + i * 40);
+        else if (bgKey === 'art-forge_rack_bg') fire.fillEllipse(740, 330, 120 + i * 60, 90 + i * 36);
         else fire.fillEllipse(W / 2, 250, 160 + i * 70, 120 + i * 40);
       }
       this.tweens.add({ targets: fire, alpha: 0.35, duration: 900, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
@@ -247,8 +259,15 @@ export class ForgeScene extends Phaser.Scene {
       g.fillGradientStyle(C.bgTop, C.bgTop, C.bgBottom, C.bgBottom, 1);
       g.fillRect(0, 0, W, H);
     }
+    if (PORTRAIT) {
+      // darker bands behind the rack strip and the controls so text stays readable on the painting
+      const band = this.add.graphics();
+      band.fillStyle(0x000000, 0.42).fillRect(0, 112, W, 220);
+      band.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.82, 0.82).fillRect(0, 760 + EXTRA, W, 80);
+      band.fillStyle(0x000000, 0.82).fillRect(0, 840 + EXTRA, W, H - 840 - EXTRA);
+    }
     this.add.particles(0, 0, 'ember', {
-      x: { min: 260, max: 1020 },
+      x: PORTRAIT ? { min: 80, max: 640 } : { min: 260, max: 1020 },
       y: H + 6,
       lifespan: { min: 3200, max: 6400 },
       speedY: { min: -70, max: -24 },
@@ -262,6 +281,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private buildTopBar() {
+    if (PORTRAIT) return this.buildTopBarPortrait();
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.45);
     g.fillRect(0, 0, W, 64);
@@ -286,12 +306,35 @@ export class ForgeScene extends Phaser.Scene {
     this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
+  /** Portrait top bar, two rows: title · DAY · gold, then the menu buttons and the hearts. */
+  private buildTopBarPortrait() {
+    const g = this.add.graphics();
+    g.fillStyle(0x000000, 0.6).fillRect(0, 0, W, 112);
+    g.lineStyle(1, C.edge, 1).lineBetween(0, 112.5, W, 112.5);
+    label(this, 16, 30, 'FORGE THE NIGHT', 17, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
+    this.dayText = label(this, W / 2 + 40, 30, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
+    this.goldText = label(this, W - 16, 30, '', 22, C.goldHi, { weight: 900, origin: [1, 0.5] });
+    this.livesG = this.add.graphics();
+    this.skillBtn = new Button(this, 88, 80, 160, 40, '스킬트리', { variant: 'dark', size: 14, sub: 'K', onClick: () => this.openSkills() });
+    new Button(this, 214, 80, 80, 36, '🏆 랭킹', { variant: 'gold', size: 13, onClick: () => void openRanking() });
+    new Button(this, 304, 80, 88, 36, '인트로', {
+      variant: 'ghost',
+      size: 13,
+      onClick: () => {
+        if (this.animating || this.leaving) return;
+        const data: CinematicData = { clips: INTRO, next: 'Forge', titleCard: true };
+        this.scene.start('Cinematic', data);
+      },
+    });
+    this.shopBtn = new Button(this, 422, 80, 136, 40, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 14, sub: 'M', onClick: () => this.openShop() });
+  }
+
   private drawLives(lives: number) {
     const g = this.livesG;
     g.clear();
     for (let i = 0; i < START_LIVES; i++) {
-      const x = 948 + i * 16;
-      const y = 32;
+      const x = PORTRAIT ? 556 + i * 16 : 948 + i * 16;
+      const y = PORTRAIT ? 78 : 32;
       const alive = i < lives;
       g.fillStyle(alive ? C.danger : 0x2a1d1d, 1);
       g.fillCircle(x - 3, y - 2, 4);
@@ -302,7 +345,7 @@ export class ForgeScene extends Phaser.Scene {
 
   /** The weapon rack hangs on the forge wall: no list window, the weapons themselves are the buttons. */
   private buildRack() {
-    this.painted = this.textures.exists('art-forge_rack_bg');
+    this.painted = !PORTRAIT && this.textures.exists('art-forge_rack_bg');
     if (!this.painted) {
       // no painted rack yet: a plain timber board stands in for it
       const g = this.add.graphics();
@@ -523,7 +566,11 @@ export class ForgeScene extends Phaser.Scene {
     const staged = this.stageKey() !== null;
     const cx = staged ? CARD.x + CARD.w / 2 : 640;
     const y0 = staged ? CARD.y + 26 : 104;
-    const gap = staged ? { lv: 50, next: 98, dmg: 130, undo: 176 } : { lv: 64, next: 118, dmg: 152, undo: 196 };
+    const gap = PORTRAIT
+      ? { lv: 52, next: 100, dmg: 134, undo: 52 }
+      : staged
+        ? { lv: 50, next: 98, dmg: 130, undo: 176 }
+        : { lv: 64, next: 118, dmg: 152, undo: 196 };
     this.nameText = label(this, cx, y0, '', 22, C.text, { weight: 900, origin: [0.5, 0.5] });
     this.nameText.setStroke('#140a05', 6);
     this.levelText = new LevelBadge(this, cx, y0 + gap.lv, 0, staged ? 46 : 54);
@@ -535,10 +582,41 @@ export class ForgeScene extends Phaser.Scene {
       .setOrigin(0.5);
     this.starterHammer = this.add.image(staged ? this.face.x : ANVIL_X, staged ? this.face.y - 10 : 410, 'weapon-hammer').setScale(staged ? 0.62 : 0.9).setVisible(false);
     this.emptyText = label(this, cx, y0 + gap.dmg, '', 14, C.text, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: CARD.w - 30, lineSpacing: 6 });
-    this.undoBtn = new Button(this, cx, y0 + gap.undo, 250, 36, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
+    // portrait: beside the level badge, since the rows below belong to the odds and buttons
+    this.undoBtn = PORTRAIT
+      ? new Button(this, W - 130, y0 + gap.undo, 220, 36, '시간 역행석 사용', { variant: 'ghost', size: 13, sub: '', onClick: () => this.undo() })
+      : new Button(this, cx, y0 + gap.undo, 250, 36, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
+  }
+
+  /** Portrait: odds as one row of five columns, then stones, the big enhance button and the action row. */
+  private buildOddsPortrait() {
+    const colW = (W - 40) / OUTCOMES.length;
+    label(this, 20, PB.oddsY - 4, '강화 확률', 14, C.gold, { weight: 900, origin: [0, 0.5] });
+    this.stageText = label(this, W / 2, PB.oddsY - 4, '', 12, C.mute, { weight: 700, origin: [0.5, 0.5] });
+    new Button(this, W - 36, PB.oddsY - 4, 36, 26, '?', { variant: 'ghost', onClick: () => this.openModal({ kind: 'tutorial', replay: true }) });
+    this.oddsBars = this.add.graphics();
+    OUTCOMES.forEach((o, i) => {
+      const cx = 20 + colW * i + colW / 2;
+      const dot = this.add.graphics();
+      dot.fillStyle(OUTCOME_INFO[o].color, 1).fillCircle(cx - 26, PB.oddsY + 24, 5);
+      label(this, cx - 18, PB.oddsY + 24, OUTCOME_INFO[o].name, 14, o === 'destroy' ? C.dangerHi : C.text, { weight: 700, origin: [0, 0.5] });
+      this.oddsTexts[o] = label(this, cx, PB.oddsY + 50, '', 18, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [0.5, 0.5] });
+    });
+    this.statsText = label(this, W / 2, PB.oddsY + 80, '', 11, C.dim, { origin: [0.5, 0.5] });
+    this.stoneTitle = label(this, 20, PB.stonesY, '사용', 12, C.mute, { weight: 700, origin: [0, 0.5] });
+    ENHANCE_ITEMS.forEach((item, i) => {
+      const chip = new StoneChip(this, 60 + i * 96, PB.stonesY - 15, 90, 30, item, () => this.toggleStone(item));
+      this.stoneChips.push(chip);
+    });
+    this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, W - 40, 84, '강화', { variant: 'gold', size: 30, sub: '', onClick: () => this.tryEnhance() });
+    const bw = (W - 40 - 20) / 3;
+    this.equipBtn = new Button(this, 20 + bw / 2, PB.rowY, bw, 62, '장착', { variant: 'dark', sub: '', onClick: () => this.equipSelected() });
+    this.sellBtn = new Button(this, W / 2, PB.rowY, bw, 62, '판매', { variant: 'dark', sub: '', onClick: () => this.trySell() });
+    this.nightBtn = new Button(this, W - 20 - bw / 2, PB.rowY, bw, 62, '밤 전투', { variant: 'dark', sub: '', onClick: () => this.startNight() });
   }
 
   private buildOdds() {
+    if (PORTRAIT) return this.buildOddsPortrait();
     const g = this.add.graphics();
     panel(g, RIGHT.x, RIGHT.y, RIGHT.w, RIGHT.h);
     label(this, RIGHT.x + 20, RIGHT.y + 18, '강화 확률', 16, C.gold, { weight: 900 });
@@ -581,7 +659,7 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   private buildToast() {
-    this.toastBox = this.add.container(640, 676).setDepth(40).setAlpha(0);
+    this.toastBox = this.add.container(TOAST.x, TOAST.y).setDepth(40).setAlpha(0);
   }
 
   private toast(msg: string, color: number = C.text) {
@@ -619,7 +697,7 @@ export class ForgeScene extends Phaser.Scene {
   /** 8 planks: weapons hang on the open ones in order, the rest are padlocked until a key is bought. */
   private renderRack() {
     const s = this.core.state;
-    this.rackTitle.setText(`무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  클릭해 선택`);
+    this.rackTitle.setText(`무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  ${PORTRAIT ? '눌러서' : '클릭해'} 선택`);
     this.rack.removeAll(true);
     const plank = !this.painted && this.textures.exists('art-rack_slot');
     for (let i = 0; i < INVENTORY_CAP; i++) {
@@ -776,11 +854,16 @@ export class ForgeScene extends Phaser.Scene {
       const shielded = row && (o === 'down' || o === 'destroy') && isArmed(this.core.state, 'protect');
       this.oddsTexts[o].setText(row ? `${shielded ? '→유지 ' : ''}${pct.toFixed(1)}%` : '—');
       this.oddsTexts[o].setColor(css(shielded ? ITEMS.protect.color : o === 'destroy' ? C.dangerHi : C.text));
+      // landscape: one long bar per row; portrait: a short bar under each column
+      const colW = (W - 40) / OUTCOMES.length;
+      const bx = PORTRAIT ? 20 + colW * i + 10 : RIGHT.x + 20;
+      const by = PORTRAIT ? PB.oddsY + 66 : y;
+      const bw = PORTRAIT ? colW - 20 : RIGHT.w - 40;
       g.fillStyle(0x0a0807, 1);
-      g.fillRoundedRect(RIGHT.x + 20, y, RIGHT.w - 40, 6, 3);
+      g.fillRoundedRect(bx, by, bw, 6, 3);
       if (pct > 0) {
         g.fillStyle(OUTCOME_INFO[o].color, 1);
-        g.fillRoundedRect(RIGHT.x + 20, y, Math.max(6, ((RIGHT.w - 40) * pct) / 100), 6, 3);
+        g.fillRoundedRect(bx, by, Math.max(6, (bw * pct) / 100), 6, 3);
       }
     });
     const st = this.core.state.stats;
@@ -789,23 +872,27 @@ export class ForgeScene extends Phaser.Scene {
     const canEnhance = !!w && w.level < MAX_LEVEL && !this.animating;
     this.enhanceBtn.setEnabled(canEnhance);
     const cost = w ? enhanceCost(w.level) : 0;
+    // keyboard hints only where there is a keyboard
+    const key = (k: string) => (PORTRAIT ? '' : ` · ${k}`);
     this.enhanceBtn.setLabel(
       w && w.level >= MAX_LEVEL ? '최대 단계' : '강화',
-      w && w.level >= MAX_LEVEL ? '+50 도달' : !w ? 'Space' : cost === 0 ? '무료 · Space' : `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''} · Space`,
+      w && w.level >= MAX_LEVEL ? '+50 도달' : !w ? (PORTRAIT ? '' : 'Space') : cost === 0 ? `무료${key('Space')}` : `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''}${key('Space')}`,
     );
     const eq = !!w && this.core.state.equippedId === w.id;
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
-    this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? '이 무기로 밤에 싸웁니다' : 'E');
+    this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? (PORTRAIT ? '밤에 사용' : '이 무기로 밤에 싸웁니다') : PORTRAIT ? '' : 'E');
     this.sellBtn.setEnabled(!!w && !this.animating);
-    this.sellBtn.setLabel('판매', w ? `${sellPrice(this.core.state, w.level).toLocaleString()}G · S` : 'S');
+    this.sellBtn.setLabel('판매', w ? `${sellPrice(this.core.state, w.level).toLocaleString()}G${key('S')}` : PORTRAIT ? '' : 'S');
     this.renderItems();
     const armed = equippedWeapon(this.core.state);
     const hammer = this.core.state.weapons.length === 0;
     this.nightBtn.setEnabled((!!armed || hammer) && !this.animating);
-    this.nightBtn.setLabel(
-      '밤 전투 시작',
-      armed ? `${weaponName(armed)} +${armed.level} (N)` : hammer ? '기본 망치로 싸웁니다 (N)' : '먼저 무기를 장착하세요',
-    );
+    if (PORTRAIT) this.nightBtn.setLabel('밤 전투', armed ? `+${armed.level} 장착` : hammer ? '망치로 싸움' : '장착 필요');
+    else
+      this.nightBtn.setLabel(
+        '밤 전투 시작',
+        armed ? `${weaponName(armed)} +${armed.level} (N)` : hammer ? '기본 망치로 싸웁니다 (N)' : '먼저 무기를 장착하세요',
+      );
   }
 
   private startNight() {
@@ -940,7 +1027,8 @@ export class ForgeScene extends Phaser.Scene {
   private coinBurst(price: number) {
     const n = Phaser.Math.Clamp(Math.round(Math.log10(price) * 3), 3, 16);
     for (let i = 0; i < n; i++) {
-      const c = this.add.image(640 + Phaser.Math.Between(-60, 60), 330 + Phaser.Math.Between(-20, 20), 'spark').setTint(0xffd36b).setScale(0.9).setDepth(50).setBlendMode('ADD');
+      const from = this.face ?? { x: 640, y: 330 };
+      const c = this.add.image(from.x + Phaser.Math.Between(-60, 60), from.y - 30 + Phaser.Math.Between(-20, 20), 'spark').setTint(0xffd36b).setScale(0.9).setDepth(50).setBlendMode('ADD');
       this.tweens.add({
         targets: c,
         x: W - 60,

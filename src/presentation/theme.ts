@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
+import { PORTRAIT, portraitHeight } from './layout';
 
-export const W = 1280;
-export const H = 720;
+/** Game canvas size: 1280×720 landscape, or 720 × (1280…1600, the phone's shape) in portrait. */
+export const W = PORTRAIT ? 720 : 1280;
+export const H = PORTRAIT ? portraitHeight() : 720;
+/** Extra portrait height beyond 1280; lower blocks move down by this much. */
+export const EXTRA = PORTRAIT ? H - 1280 : 0;
 
 /** Dark fantasy palette: soot, iron, ember and gold. Danger is a distinct red (§8.4). */
 export const C = {

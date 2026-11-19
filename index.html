@@ -23,6 +23,7 @@
       #rotate { display: none; position: fixed; inset: 0; z-index: 10; background: #07060a; color: #e9d9b5; font: 700 18px "Noto Sans KR", sans-serif; text-align: center; place-items: center; }
       #rotate span { display: block; font-size: 56px; margin-bottom: 12px; }
       @media (orientation: portrait) and (pointer: coarse) { #rotate { display: grid; } }
+      body.portrait-mode #rotate { display: none !important; }
     </style>
   </head>
   <body>

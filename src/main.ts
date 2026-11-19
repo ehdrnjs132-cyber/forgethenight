@@ -11,6 +11,7 @@ import { SkillScene } from './presentation/scenes/SkillScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { H, W } from './presentation/theme';
 import { setupInstall } from './install';
+import { PORTRAIT } from './presentation/layout';
 import { account, submitBest } from './online/account';
 import { showLoginIfNeeded } from './online/ui';
 import { weaponDisplayName } from './config/swordNames';
@@ -36,7 +37,7 @@ function goFullscreenOnTouch() {
   const enter = async () => {
     try {
       if (!document.fullscreenElement) await (el.requestFullscreen?.({ navigationUI: 'hide' }) ?? el.webkitRequestFullscreen?.());
-      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.('landscape');
+      await (screen.orientation as ScreenOrientation & { lock?: (o: string) => Promise<void> }).lock?.(PORTRAIT ? 'portrait' : 'landscape');
     } catch {
       /* not allowed here; the page still fits the screen */
     }
@@ -63,6 +64,8 @@ function setupOnline(core: GameCore) {
 }
 
 async function boot() {
+  // portrait layout: no "turn your phone sideways" cover
+  if (PORTRAIT) document.body.classList.add('portrait-mode');
   await fontsReady();
   const core = new GameCore(browserStorage(new URLSearchParams(location.search).get('slot')));
   const game = new Phaser.Game({
