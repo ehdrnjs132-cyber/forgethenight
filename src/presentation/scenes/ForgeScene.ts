@@ -697,7 +697,7 @@ export class ForgeScene extends Phaser.Scene {
     // landscape: short, so the buy button fits on the same row
     this.rackTitle.setText(PORTRAIT ? `무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  눌러서 선택` : `무기걸이 ${s.weapons.length} / ${s.inventoryCap}`);
     const price = weaponPrice(s);
-    this.buyBtn.setLabel(`＋ 무기 구매 · ${price.toLocaleString()}G`);
+    this.buyBtn.setLabel(price > 0 ? `＋ 무기 구매 · ${price.toLocaleString()}G` : '＋ 새 무기 받기 (무료)');
     this.buyBtn.setEnabled(!this.animating && !inPrologue(s) && s.weapons.length < s.inventoryCap && s.gold >= price);
     this.rack.removeAll(true);
     const plank = !this.painted && this.textures.exists('art-rack_slot');
@@ -1053,7 +1053,7 @@ export class ForgeScene extends Phaser.Scene {
     if (r.type === 'weaponBought') {
       this.sfx.coin();
       this.selectedId = r.weapon.id;
-      this.toast(`${weaponName(r.weapon)} 구매 · −${r.price.toLocaleString()}G · 다음 구매 ${weaponPrice(this.core.state).toLocaleString()}G`, C.goldHi);
+      this.toast(r.price > 0 ? `${weaponName(r.weapon)} 구매 · −${r.price.toLocaleString()}G · 다음 구매 ${weaponPrice(this.core.state).toLocaleString()}G` : `새 무기: ${weaponName(r.weapon)}`, C.goldHi);
       this.say(SMITH_LINES.buy);
       this.refresh();
       return;

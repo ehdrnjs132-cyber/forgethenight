@@ -52,6 +52,8 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
 
 /** Sale price including 상인의 눈 and other sale bonuses. */
 export function sellPrice(state: GameState, level: number): number {
+  // fresh weapons are free at the forge, so an untouched +0 one is worth nothing (no free-gold loop)
+  if (level <= 0) return 0;
   const bonus = skillTotals(state, null).sellBonus;
   return roundPrice(salePrice(level) * SALE_MULTIPLIER * (1 + bonus));
 }

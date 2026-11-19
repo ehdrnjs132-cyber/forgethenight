@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { runWith, seedFor } from './helpers';
 import { SALE_MULTIPLIER } from '../src/config/economy';
-import { keyPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, toggleArmed, undoEnhance } from '../src/core/systems/economy';
+import { keyPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, sellPrice, toggleArmed, undoEnhance } from '../src/core/systems/economy';
 import { effectiveRow, enhance } from '../src/core/systems/enhancement';
 import { ENHANCE_TABLE } from '../src/config/enhancement';
 import { GameCore } from '../src/core/game';
@@ -41,23 +41,28 @@ describe('selling (QA 6, 7)', () => {
     const game = new GameCore(storage, 3);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
+    // a +1 weapon (an untouched +0 one sells for nothing since weapons became free)
+    game.state = { ...game.state, weapons: game.state.weapons.map((w, i) => (i === 0 ? { ...w, level: 1 } : w)) };
     const [a, b] = game.state.weapons;
+    const price = sellPrice(game.state, 1);
     game.dispatch({ type: 'SELL', weaponId: a.id });
     game.dispatch({ type: 'EQUIP', weaponId: b.id });
     game.dispatch({ type: 'START_NIGHT' });
     game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 5 });
-    expect(game.state.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);
+    expect(price).toBeGreaterThan(0);
+    expect(game.state.gold).toBe(START_GOLD + price);
     expect(game.state.weapons).toHaveLength(2);
-    expect(new GameCore(storage).state.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);
+    expect(new GameCore(storage).state.gold).toBe(START_GOLD + price);
   });
 
   it('the sale is on disk immediately (§25: closing mid-sale cannot duplicate gold)', () => {
     const storage = new MemoryStorage();
     const game = new GameCore(storage, 3);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
+    game.state = { ...game.state, weapons: game.state.weapons.map((w, i) => (i === 0 ? { ...w, level: 1 } : w)) };
     game.dispatch({ type: 'SELL', weaponId: game.state.weapons[0].id });
     const saved = new SaveManager(storage).loadRun().state!;
-    expect(saved.gold).toBe(START_GOLD + 10 * SALE_MULTIPLIER);
+    expect(saved.gold).toBe(START_GOLD + sellPrice(saved, 1));
     expect(saved.weapons).toHaveLength(2);
   });
 });
