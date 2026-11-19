@@ -71,6 +71,12 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
     s = { ...s, version: 4, inventoryCap: cap(s), stats: { ...createStats(), ...s.stats } };
     if (s.nightSnapshot) s.nightSnapshot = { ...s.nightSnapshot, version: 4, inventoryCap: cap(s.nightSnapshot as GameState), stats: { ...createStats(), ...s.nightSnapshot.stats } };
   }
+  // 2026-11-19: only swords exist now (they alone have a name and image per level). Spears and axes in
+  // an older save become swords of the same element and level.
+  const toSwords = (x: GameState): GameState =>
+    x.weapons.some((w) => w.cls !== 'sword') ? { ...x, weapons: x.weapons.map((w) => (w.cls === 'sword' ? w : { ...w, cls: 'sword' })) } : x;
+  s = toSwords(s);
+  if (s.nightSnapshot) s = { ...s, nightSnapshot: toSwords(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
   return s;
 }
 

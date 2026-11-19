@@ -1,5 +1,5 @@
 // WeaponManager: daily grant, equip, lookup (§4, §24). Pure functions over GameState.
-import { DAILY_GRANT, ELEMENTS, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
+import { DAILY_GRANT, DROP_CLASSES, ELEMENTS, type Element, type WeaponClass } from '../../config/weapons';
 import { DAILY_WEAPON_LIMIT, SALE_PRICES, WEAPON_BASE_PRICE } from '../../config/economy';
 import { daily, withDaily } from './forgeSkills';
 import { Rng } from '../rng';
@@ -80,7 +80,7 @@ export function buyWeapon(prev: GameState): { ok: true; state: GameState; weapon
   const counted = withDaily(prev, { freeWeapons: daily(prev).freeWeapons + 1 });
   const state: GameState = { ...counted, weapons: [...prev.weapons], gold: prev.gold - price, weaponsBought: (prev.weaponsBought ?? 0) + 1 };
   const rng = new Rng(state.rng);
-  const w = makeWeapon(state, rng.pick(WEAPON_CLASSES), rng.pick(ELEMENTS));
+  const w = makeWeapon(state, rng.pick(DROP_CLASSES), rng.pick(ELEMENTS));
   state.rng = rng.state;
   state.weapons.push(w);
   return { ok: true, state, weapon: w, price };

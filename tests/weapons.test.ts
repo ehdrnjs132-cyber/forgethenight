@@ -4,9 +4,9 @@ import { equip, grantDaily } from '../src/core/systems/weapons';
 import { INVENTORY_CAP, INVENTORY_START } from '../src/config/weapons';
 
 describe('daily weapon grant (QA 8)', () => {
-  it('hands out one sword, one spear and one axe at +0', () => {
+  it('hands out three swords at +0 (swords only since 2026-11-19)', () => {
     const { state, granted } = grantDaily(createRun(7));
-    expect(granted.map((w) => w.cls)).toEqual(['sword', 'spear', 'axe']);
+    expect(granted.map((w) => w.cls)).toEqual(['sword', 'sword', 'sword']);
     expect(granted.every((w) => w.level === 0 && w.bornDay === 1)).toBe(true);
     expect(state.weapons).toHaveLength(3);
     expect(state.grantedDays).toEqual([1]);

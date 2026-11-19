@@ -38,8 +38,15 @@ export const CLASS_INFO: Record<WeaponClass, ClassInfo> = {
 
 export const MAX_LEVEL = 50;
 
-/** Decision #3: one sword, one spear and one axe per day, element random. */
-export const DAILY_GRANT: readonly WeaponClass[] = WEAPON_CLASSES;
+/**
+ * Classes that are handed out (2026-11-19): swords only, because only swords have a name and an image
+ * for every level (config/swordNames.ts, 150 images). Spears and axes stay in the code for old saves,
+ * which load as swords (save.ts migrate).
+ */
+export const DROP_CLASSES: readonly WeaponClass[] = ['sword'];
+
+/** Three weapons a day, element random (was one per class, decision #3). */
+export const DAILY_GRANT: readonly WeaponClass[] = ['sword', 'sword', 'sword'];
 
 /** Weapon rack: 8 slots, 3 open at the start; each merchant key opens one more (user decision 2026-11-18). */
 export const INVENTORY_START = 3;

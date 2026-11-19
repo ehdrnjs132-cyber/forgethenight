@@ -2,7 +2,7 @@
 // its weapon with the player's own enhancement table, and keeps an honest record of how it got there.
 import { ENHANCE_TABLE, type Outcome } from '../../config/enhancement';
 import { CLASS_WORD, ELEMENT_WORD, TEMPERAMENTS, nightPlan, type Temperament } from '../../config/doppelganger';
-import { ELEMENTS, MAX_LEVEL, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
+import { DROP_CLASSES, ELEMENTS, MAX_LEVEL, type Element, type WeaponClass } from '../../config/weapons';
 import { weaponDisplayName } from '../../config/swordNames';
 import { Rng } from '../rng';
 import { PROLOGUE_ENABLED } from './prologue';
@@ -104,7 +104,7 @@ export function generateNight(day: number, seed: number): { doppelgangers: Doppe
   const list: Doppelganger[] = [];
   for (let i = 0; i < plan.count; i++) {
     const temperament = pickWeighted(rng, plan.weights);
-    const cls = rng.pick(WEAPON_CLASSES);
+    const cls = rng.pick(DROP_CLASSES);
     const element = rng.pick(ELEMENTS);
     const { level, record } = forgeWeapon(rng, temperament, plan.attemptBudget, plan.expectedLevel, plan.weapons);
     // User decision 2026-11-18: every rival is "earth N", N random 1..999 (the world it came from).
