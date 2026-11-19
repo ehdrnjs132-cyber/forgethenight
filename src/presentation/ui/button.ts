@@ -7,6 +7,8 @@ export interface ButtonOpts {
   variant?: Variant;
   sub?: string;
   size?: number;
+  /** Font size of the sub line (default 12). */
+  subSize?: number;
   onClick: () => void;
 }
 
@@ -38,8 +40,9 @@ export class Button extends Phaser.GameObjects.Container {
     const look = LOOK[opts.variant ?? 'dark'];
     const size = opts.size ?? 18;
     this.bg = scene.add.graphics();
-    this.main = label(scene, 0, opts.sub ? -9 : 0, text, size, look.text, { weight: 700, origin: [0.5, 0.5] });
-    this.subText = opts.sub ? label(scene, 0, size * 0.55 + 4, opts.sub, 12, look.sub, { weight: 400, origin: [0.5, 0.5] }) : null;
+    const subSize = opts.subSize ?? 12;
+    this.main = label(scene, 0, opts.sub ? -Math.round(subSize * 0.75) : 0, text, size, look.text, { weight: 700, origin: [0.5, 0.5] });
+    this.subText = opts.sub ? label(scene, 0, size * 0.55 + subSize / 3, opts.sub, subSize, look.sub, { weight: subSize > 12 ? 700 : 400, origin: [0.5, 0.5] }) : null;
     this.add([this.bg, this.main, ...(this.subText ? [this.subText] : [])]);
     this.setSize(bw, bh);
     this.setInteractive({ useHandCursor: true });

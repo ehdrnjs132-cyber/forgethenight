@@ -16,8 +16,6 @@ import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE, type Swing } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
 import type { NightData } from './NightScene';
-import type { CinematicData } from './CinematicScene';
-import { INTRO } from '../../config/cinematics';
 import { weaponDisplayName } from '../../config/swordNames';
 import { openRanking } from '../../online/ui';
 import { inPrologue } from '../../core/systems/prologue';
@@ -37,7 +35,7 @@ const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
 /** Weapon rack: 2 × 4 planks on the left wall (landscape) or a 4 × 2 strip under the top bar (portrait). */
 const RACK = PORTRAIT ? { x: 14, y: 150, cols: 4, slotW: 165, slotH: 78, gapX: 9, gapY: 10 } : { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
 /** Selected-weapon card (name, level badge, next milestone, damage). */
-const CARD = PORTRAIT ? { x: 40, y: 806 + EXTRA, w: 640, h: 170 } : { x: 24, y: 490, w: 500, h: 226 };
+const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 24, y: 490, w: 500, h: 226 };
 /**
  * The blacksmith behind the anvil (one Higgsfield image or sprite sheet). `fx/fy` locate the anvil face
  * inside each texture (fractions of its width/height), so the weapon lies exactly where the hammer lands.
@@ -45,9 +43,10 @@ const CARD = PORTRAIT ? { x: 40, y: 806 + EXTRA, w: 640, h: 170 } : { x: 24, y: 
 // on a taller phone the smith grows into part of the extra room and the lower block moves down
 // Side view (2026-11-19): smith on the left, anvil on the right, so the stage is wider than tall.
 // portrait: the camera sits further back (user feedback 2026-11-19: the smith felt too big for the room)
-const STAGE = PORTRAIT ? { x: 340, bottom: 790 + EXTRA, height: 380 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
+const STAGE = PORTRAIT ? { x: 340, bottom: 752 + EXTRA, height: 380 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
 /** Portrait bottom area: odds row, stones, enhance button, action row. */
-const PB = { oddsY: 994 + EXTRA, stonesY: 1084 + EXTRA, enhanceY: 1150 + EXTRA, rowY: 1238 + EXTRA };
+// 2026-11-19: bigger, starting right under the smith's boots (user: the controls were too small)
+const PB = { oddsY: 934 + EXTRA, stonesY: 1062 + EXTRA, enhanceY: 1132 + EXTRA, rowY: 1236 + EXTRA };
 
 /**
  * Shelf centres and sizes measured on the painted rack in forge_rack_bg (1280×720 screen space),
@@ -85,9 +84,9 @@ const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
 /** Tail tip of the smith's speech bubble: beside his head, clear of the hammer and the right panel. */
 // above the anvil, beside the side-view smith's face
-const SMITH_BUBBLE = PORTRAIT ? { x: 450, y: 560 + EXTRA * 0.8 } : { x: 720, y: 360 };
+const SMITH_BUBBLE = PORTRAIT ? { x: 450, y: 520 + EXTRA * 0.8 } : { x: 720, y: 360 };
 /** Toast line position. */
-const TOAST = PORTRAIT ? { x: 360, y: 770 + EXTRA } : { x: 640, y: 676 };
+const TOAST = PORTRAIT ? { x: 360, y: 730 + EXTRA } : { x: 640, y: 676 };
 
 const weaponName = (w: Weapon) => weaponDisplayName(w);
 
@@ -270,8 +269,8 @@ export class ForgeScene extends Phaser.Scene {
       // darker bands behind the rack strip and the controls so text stays readable on the painting
       const band = this.add.graphics();
       band.fillStyle(0x000000, 0.42).fillRect(0, 112, W, 220);
-      band.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.82, 0.82).fillRect(0, 760 + EXTRA, W, 80);
-      band.fillStyle(0x000000, 0.82).fillRect(0, 840 + EXTRA, W, H - 840 - EXTRA);
+      band.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.85, 0.85).fillRect(0, 716 + EXTRA, W, 60);
+      band.fillStyle(0x000000, 0.85).fillRect(0, 776 + EXTRA, W, H - 776 - EXTRA);
     }
     this.add.particles(0, 0, 'ember', {
       x: PORTRAIT ? { min: 80, max: 640 } : { min: 260, max: 1020 },
@@ -299,16 +298,7 @@ export class ForgeScene extends Phaser.Scene {
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
     this.goldText = label(this, W - 24, 32, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
-    new Button(this, 573, 32, 84, 36, '🏆 랭킹', { variant: 'gold', size: 13, onClick: () => void openRanking() });
-    new Button(this, 479, 32, 96, 36, '인트로 보기', {
-      variant: 'ghost',
-      size: 13,
-      onClick: () => {
-        if (this.animating || this.leaving) return;
-        const data: CinematicData = { clips: INTRO, next: 'Forge', titleCard: true };
-        this.scene.start('Cinematic', data);
-      },
-    });
+    new Button(this, 540, 32, 120, 40, '🏆 랭킹', { variant: 'gold', size: 16, onClick: () => void openRanking() });
     this.skillBtn = new Button(this, 340, 32, 170, 42,'스킬트리', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
     this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
@@ -322,26 +312,18 @@ export class ForgeScene extends Phaser.Scene {
     this.dayText = label(this, W / 2 + 40, 30, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
     this.goldText = label(this, W - 16, 30, '', 22, C.goldHi, { weight: 900, origin: [1, 0.5] });
     this.livesG = this.add.graphics();
-    this.skillBtn = new Button(this, 88, 80, 160, 40, '스킬트리', { variant: 'dark', size: 14, sub: 'K', onClick: () => this.openSkills() });
-    new Button(this, 214, 80, 80, 36, '🏆 랭킹', { variant: 'gold', size: 13, onClick: () => void openRanking() });
-    new Button(this, 304, 80, 88, 36, '인트로', {
-      variant: 'ghost',
-      size: 13,
-      onClick: () => {
-        if (this.animating || this.leaving) return;
-        const data: CinematicData = { clips: INTRO, next: 'Forge', titleCard: true };
-        this.scene.start('Cinematic', data);
-      },
-    });
-    this.shopBtn = new Button(this, 422, 80, 136, 40, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 14, sub: 'M', onClick: () => this.openShop() });
+    // bigger thumb-sized buttons (user 2026-11-19); the intro button is gone
+    this.skillBtn = new Button(this, 104, 82, 192, 50, '스킬트리', { variant: 'dark', size: 19, sub: ' ', subSize: 12, onClick: () => this.openSkills() });
+    new Button(this, 274, 82, 136, 50, '🏆 랭킹', { variant: 'gold', size: 19, onClick: () => void openRanking() });
+    this.shopBtn = new Button(this, 434, 82, 172, 50, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 18, onClick: () => this.openShop() });
   }
 
   private drawLives(lives: number) {
     const g = this.livesG;
     g.clear();
     for (let i = 0; i < START_LIVES; i++) {
-      const x = PORTRAIT ? 556 + i * 16 : 948 + i * 16;
-      const y = PORTRAIT ? 78 : 32;
+      const x = PORTRAIT ? 538 + i * 17 : 948 + i * 16;
+      const y = PORTRAIT ? 80 : 32;
       const alive = i < lives;
       g.fillStyle(alive ? C.danger : 0x2a1d1d, 1);
       g.fillCircle(x - 3, y - 2, 4);
@@ -580,18 +562,18 @@ export class ForgeScene extends Phaser.Scene {
     const cx = staged ? CARD.x + CARD.w / 2 : 640;
     const y0 = staged ? CARD.y + 26 : 104;
     const gap = PORTRAIT
-      ? { lv: 52, next: 100, dmg: 134, undo: 52 }
+      ? { lv: 54, next: 100, dmg: 134, undo: 54 }
       : staged
         ? { lv: 50, next: 98, dmg: 130, undo: 176 }
         : { lv: 64, next: 118, dmg: 152, undo: 196 };
-    this.nameText = label(this, cx, y0, '', 22, C.text, { weight: 900, origin: [0.5, 0.5] });
+    this.nameText = label(this, cx, y0, '', PORTRAIT ? 27 : 22, C.text, { weight: 900, origin: [0.5, 0.5] });
     this.nameText.setStroke('#140a05', 6);
-    this.levelText = new LevelBadge(this, cx, y0 + gap.lv, 0, staged ? 46 : 54);
-    this.nextText = label(this, cx, y0 + gap.next, '', 14, C.text, { weight: 700, origin: [0.5, 0.5] });
+    this.levelText = new LevelBadge(this, cx, y0 + gap.lv, 0, PORTRAIT ? 50 : staged ? 46 : 54);
+    this.nextText = label(this, cx, y0 + gap.next, '', PORTRAIT ? 17 : 14, C.text, { weight: 700, origin: [0.5, 0.5] });
     this.nextText.setStroke('#140a05', 5);
     // How hard this weapon hits: the direct, readable payoff of every enhancement.
     this.damageText = this.add
-      .text(cx, y0 + gap.dmg, '', { fontFamily: DISPLAY, fontSize: '26px', fontStyle: '900', color: '#ffe9a8', stroke: '#140a05', strokeThickness: 7, resolution: 2 })
+      .text(cx, y0 + gap.dmg, '', { fontFamily: DISPLAY, fontSize: PORTRAIT ? '32px' : '26px', fontStyle: '900', color: '#ffe9a8', stroke: '#140a05', strokeThickness: 7, resolution: 2 })
       .setOrigin(0.5);
     this.starterHammer = this.add.image(staged ? this.face.x : ANVIL_X, staged ? this.face.y - 10 : 410, 'weapon-hammer').setScale(PORTRAIT ? 0.46 : staged ? 0.62 : 0.9).setVisible(false);
     this.emptyText = label(this, cx, y0 + gap.dmg, '', 14, C.text, { weight: 700, align: 'center', origin: [0.5, 0.5], wrap: CARD.w - 30, lineSpacing: 6 });
@@ -604,28 +586,30 @@ export class ForgeScene extends Phaser.Scene {
   /** Portrait: odds as one row of five columns, then stones, the big enhance button and the action row. */
   private buildOddsPortrait() {
     const colW = (W - 40) / OUTCOMES.length;
-    label(this, 20, PB.oddsY - 4, '강화 확률', 14, C.gold, { weight: 900, origin: [0, 0.5] });
-    this.stageText = label(this, W / 2, PB.oddsY - 4, '', 12, C.mute, { weight: 700, origin: [0.5, 0.5] });
-    new Button(this, W - 36, PB.oddsY - 4, 36, 26, '?', { variant: 'ghost', onClick: () => this.openModal({ kind: 'tutorial', replay: true }) });
+    label(this, 20, PB.oddsY - 4, '강화 확률', 18, C.gold, { weight: 900, origin: [0, 0.5] });
+    // appearance stage: not shown on phones (it crowded the damage line); kept as a hidden text object
+    this.stageText = label(this, W / 2 + 40, PB.oddsY - 4, '', 13, C.mute, { weight: 700, origin: [0.5, 0.5] }).setVisible(false);
+    new Button(this, W - 40, PB.oddsY - 4, 44, 32, '?', { variant: 'ghost', onClick: () => this.openModal({ kind: 'tutorial', replay: true }) });
     this.oddsBars = this.add.graphics();
     OUTCOMES.forEach((o, i) => {
       const cx = 20 + colW * i + colW / 2;
       const dot = this.add.graphics();
-      dot.fillStyle(OUTCOME_INFO[o].color, 1).fillCircle(cx - 26, PB.oddsY + 24, 5);
-      label(this, cx - 18, PB.oddsY + 24, OUTCOME_INFO[o].name, 14, o === 'destroy' ? C.dangerHi : C.text, { weight: 700, origin: [0, 0.5] });
-      this.oddsTexts[o] = label(this, cx, PB.oddsY + 50, '', 18, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [0.5, 0.5] });
+      dot.fillStyle(OUTCOME_INFO[o].color, 1).fillCircle(cx - 32, PB.oddsY + 32, 7);
+      label(this, cx - 22, PB.oddsY + 32, OUTCOME_INFO[o].name, 18, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [0, 0.5] });
+      this.oddsTexts[o] = label(this, cx, PB.oddsY + 66, '', 25, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [0.5, 0.5] });
     });
-    this.statsText = label(this, W / 2, PB.oddsY + 80, '', 11, C.dim, { origin: [0.5, 0.5] });
-    this.stoneTitle = label(this, 20, PB.stonesY, '사용', 12, C.mute, { weight: 700, origin: [0, 0.5] });
+    this.statsText = label(this, W / 2, PB.oddsY + 108, '', 12, C.dim, { origin: [0.5, 0.5] });
+    this.stoneTitle = label(this, 20, PB.stonesY, '사용', 13, C.mute, { weight: 700, origin: [0, 0.5] });
     ENHANCE_ITEMS.forEach((item, i) => {
-      const chip = new StoneChip(this, 60 + i * 96, PB.stonesY - 15, 90, 30, item, () => this.toggleStone(item));
+      const chip = new StoneChip(this, 64 + i * 100, PB.stonesY - 16, 94, 32, item, () => this.toggleStone(item));
       this.stoneChips.push(chip);
     });
-    this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, W - 40, 84, '강화', { variant: 'gold', size: 30, sub: '', onClick: () => this.tryEnhance() });
-    const bw = (W - 40 - 20) / 3;
-    this.equipBtn = new Button(this, 20 + bw / 2, PB.rowY, bw, 62, '장착', { variant: 'dark', sub: '', onClick: () => this.equipSelected() });
-    this.sellBtn = new Button(this, W / 2, PB.rowY, bw, 62, '판매', { variant: 'dark', sub: '', onClick: () => this.trySell() });
-    this.nightBtn = new Button(this, W - 20 - bw / 2, PB.rowY, bw, 62, '밤 전투', { variant: 'dark', sub: '', onClick: () => this.startNight() });
+    // sub: ' ' so the sub line exists (cost, price, weapon) and can be filled in by renderOdds
+    this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, W - 32, 100, '강화', { variant: 'gold', size: 40, sub: ' ', subSize: 17, onClick: () => this.tryEnhance() });
+    const bw = (W - 32 - 20) / 3;
+    this.equipBtn = new Button(this, 16 + bw / 2, PB.rowY, bw, 78, '장착', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.equipSelected() });
+    this.sellBtn = new Button(this, W / 2, PB.rowY, bw, 78, '판매', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.trySell() });
+    this.nightBtn = new Button(this, W - 16 - bw / 2, PB.rowY, bw, 78, '밤 전투', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.startNight() });
   }
 
   private buildOdds() {
@@ -874,13 +858,14 @@ export class ForgeScene extends Phaser.Scene {
       // landscape: one long bar per row; portrait: a short bar under each column
       const colW = (W - 40) / OUTCOMES.length;
       const bx = PORTRAIT ? 20 + colW * i + 10 : RIGHT.x + 20;
-      const by = PORTRAIT ? PB.oddsY + 66 : y;
+      const by = PORTRAIT ? PB.oddsY + 86 : y;
       const bw = PORTRAIT ? colW - 20 : RIGHT.w - 40;
+      const bh = PORTRAIT ? 9 : 6;
       g.fillStyle(0x0a0807, 1);
-      g.fillRoundedRect(bx, by, bw, 6, 3);
+      g.fillRoundedRect(bx, by, bw, bh, bh / 2);
       if (pct > 0) {
         g.fillStyle(OUTCOME_INFO[o].color, 1);
-        g.fillRoundedRect(bx, by, Math.max(6, (bw * pct) / 100), 6, 3);
+        g.fillRoundedRect(bx, by, Math.max(bh, (bw * pct) / 100), bh, bh / 2);
       }
     });
     const st = this.core.state.stats;
@@ -948,7 +933,8 @@ export class ForgeScene extends Phaser.Scene {
     if (undoable) this.undoBtn.setLabel(`⟲ 시간 역행석 사용 (보유 ${itemCount(s, 'timeStone')})`);
     this.shopBtn.setVisible(merchantHere(s));
     const pts = s.player.skillPoints;
-    this.skillBtn.setLabel('스킬트리', pts > 0 ? `포인트 ${pts} · K` : `Lv ${s.player.level} · K`);
+    const k = PORTRAIT ? '' : ' · K';
+    this.skillBtn.setLabel('스킬트리', pts > 0 ? `포인트 ${pts}${k}` : `Lv ${s.player.level}${k}`);
     if (pts > 0 && !this.skillPulse) this.skillPulse = this.tweens.add({ targets: this.skillBtn, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     else if (pts === 0 && this.skillPulse) {
       this.skillPulse.remove();
