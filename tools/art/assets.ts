@@ -124,6 +124,33 @@ export const ASSETS: AssetSpec[] = [
       'The anvil is in the foreground and covers his legs; its flat top face is clear and empty at chest height of the viewer. Both his hands grip the forging hammer raised high above his head, ready to strike straight down onto the centre of the anvil. ' +
       `Whole figure and whole anvil fully visible with empty margin above the hammer and around everything. ${SPRITE} ${STYLE_V2}`,
   },
+  // 2026-11-19: smith_anvil came out with a short handle under EACH fist (reads as two hammers' handles).
+  {
+    key: 'smith_anvil_v3',
+    aspect: '3:4',
+    transparent: true,
+    refs: ['smith_raise', 'anvil'],
+    prompt:
+      'Front view, camera facing the scene: the same blacksmith as the first reference image, identical design and colours, standing directly BEHIND the same heavy iron anvil on a tree stump as the second reference image. ' +
+      'The anvil is in the foreground and covers his legs; its flat top face is clear and empty. ' +
+      'He holds exactly ONE forging hammer raised high above his head: one heavy square iron head on top and ONE single long straight wooden handle going down from it, ' +
+      'both gloved hands wrapped around that same handle one above the other, the end of the handle visible just below the lower hand. No second handle, no extra grip. ' +
+      'Ready to strike straight down onto the centre of the anvil. He is large in the frame. ' +
+      `Whole figure and whole anvil fully visible with empty margin above the hammer and around everything. ${SPRITE} ${STYLE_V2}`,
+  },
+  // 2026-11-19: portrait (phone) forge background
+  {
+    key: 'forge_bg_portrait',
+    aspect: '9:16',
+    transparent: false,
+    refs: ['forge_bg'],
+    prompt:
+      'Tall vertical interior of the same cozy blacksmith forge at night as the reference image, same style and colours, front view. ' +
+      'A big glowing stone furnace with embers fills the middle of the picture; stone walls and wooden beams above, hanging chains, tongs and finished weapons on the walls. ' +
+      'The lower third is a worn stone floor lit by warm firelight, open and empty in the centre (an anvil and a blacksmith will be placed there). ' +
+      'The top edge and the bottom edge are darker and calmer so text can sit over them. ' +
+      `${STYLE_V2} No characters, no anvil, no text.`,
+  },
   {
     key: 'rack_slot',
     aspect: '21:9',
