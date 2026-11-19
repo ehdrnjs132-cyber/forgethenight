@@ -30,6 +30,29 @@ export const SMITH_LINES = {
   needEquip: ['맨손으로 나갈 순 없지. 무기부터 쥐자.'],
 };
 
+/**
+ * Day-1 guide (2026-11-19, the new rules): each step plays once, when its moment comes.
+ * Ids double as tutorial flags so a step never repeats.
+ */
+export const COACH = {
+  coachArrive: [
+    '…아침이군. 세상 곳곳에서 무기가 또 도착했다.',
+    '무기걸이에서 하나 골라 「강화」를 눌러 보자. 단계가 오를수록 비싸게 팔린다.',
+  ],
+  coachEnhance: ['좋아. 강화한 무기는 「판매」로 골드가 된다. +1부터 값이 붙고, 높을수록 크게 뛴다.'],
+  coachSell: [
+    '골드는 강화비, 「강화 스킬」, 그리고 왕의 월세에 쓴다.',
+    '왕은 사흘쯤 뒤에 월세를 걷으러 온다. 못 내면… 목숨을 하나 내놔야 해.',
+  ],
+  coachSkill: ['골드가 좀 모였다. 위의 「강화 스킬」에서 기술을 하나 배워 둘까.'],
+  coachDay: [
+    '하루를 마치려면 아래 「다음 날」을 누르자.',
+    '밤에는 다른 세계의 대장장이가 내기를 걸어온다. 받아들일지는 내 마음이다.',
+  ],
+} as const;
+
+export type CoachStep = keyof typeof COACH;
+
 export const NARRATOR_LINES = {
   allShattered: '해가 진다. 무기는 모두 부서졌다 — 낡은 망치를 들고 밤을 맞이하라. (밤 전투 시작)',
   prologueNight: '균열 너머에서 같은 얼굴들이 걸어 나온다. 머리 위 숫자가 그들이 벼려 온 강화 단계다.',

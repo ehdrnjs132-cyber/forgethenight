@@ -59,6 +59,8 @@ export interface RentNotice {
   amount: number;
   paid: number;
   lifeLost: boolean;
+  /** The visit was already paid in advance. */
+  prepaid?: boolean;
 }
 
 /** The most recent enhancement, kept for the time-reversal stone (DECISIONS.md, H). */
@@ -99,6 +101,8 @@ export interface GameState {
   /** Day the king next comes for rent (absent = 3 days after the day it is first needed). */
   rentDueDay?: number;
   lastRent?: RentNotice | null;
+  /** The next visit was paid in advance (at the cheaper rate of the day it was paid). */
+  rentPrepaid?: boolean;
   player: { level: number; xp: number; skillPoints: number };
   skills: Record<string, number>;
   totems: { owned: string[]; equipped: string[] };

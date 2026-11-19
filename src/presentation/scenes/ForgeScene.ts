@@ -6,7 +6,6 @@ import { collectEnhanceMods, effectiveRow, type EnhanceResult } from '../../core
 import { checkBuySkill, fateSplitLeft, overheatBonus, phoenixLeft, skillLevel } from '../../core/systems/forgeSkills';
 import { DIVINE_STEP, FORGE_SKILLS, FORGE_SKILL_BY_ID, SKILL_TABLE } from '../../config/forgeSkills';
 import { rentAmount, rentDueDay } from '../../core/systems/rent';
-import { tonightsRivals } from '../../core/systems/doppelganger';
 import { equippedWeapon, findWeapon, weaponPrice } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
@@ -19,17 +18,16 @@ import { drawWeapon, glowStrength, weaponLookTexture } from '../weaponArt';
 import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE, type Swing } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
-import type { NightData } from './NightScene';
 import { weaponDisplayName } from '../../config/swordNames';
 import { openRanking } from '../../online/ui';
 import { inPrologue } from '../../core/systems/prologue';
-import { NARRATOR_LINES, SMITH_LINES, pick } from '../../config/dialogue';
+import { COACH, SMITH_LINES, pick, type CoachStep } from '../../config/dialogue';
 import { Bubble, SMITH_STYLE } from '../ui/speech';
 import { LevelBadge } from '../ui/levelBadge';
 import { PORTRAIT } from '../layout';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
-import { DAILY_WEAPON_LIMIT, ENHANCE_ITEMS, ITEMS, MERCHANT, NIGHT_STAKE, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
+import { DAILY_WEAPON_LIMIT, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
 import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
 
@@ -129,7 +127,6 @@ export class ForgeScene extends Phaser.Scene {
   private enhanceBtn!: Button;
   private equipBtn!: Button;
   private sellBtn!: Button;
-  private nightBtn!: Button;
   private buyBtn!: Button;
   private sleepBtn!: Button;
   private splitBtn!: Button;
@@ -178,8 +175,8 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-UP', () => this.step(-1));
     kb.on('keydown-DOWN', () => this.step(1));
     kb.on('keydown-E', () => this.equipSelected());
-    kb.on('keydown-N', () => this.offerNight());
-    kb.on('keydown-Z', () => this.sleepUntilMorning());
+    kb.on('keydown-N', () => this.openEvening());
+    kb.on('keydown-Z', () => this.openEvening());
     kb.on('keydown-S', () => this.trySell());
     kb.on('keydown-M', () => this.openShop());
     kb.on('keydown-K', () => this.openSkills());
@@ -207,29 +204,27 @@ export class ForgeScene extends Phaser.Scene {
     this.core.lastGrant = [];
     this.core.lastOverflow = { count: 0, gold: 0 };
 
-    // DAY 1 talk: the prologue morning, or the morning after the scripted defeat.
+    // DAY 1 guide: the first morning of a run explains the day, step by step as things happen
     this.bubble = new Bubble(this, SMITH_STYLE, 70);
-    const s = this.core.state;
-    if (this.registry.get('afterPrologue')) {
-      this.registry.set('afterPrologue', false);
-      void this.sayAll(SMITH_LINES.afterPrologue, 600);
-    } else if (inPrologue(s) && s.stats.enhanceAttempts === 0) void this.sayAll(SMITH_LINES.prologueArrive, 900);
+    this.time.delayedCall(900, () => this.coach('coachArrive'));
   }
 
-  // ───────────────────────── DAY 1 lines
-  private afterEnhanceLine(outcome: Outcome) {
+  // ───────────────────────── DAY 1 guide
+  /** Play a guide step once (day 1 only); returns true if it played. */
+  private coach(step: CoachStep): boolean {
     const s = this.core.state;
-    if (inPrologue(s) && outcome === 'destroy') {
-      const left = s.weapons.length;
-      this.say(SMITH_LINES.prologueDestroy[Math.min(left, SMITH_LINES.prologueDestroy.length - 1)], true);
-      if (left === 0) {
-        // nothing left but the hammer: point at the night button
-        this.time.delayedCall(2600, () => this.toast(NARRATOR_LINES.allShattered, C.goldHi));
-        this.tweens.add({ targets: this.nightBtn, scale: 1.07, duration: 520, yoyo: true, repeat: 7, ease: 'Sine.easeInOut' });
-      }
-      return;
-    }
+    if (s.day !== 1 || isTutorialDone(s, step)) return false;
+    this.core.dispatch({ type: 'COMPLETE_TUTORIAL', id: step });
+    void this.sayAll(COACH[step]);
+    if (step === 'coachDay') this.tweens.add({ targets: this.sleepBtn, scale: 1.06, duration: 480, yoyo: true, repeat: 7, ease: 'Sine.easeInOut' });
+    return true;
+  }
+
+  private afterEnhanceLine(outcome: Outcome) {
+    if (this.coach('coachEnhance')) return;
     this.say(SMITH_LINES[outcome]);
+    // after a few attempts, point at the end of the day
+    if (this.core.state.stats.enhanceAttempts >= 4) this.time.delayedCall(2500, () => this.coach('coachDay'));
   }
 
   /** One line over the smith's head (DAY 1 only unless `always`). */
@@ -242,6 +237,8 @@ export class ForgeScene extends Phaser.Scene {
   private async sayAll(lines: readonly string[], delayMs = 0) {
     if (delayMs) await new Promise((r) => this.time.delayedCall(delayMs, r));
     for (const l of lines) {
+      // a popup (tutorial, shop, skills) pauses the forge: wait for it instead of dropping the line
+      while (this.scene.isPaused()) await new Promise((r) => setTimeout(r, 300));
       if (!this.scene.isActive()) return;
       await this.bubble.say(l, SMITH_BUBBLE.x, SMITH_BUBBLE.y);
     }
@@ -617,14 +614,11 @@ export class ForgeScene extends Phaser.Scene {
     });
     // sub: ' ' so the sub line exists (cost, price, weapon) and can be filled in by renderOdds
     this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, W - 32, 100, '강화', { variant: 'gold', size: 40, sub: ' ', subSize: 17, onClick: () => this.tryEnhance() });
-    // 장착 · 판매 · 밤 내기 · 다음 날 (the night is an optional gamble now)
-    const bw = (W - 32 - 24) / 4;
-    const bx = (i: number) => 16 + bw / 2 + i * (bw + 8);
-    this.equipBtn = new Button(this, bx(0), PB.rowY, bw, 78, '장착', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.equipSelected() });
-    this.sellBtn = new Button(this, bx(1), PB.rowY, bw, 78, '판매', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.trySell() });
-    this.nightBtn = new Button(this, bx(2), PB.rowY, bw, 78, '밤 내기', { variant: 'danger', size: 22, sub: ' ', subSize: 13, onClick: () => this.offerNight() });
-    this.sleepBtn = new Button(this, bx(3), PB.rowY, bw, 78, '다음 날', { variant: 'dark', size: 22, sub: '잠자기', subSize: 13, onClick: () => this.sleepUntilMorning() });
-    this.splitBtn = new Button(this, W - 16 - 110, PB.stonesY, 220, 36, '운명 분열', { variant: 'ghost', size: 15, onClick: () => this.toggleSplit() });
+    // 장착 · 판매 · [   다음 날   ] — the night gamble is offered in the evening, after "다음 날"
+    const unit = (W - 32 - 16) / 4;
+    this.equipBtn = new Button(this, 16 + unit / 2, PB.rowY, unit, 78, '장착', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.equipSelected() });
+    this.sellBtn = new Button(this, 16 + unit * 1.5 + 8, PB.rowY, unit, 78, '판매', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.trySell() });
+    this.sleepBtn = new Button(this, W - 16 - unit, PB.rowY, unit * 2, 78, '다음 날 ▶', { variant: 'gold', size: 26, sub: '하루 마치기', subSize: 14, onClick: () => this.openEvening() });    this.splitBtn = new Button(this, W - 16 - 110, PB.stonesY, 220, 36, '운명 분열', { variant: 'ghost', size: 15, onClick: () => this.toggleSplit() });
   }
 
   private buildOdds() {
@@ -667,10 +661,8 @@ export class ForgeScene extends Phaser.Scene {
     });
     this.equipBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 518, 134, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
     this.sellBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 518, 134, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
-    // the night is an optional gamble; "다음 날" skips it
-    this.nightBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 578, 134, 50, '밤 내기', { variant: 'danger', sub: ' ', onClick: () => this.offerNight() });
-    this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 578, 134, 50, '다음 날', { variant: 'dark', sub: '잠자기 · Z', onClick: () => this.sleepUntilMorning() });
-    this.splitBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 70, RIGHT.y + 312, 140, 30, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
+    // "다음 날" ends the day; the evening screen then offers the night gamble or paying rent early
+    this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 578, 276, 54, '다음 날 ▶', { variant: 'gold', size: 22, sub: '하루 마치기 · Z', onClick: () => this.openEvening() });    this.splitBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 70, RIGHT.y + 312, 140, 30, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
   }
 
   private buildToast() {
@@ -916,9 +908,9 @@ export class ForgeScene extends Phaser.Scene {
     const armed = equippedWeapon(this.core.state);
     const hammer = this.core.state.weapons.length === 0;
     const st0 = this.core.state;
-    this.nightBtn.setEnabled((!!armed || hammer) && !this.animating);
-    this.nightBtn.setLabel('밤 내기', armed ? `+${armed.level}로 도전` : hammer ? '망치로 도전' : '장착 필요');
-    this.sleepBtn.setEnabled(!this.animating && !inPrologue(st0));
+    void armed;
+    void hammer;
+    this.sleepBtn.setEnabled(!this.animating && !st0.pendingSplit);
     // 운명 분열 toggle: only once learned; shows today's uses left
     const splitLv = skillLevel(st0, 'fateSplit');
     this.splitBtn.setVisible(splitLv > 0);
@@ -931,27 +923,6 @@ export class ForgeScene extends Phaser.Scene {
     // the king's next visit
     const due = rentDueDay(st0);
     this.rentText.setText(due <= st0.day ? '' : `월세 D-${due - st0.day} · ${rentAmount(due).toLocaleString()}G`);
-  }
-
-  private startNight() {
-    if (this.animating || this.leaving) return;
-    const r = this.core.dispatch({ type: 'START_NIGHT' });
-    if (r.type !== 'nightStarted') {
-      if (r.type === 'nightBlocked') {
-        this.toast('밤에 들고 갈 무기를 먼저 장착하세요', C.dangerHi);
-        this.say(SMITH_LINES.needEquip);
-      }
-      return;
-    }
-    this.leaving = true;
-    const data: NightData = { weapon: r.weapon, day: this.core.state.day, lineup: r.lineup };
-    // DAY 1: a last word before the fade
-    const talk = this.core.state.day === 1;
-    if (talk) this.say(r.weapon.kind === 'hammer' ? SMITH_LINES.nightStartHammer : SMITH_LINES.nightStart);
-    this.time.delayedCall(talk ? 1300 : 0, () => {
-      this.cameras.main.fadeOut(300, 0, 0, 0);
-      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Night', data));
-    });
   }
 
   /** Stone chips, the time-stone button and the merchant button. */
@@ -1069,8 +1040,10 @@ export class ForgeScene extends Phaser.Scene {
     this.sfx.coin();
     this.coinBurst(r.price);
     this.toast(`${name} 판매 · +${r.price.toLocaleString()}G`, C.goldHi);
-    this.say(SMITH_LINES.sell);
+    if (!this.coach('coachSell')) this.say(SMITH_LINES.sell);
     this.refresh();
+    // enough gold for the first skill: point at the skill tree once
+    if (this.core.state.gold >= FORGE_SKILLS[0].cost[0]) this.time.delayedCall(4500, () => this.coach('coachSkill'));
   }
 
   /** Coins fly from the anvil to the gold counter. */
@@ -1300,51 +1273,15 @@ export class ForgeScene extends Phaser.Scene {
     this.playResult(r.result);
   }
 
-  // ───────────────────────── night gamble and sleeping
-  /** Show tonight's two rivals and the stakes; the fight only starts if you accept. */
-  private offerNight() {
-    if (this.animating || this.leaving) return;
-    const s = this.core.state;
-    if (inPrologue(s)) return this.startNight();
-    const armed = equippedWeapon(s);
-    if (!armed && s.weapons.length > 0) {
-      this.toast('밤에 들고 갈 무기를 먼저 장착하세요', C.dangerHi);
-      this.say(SMITH_LINES.needEquip);
-      return;
-    }
-    const rivals = tonightsRivals(s).lineup;
-    const mine = armed ? `${weaponName(armed)} +${armed.level}` : '기본 대장장이 망치';
-    const list = rivals.map((d) => `· ${d.name}  +${d.weapon.level} ${d.weapon.cls === 'sword' ? weaponDisplayName(d.weapon) : ''}`).join('\n');
-    const win = Math.floor(s.gold * NIGHT_STAKE.winMul);
-    const lose = Math.floor(s.gold * NIGHT_STAKE.loseMul);
-    this.openModal({
-      kind: 'confirm',
-      danger: true,
-      title: '밤의 내기',
-      body: `오늘 밤 찾아올 다른 세계의 대장장이\n${list}\n\n내 무기: ${mine}\n\n이기면 골드 ${s.gold.toLocaleString()} → ${win.toLocaleString()}G (×1.5)\n지면 골드 ${s.gold.toLocaleString()} → ${lose.toLocaleString()}G (절반)\n어느 쪽이든 끝나면 다음 날 아침이 됩니다.`,
-      confirmLabel: '내기에 응한다',
-      onConfirm: () => this.startNight(),
-    });
-  }
-
-  /** Skip the night: the next morning (new weapons, maybe the king's rent). */
-  private sleepUntilMorning() {
-    if (this.animating || this.leaving) return;
-    const r = this.core.dispatch({ type: 'SLEEP' });
-    if (r.type === 'sleepBlocked') {
-      this.toast('오늘 밤은 피할 수 없습니다 · 밤 전투로 나가세요', C.dangerHi);
-      return;
-    }
-    if (r.type !== 'slept') return;
-    if (r.gameOver) {
-      this.leaving = true;
-      this.cameras.main.fadeOut(700, 0, 0, 0);
-      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('GameOver', { summary: r.gameOver, reason: 'died' }));
-      return;
-    }
-    this.leaving = true;
-    this.cameras.main.fadeOut(350, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart());
+  // ───────────────────────── end of the day
+  /** End the day: the evening screen (night gamble, paying rent early, or sleeping). */
+  private openEvening() {
+    if (this.animating || this.leaving || this.core.state.pendingSplit) return;
+    this.sfx.click();
+    // the evening screen explains the night itself: no need for the "next day" hint any more
+    if (!isTutorialDone(this.core.state, 'coachDay')) this.core.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'coachDay' });
+    this.scene.launch('Evening');
+    this.scene.pause();
   }
 
   /** The king's visit this morning, announced once. */

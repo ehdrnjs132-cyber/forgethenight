@@ -7,7 +7,7 @@ import { beginSplit, chooseSplit, enhance, type EnhanceOptions, type EnhanceResu
 import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
 import { buySkill, fateSplitLeft, type SkillBuyBlock } from './systems/forgeSkills';
 import type { ForgeSkillId } from '../config/forgeSkills';
-import { collectRent } from './systems/rent';
+import { collectRent, prepayRent, type PrepayBlock } from './systems/rent';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
 import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/skills';
@@ -36,7 +36,8 @@ export type Action =
   | { type: 'SLEEP' }
   | { type: 'TOGGLE_SPLIT' }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
-  | { type: 'BUY_SKILL'; id: ForgeSkillId };
+  | { type: 'BUY_SKILL'; id: ForgeSkillId }
+  | { type: 'PREPAY_RENT' };
 
 export type ActionResult =
   | { type: 'enhanced'; result: EnhanceResult }
@@ -50,6 +51,8 @@ export type ActionResult =
   | { type: 'sleepBlocked' }
   | { type: 'skillBought'; id: ForgeSkillId; level: number; cost: number }
   | { type: 'skillBlocked'; reason: SkillBuyBlock }
+  | { type: 'rentPrepaid'; price: number }
+  | { type: 'prepayBlocked'; reason: PrepayBlock }
   | { type: 'sold'; price: number }
   | { type: 'sellBlocked'; reason: SellBlock | 'prologue' }
   | { type: 'weaponBought'; weapon: Weapon; price: number }
@@ -271,6 +274,13 @@ export class GameCore {
         const over = this.morning(sleep(this.state));
         this.emit('changed', this.state);
         return { type: 'slept', day: this.state.day, rent: this.lastRentNotice, gameOver: over };
+      }
+      case 'PREPAY_RENT': {
+        const r = prepayRent(this.state);
+        if (!r.ok) return { type: 'prepayBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'rentPrepaid', price: r.price };
       }
       case 'TOGGLE_SPLIT': {
         if (this.state.phase !== 'day' || this.state.pendingSplit) return { type: 'ok' };

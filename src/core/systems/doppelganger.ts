@@ -5,6 +5,7 @@ import { CLASS_WORD, ELEMENT_WORD, TEMPERAMENTS, nightPlan, type Temperament } f
 import { ELEMENTS, MAX_LEVEL, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
 import { weaponDisplayName } from '../../config/swordNames';
 import { Rng } from '../rng';
+import { PROLOGUE_ENABLED } from './prologue';
 import { levelAfter, rollOutcome } from './enhancement';
 
 /** What the defeat card shows (spec §3.6). Counts are for the weapon it brought, plus weapons it lost. */
@@ -122,7 +123,7 @@ export const GAMBLE_RIVALS = { count: 2, minLevel: 1, maxLevel: 50 };
  * The first-day prologue keeps the scripted visitors.
  */
 export function tonightsRivals(state: { day: number; rng: number; tutorials: Record<string, boolean>; stats: { nightsWon: number } }): { lineup: Doppelganger[]; rng: number } {
-  const prologue = state.day === 1 && !state.tutorials.prologueDone && state.stats.nightsWon === 0;
+  const prologue = PROLOGUE_ENABLED && state.day === 1 && !state.tutorials.prologueDone && state.stats.nightsWon === 0;
   const g = generateNight(state.day, state.rng);
   if (prologue) return { lineup: g.doppelgangers, rng: g.rng };
   const rng = new Rng(g.rng);

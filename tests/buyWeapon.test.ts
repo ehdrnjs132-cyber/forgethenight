@@ -40,11 +40,9 @@ describe('free weapons at the forge (user decision 2026-11-19)', () => {
     expect(g.state.gold).toBe(0);
   });
 
-  it('is saved at once, and is not possible in the first-day prologue', () => {
+  it('is saved at once', () => {
     const { g, storage } = game();
     g.dispatch({ type: 'BUY_WEAPON' });
     expect(new SaveManager(storage).loadRun().state!.weapons).toHaveLength(4);
-    const fresh = new GameCore(new MemoryStorage(), 9);
-    expect(fresh.dispatch({ type: 'BUY_WEAPON' })).toEqual({ type: 'weaponBuyBlocked', reason: 'prologue' });
   });
 });

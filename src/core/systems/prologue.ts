@@ -7,9 +7,16 @@ import { grantDaily, type GrantResult } from './weapons';
 
 export const PROLOGUE_DONE = 'prologueDone';
 
-/** True from the first morning until the end of the first night. */
+/**
+ * Switched off 2026-11-19 (user decision): with the night now an optional gamble, day 1 is a normal,
+ * guided day (see config/dialogue.ts COACH) instead of forced shattering and a scripted lost night.
+ * Kept so old saves and the code paths stay valid; set to true to bring the prologue back.
+ */
+export const PROLOGUE_ENABLED = false;
+
+/** True from the first morning until the end of the first night (only while the prologue is enabled). */
 export function inPrologue(s: GameState): boolean {
-  return s.day === 1 && !s.tutorials[PROLOGUE_DONE] && s.stats.nightsWon === 0;
+  return PROLOGUE_ENABLED && s.day === 1 && !s.tutorials[PROLOGUE_DONE] && s.stats.nightsWon === 0;
 }
 
 /** After the scripted defeat: back to DAY 1 morning, no life lost, three new weapons. */

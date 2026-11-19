@@ -6,7 +6,7 @@ import { Rng } from '../rng';
 import type { EnhanceCandidate, GameState, Weapon } from '../state/types';
 import { daily, fateSplitLeft, phoenixLeft, rollCandidate, skillLevel, withDaily } from './forgeSkills';
 import { SKILL_TABLE } from '../../config/forgeSkills';
-import { findWeapon, isLastWeapon, removeWeapon } from './weapons';
+import { findWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
 import { consume, enhanceCost, isArmed } from './economy';
 import { skillTotals } from './skills';
@@ -94,7 +94,8 @@ export function checkEnhance(state: GameState, weaponId: string, opts: EnhanceOp
   if (weapon.level >= MAX_LEVEL) return 'max-level';
   if (!isTutorialDone(state, 'firstEnhance')) return 'tutorial';
   if (state.gold < enhanceCost(weapon.level)) return 'gold';
-  if (isLastWeapon(state, weaponId) && !opts.confirmLast) return 'confirm-last';
+  // (2026-11-19: no "last weapon" warning any more; weapons are free and the forge always gives more)
+  void opts;
   return null;
 }
 

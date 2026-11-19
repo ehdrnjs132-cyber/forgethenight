@@ -106,9 +106,9 @@ describe('skipping the night', () => {
     expect(game.state.grantedDays).toContain(2);
   });
 
-  it('is not possible in the first-day prologue (that night is part of the tutorial)', () => {
+  it('works on day 1 too (no scripted prologue any more)', () => {
     const game = new GameCore(new MemoryStorage(), 3);
-    expect(game.dispatch({ type: 'SLEEP' })).toEqual({ type: 'sleepBlocked' });
+    expect(game.dispatch({ type: 'SLEEP' }).type).toBe('slept');
   });
 });
 
@@ -139,6 +139,25 @@ describe('the king\'s rent (user decision 2026-11-19)', () => {
     }
     expect(notice).toMatchObject({ lifeLost: true });
     expect(game.state.lives).toBe(START_LIVES - 1);
+  });
+
+  it('can be paid in advance at today\'s cheaper rate; the next visit then costs nothing', () => {
+    const { game } = readyGame();
+    game.state = { ...game.state, gold: 10_000 };
+    const r = game.dispatch({ type: 'PREPAY_RENT' });
+    if (r.type !== 'rentPrepaid') throw new Error(r.type);
+    expect(r.price).toBe(rentAmount(1));
+    expect(game.dispatch({ type: 'PREPAY_RENT' })).toEqual({ type: 'prepayBlocked', reason: 'already' });
+    const gold = game.state.gold;
+    let notice = null;
+    for (let i = 0; i < RENT.firstAfter; i++) {
+      const s = game.dispatch({ type: 'SLEEP' });
+      if (s.type === 'slept' && s.rent) notice = s.rent;
+    }
+    expect(notice).toMatchObject({ prepaid: true, paid: 0, lifeLost: false });
+    expect(game.state.gold).toBeGreaterThanOrEqual(gold); // nothing taken on the visit day
+    expect(game.state.rentPrepaid).toBe(false);
+    expect(rentAmount(1 + RENT.firstAfter)).toBeGreaterThan(r.price);
   });
 
   it('ends the run when unpaid rent takes the last life', () => {

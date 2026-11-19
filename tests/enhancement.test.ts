@@ -77,12 +77,8 @@ describe('enhance()', () => {
     expect(attempt.state).toBe(s);
   });
 
-  it('asks for confirmation before risking the last weapon (QA 13)', () => {
-    const s = runWith([{}]);
-    const first = enhance(s, 'w1');
-    expect(first.ok).toBe(false);
-    if (!first.ok) expect(first.blocked).toBe('confirm-last');
-    expect(enhance(s, 'w1', { confirmLast: true }).ok).toBe(true);
+  it('no longer asks before risking the last weapon (user decision 2026-11-19)', () => {
+    expect(enhance(runWith([{}]), 'w1').ok).toBe(true);
   });
 
   it('does not ask when other weapons remain', () => {
