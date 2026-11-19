@@ -299,7 +299,7 @@ export class ForgeScene extends Phaser.Scene {
     g.fillRect(0, 0, W, 64);
     g.lineStyle(1, C.edge, 1);
     g.lineBetween(0, 64.5, W, 64.5);
-    label(this, 24, 32, 'FORGE THE NIGHT', 20, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
+    new Button(this, 90, 32, 150, 42, '🏠 로비', { variant: 'dark', size: 17, onClick: () => this.toLobby() });
     this.dayText = label(this, 664, 32, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
@@ -310,12 +310,19 @@ export class ForgeScene extends Phaser.Scene {
     this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
+  /** Back to the lobby (the run is saved after every action, so nothing is lost). */
+  private toLobby() {
+    this.input.enabled = false;
+    this.cameras.main.fadeOut(250, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Lobby'));
+  }
+
   /** Portrait top bar, two rows: title · DAY · gold, then the menu buttons and the hearts. */
   private buildTopBarPortrait() {
     const g = this.add.graphics();
     g.fillStyle(0x000000, 0.6).fillRect(0, 0, W, 112);
     g.lineStyle(1, C.edge, 1).lineBetween(0, 112.5, W, 112.5);
-    label(this, 16, 30, 'FORGE THE NIGHT', 17, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
+    new Button(this, 74, 30, 132, 44, '🏠 로비', { variant: 'dark', size: 18, onClick: () => this.toLobby() });
     this.dayText = label(this, W / 2 + 40, 30, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
     this.goldText = label(this, W - 16, 24, '', 22, C.goldHi, { weight: 900, origin: [1, 0.5] });
     this.rentText = label(this, W - 16, 50, '', 13, C.mute, { weight: 700, origin: [1, 0.5] });

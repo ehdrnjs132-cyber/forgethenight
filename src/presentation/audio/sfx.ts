@@ -5,8 +5,26 @@ export class Sfx {
   private master: GainNode | null = null;
   muted = false;
 
+  /** Lobby sound switch, shared by every scene and kept across visits. */
+  static globalMuted = (() => {
+    try {
+      return localStorage.getItem('ftn.mute') === '1';
+    } catch {
+      return false;
+    }
+  })();
+
+  static setGlobalMuted(on: boolean) {
+    Sfx.globalMuted = on;
+    try {
+      localStorage.setItem('ftn.mute', on ? '1' : '0');
+    } catch {
+      /* ignore */
+    }
+  }
+
   private ensure(): AudioContext | null {
-    if (this.muted) return null;
+    if (this.muted || Sfx.globalMuted) return null;
     if (!this.ctx) {
       const AC = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
       if (!AC) return null;

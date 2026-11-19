@@ -127,9 +127,9 @@ export class BootScene extends Phaser.Scene {
       this.scene.start('GameOver', { summary, reason: 'closed' });
     } else if (core && !core.hasSeen('intro') && !new URLSearchParams(location.search).has('nointro')) {
       // first launch: the story intro, then the title card, then DAY 1 (spec PART 8)
-      const data: CinematicData = { clips: INTRO, next: 'Forge', titleCard: true, seenId: 'intro' };
+      const data: CinematicData = { clips: INTRO, next: 'Lobby', titleCard: true, seenId: 'intro' };
       this.scene.start('Cinematic', data);
-    } else this.scene.start('Forge');
+    } else this.scene.start('Lobby');
   }
 
   /** Starter hammer, drawn horizontally like the weapon images (head on the right). */

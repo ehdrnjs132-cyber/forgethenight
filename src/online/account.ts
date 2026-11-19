@@ -61,6 +61,9 @@ export const account = {
   onChange(fn: () => void) {
     listeners.add(fn);
   },
+  offChange(fn: () => void) {
+    listeners.delete(fn);
+  },
   get skipped(): boolean {
     try {
       return localStorage.getItem(SKIP_KEY) === '1';

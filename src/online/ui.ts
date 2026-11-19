@@ -117,7 +117,13 @@ export async function showLoginIfNeeded(): Promise<void> {
   // login screen in front of the game (the 🏆 button still offers sign-in later).
   const up = await Promise.race([serverConfig().then(() => true, () => false), new Promise<boolean>((r) => setTimeout(() => r(false), 8000))]);
   if (!up || account.user) return;
+  openLogin();
+}
+
+/** The login card (Google / guest nickname / later); also opened from the lobby's 로그인 button. */
+export function openLogin(): void {
   style();
+  document.querySelector('.ol-back')?.remove();
   const back = document.createElement('div');
   back.className = 'ol-back';
   back.innerHTML = `<div class="ol-card">
@@ -158,6 +164,7 @@ export async function showLoginIfNeeded(): Promise<void> {
   });
   // keep keyboard input out of the game while typing
   back.addEventListener('keydown', (e) => e.stopPropagation());
+  back.addEventListener('click', (e) => e.target === back && close());
 }
 
 // ───────────────────────── ranking page

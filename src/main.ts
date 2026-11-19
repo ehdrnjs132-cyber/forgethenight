@@ -10,6 +10,7 @@ import { ShopScene } from './presentation/scenes/ShopScene';
 import { SkillScene } from './presentation/scenes/SkillScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { EveningScene } from './presentation/scenes/EveningScene';
+import { LobbyScene } from './presentation/scenes/LobbyScene';
 import { H, W } from './presentation/theme';
 import { setupInstall } from './install';
 import { PORTRAIT } from './presentation/layout';
@@ -81,7 +82,7 @@ async function boot() {
     // so automated checks keep running when the page is not being painted.
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
     physics: { default: 'arcade', arcade: { debug: false } },
-    scene: [BootScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene],
+    scene: [BootScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene, LobbyScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   goFullscreenOnTouch();
