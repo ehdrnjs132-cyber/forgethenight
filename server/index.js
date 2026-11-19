@@ -24,6 +24,12 @@ const ORIGINS = new Set([
 const MAX_LEVEL = 50;
 const MAX_DEVICES = 10;
 const RANK_SIZE = 50;
+/**
+ * Ranking season. Raising it wipes every best record once at start-up (accounts and names stay), and
+ * records sent by clients built for an older season are ignored, so old bests cannot come back.
+ * Season 2 = reset of 2026-11-19 (user request). The game's RANK_SEASON (src/online/account.ts) must match.
+ */
+const SEASON = 2;
 
 const app = express();
 app.disable('x-powered-by');
@@ -54,7 +60,7 @@ setInterval(() => hits.clear(), 10 * 60_000).unref();
 
 const startedAt = Date.now();
 app.get('/healthz', (_req, res) => res.send('ok'));
-app.get('/config.json', (_req, res) => res.json({ googleClientId: GOOGLE_CLIENT_ID || null }));
+app.get('/config.json', (_req, res) => res.json({ googleClientId: GOOGLE_CLIENT_ID || null, season: SEASON }));
 app.get('/status', (_req, res) =>
   res.json({
     storage: store.backend,
@@ -157,6 +163,8 @@ app.post('/api/name', (req, res) => {
 app.post('/api/record', (req, res) => {
   const u = auth(req.body);
   if (!u) return res.status(401).json({ ok: false, error: 'auth' });
+  // a game built before this season would re-send an old best: accept nothing from it
+  if (Number(req.body?.season) !== SEASON) return res.json({ ok: true, stale: true, user: view(u) });
   const level = Math.floor(Number(req.body?.level));
   if (!Number.isFinite(level) || level < 0 || level > MAX_LEVEL) return res.status(400).json({ ok: false, error: 'level' });
   const weapon = String(req.body?.weapon || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 30);
@@ -180,4 +188,16 @@ app.get('/api/ranking', (req, res) => {
 });
 
 await store.init().catch((e) => console.error('store init failed', e.message));
+
+// New season: clear every best record once (accounts, names and sign-ins stay).
+if ((store.get('meta:season') ?? 1) < SEASON) {
+  let cleared = 0;
+  for (const [k, u] of [...store.entries('u:')]) {
+    if (!u.best) continue;
+    store.set(k, { ...u, best: null });
+    cleared++;
+  }
+  store.set('meta:season', SEASON);
+  console.log(`Ranking season ${SEASON}: cleared ${cleared} records`);
+}
 app.listen(PORT, () => console.log(`FORGE THE NIGHT online on :${PORT} (google ${GOOGLE_CLIENT_ID ? 'on' : 'off'})`));

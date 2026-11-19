@@ -18,6 +18,33 @@ export interface RankRow {
   day: number;
 }
 
+/**
+ * Ranking season; must match SEASON in server/index.js. Season 2 started with the reset of 2026-11-19:
+ * only enhancements made from then on count (see seasonBest).
+ */
+export const RANK_SEASON = 2;
+const SEASON_KEY = 'ftn.seasonBest';
+
+/** This device's best of the current season (the lifetime best in records may be from an old season). */
+export function seasonBest(): { level: number; weapon: string } {
+  try {
+    const v = JSON.parse(localStorage.getItem(SEASON_KEY) || 'null');
+    if (v && v.season === RANK_SEASON) return { level: Number(v.level) || 0, weapon: String(v.weapon || '') };
+  } catch {
+    /* ignore */
+  }
+  return { level: 0, weapon: '' };
+}
+
+export function noteSeasonBest(level: number, weapon: string): void {
+  if (level <= seasonBest().level) return;
+  try {
+    localStorage.setItem(SEASON_KEY, JSON.stringify({ season: RANK_SEASON, level, weapon }));
+  } catch {
+    /* ignore */
+  }
+}
+
 const KEY = 'ftn.account';
 const SKIP_KEY = 'ftn.account.skip';
 
@@ -152,7 +179,7 @@ export async function submitBest(level: number, weapon: string, day: number): Pr
   if (saved.user.best && saved.user.best.level >= level) return;
   sending = true;
   try {
-    const r = await call<{ user: User }>('/api/record', { ...creds(), level, weapon, day });
+    const r = await call<{ user: User }>('/api/record', { ...creds(), level, weapon, day, season: RANK_SEASON });
     adopt(saved.token, r.user);
   } catch {
     /* offline: the next best (or the next launch) tries again */

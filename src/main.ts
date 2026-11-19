@@ -14,7 +14,7 @@ import { LobbyScene } from './presentation/scenes/LobbyScene';
 import { H, W } from './presentation/theme';
 import { setupInstall } from './install';
 import { PORTRAIT } from './presentation/layout';
-import { account, submitBest } from './online/account';
+import { account, noteSeasonBest, seasonBest, submitBest } from './online/account';
 import { showLoginIfNeeded } from './online/ui';
 import { weaponDisplayName } from './config/swordNames';
 
@@ -53,13 +53,16 @@ function setupOnline(core: GameCore) {
   void showLoginIfNeeded();
   const report = (level: number, weapon: string) => void submitBest(level, weapon, core.state.day);
   core.on('enhanced', (r) => {
-    if (r.weaponAfter) report(r.weaponAfter.level, `${weaponDisplayName(r.weaponAfter)}`);
+    if (!r.weaponAfter) return;
+    const name = weaponDisplayName(r.weaponAfter);
+    noteSeasonBest(r.weaponAfter.level, name);
+    report(r.weaponAfter.level, name);
   });
-  // a best made offline (or before signing in) is sent once an account exists
+  // a best made offline (or before signing in) is sent once an account exists. Only this season's best:
+  // the lifetime best in records may predate the ranking reset.
   const catchUp = () => {
-    const best = core.records.bestLevel;
-    const held = core.state.weapons.find((w) => w.level === best);
-    if (best > 0) report(best, held ? weaponDisplayName(held) : '');
+    const best = seasonBest();
+    if (best.level > 0) report(best.level, best.weapon);
   };
   account.onChange(catchUp);
   catchUp();
