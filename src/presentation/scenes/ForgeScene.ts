@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import type { Weapon } from '../../core/state/types';
 import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement';
-import { equippedWeapon, findWeapon } from '../../core/systems/weapons';
+import { equippedWeapon, findWeapon, weaponPrice } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
 import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
@@ -127,6 +127,7 @@ export class ForgeScene extends Phaser.Scene {
   private equipBtn!: Button;
   private sellBtn!: Button;
   private nightBtn!: Button;
+  private buyBtn!: Button;
   /** DAY 1 lines over the blacksmith's head. */
   private bubble!: Bubble;
   private undoBtn!: Button;
@@ -364,6 +365,9 @@ export class ForgeScene extends Phaser.Scene {
     const t = rackSlot(0);
     this.rackTitle = label(this, t.x - t.w / 2, t.y - t.h / 2 - 22, '', 15, C.goldHi, { weight: 900, origin: [0, 0.5] });
     this.rackTitle.setStroke('#140a05', 6);
+    // buy a fresh weapon to enhance (price doubles with every purchase), at the end of the title row
+    const end = rackSlot(PORTRAIT ? RACK.cols - 1 : 1);
+    this.buyBtn = new Button(this, end.x + end.w / 2 - 95, t.y - t.h / 2 - 22, 190, 34, '＋ 무기 구매', { variant: 'gold', size: 13, onClick: () => this.buyWeapon() });
     this.rack = this.add.container(0, 0);
     // soft shadow behind the selected-weapon readout instead of a panel
     const shade = this.add.graphics();
@@ -706,7 +710,11 @@ export class ForgeScene extends Phaser.Scene {
   /** 8 planks: weapons hang on the open ones in order, the rest are padlocked until a key is bought. */
   private renderRack() {
     const s = this.core.state;
-    this.rackTitle.setText(`무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  ${PORTRAIT ? '눌러서' : '클릭해'} 선택`);
+    // landscape: short, so the buy button fits on the same row
+    this.rackTitle.setText(PORTRAIT ? `무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  눌러서 선택` : `무기걸이 ${s.weapons.length} / ${s.inventoryCap}`);
+    const price = weaponPrice(s);
+    this.buyBtn.setLabel(`＋ 무기 구매 · ${price.toLocaleString()}G`);
+    this.buyBtn.setEnabled(!this.animating && !inPrologue(s) && s.weapons.length < s.inventoryCap && s.gold >= price);
     this.rack.removeAll(true);
     const plank = !this.painted && this.textures.exists('art-rack_slot');
     for (let i = 0; i < INVENTORY_CAP; i++) {
@@ -1051,6 +1059,23 @@ export class ForgeScene extends Phaser.Scene {
     }
     this.goldText.setScale(1.25);
     this.tweens.add({ targets: this.goldText, scale: 1, delay: 520, duration: 260, ease: 'Back.easeOut' });
+  }
+
+  private buyWeapon() {
+    if (this.animating || this.leaving) return;
+    const r = this.core.dispatch({ type: 'BUY_WEAPON' });
+    if (r.type === 'weaponBought') {
+      this.sfx.coin();
+      this.selectedId = r.weapon.id;
+      this.toast(`${weaponName(r.weapon)} 구매 · −${r.price.toLocaleString()}G · 다음 구매 ${weaponPrice(this.core.state).toLocaleString()}G`, C.goldHi);
+      this.say(SMITH_LINES.buy);
+      this.refresh();
+      return;
+    }
+    if (r.type !== 'weaponBuyBlocked') return;
+    this.sfx.denied();
+    const why = { full: '무기걸이가 가득 찼습니다 · 무기를 팔거나 상인에게서 열쇠를 사세요', gold: `골드가 부족합니다 (${weaponPrice(this.core.state).toLocaleString()}G)`, night: '밤에는 살 수 없습니다', prologue: '오늘은 받은 무기로 벼려야 합니다' }[r.reason];
+    this.toast(why, C.dangerHi);
   }
 
   private openShop() {

@@ -1,6 +1,6 @@
 // WeaponManager: daily grant, equip, lookup (§4, §24). Pure functions over GameState.
-import { DAILY_GRANT, ELEMENTS, type Element, type WeaponClass } from '../../config/weapons';
-import { SALE_PRICES } from '../../config/economy';
+import { DAILY_GRANT, ELEMENTS, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
+import { SALE_PRICES, WEAPON_BASE_PRICE } from '../../config/economy';
 import { Rng } from '../rng';
 import type { GameState, Weapon } from '../state/types';
 
@@ -55,6 +55,27 @@ export function grantDaily(prev: GameState): GrantResult {
   const overflowGold = overflow * SALE_PRICES[0][1];
   if (overflowGold) state.gold += overflowGold;
   return { state, granted, overflow, overflowGold };
+}
+
+/** Price of the next weapon bought at the forge: base × 2^(weapons already bought this run). */
+export function weaponPrice(state: GameState): number {
+  return WEAPON_BASE_PRICE * 2 ** (state.weaponsBought ?? 0);
+}
+
+export type WeaponBuyBlock = 'night' | 'full' | 'gold';
+
+/** Buy one fresh +0 weapon: random class and element, like the daily delivery. */
+export function buyWeapon(prev: GameState): { ok: true; state: GameState; weapon: Weapon; price: number } | { ok: false; reason: WeaponBuyBlock } {
+  if (prev.phase !== 'day') return { ok: false, reason: 'night' };
+  if (prev.weapons.length >= prev.inventoryCap) return { ok: false, reason: 'full' };
+  const price = weaponPrice(prev);
+  if (prev.gold < price) return { ok: false, reason: 'gold' };
+  const state: GameState = { ...prev, weapons: [...prev.weapons], gold: prev.gold - price, weaponsBought: (prev.weaponsBought ?? 0) + 1 };
+  const rng = new Rng(state.rng);
+  const w = makeWeapon(state, rng.pick(WEAPON_CLASSES), rng.pick(ELEMENTS));
+  state.rng = rng.state;
+  state.weapons.push(w);
+  return { ok: true, state, weapon: w, price };
 }
 
 export function equip(prev: GameState, id: string): GameState {

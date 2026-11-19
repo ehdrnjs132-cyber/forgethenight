@@ -50,6 +50,8 @@ export interface GameState {
   weaponSeq: number;
   /** Days whose three free weapons were already handed out (§4: no repeats on retry). */
   grantedDays: number[];
+  /** Weapons bought at the forge this run; each purchase doubles the next price (absent in older saves = 0). */
+  weaponsBought?: number;
   player: { level: number; xp: number; skillPoints: number };
   skills: Record<string, number>;
   totems: { owned: string[]; equipped: string[] };

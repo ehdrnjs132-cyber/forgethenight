@@ -34,6 +34,13 @@ export const SALE_CONFIRM_LEVEL = 10;
 export const ENHANCE_COST_RATE = 0.1;
 export const ENHANCE_COST_MIN = 1;
 
+/**
+ * Buying a fresh +0 weapon to enhance (user decision 2026-11-19): available at the forge any day;
+ * the first costs WEAPON_BASE_PRICE and every purchase doubles the next one, for the whole run.
+ * Kept well above the +0 sale price so buying and selling straight back never pays.
+ */
+export const WEAPON_BASE_PRICE = 100;
+
 /** Rack keys at the merchant: each opens one locked slot; price doubles with each key bought. */
 export const KEY_BASE_PRICE = 300;
 

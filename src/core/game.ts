@@ -4,7 +4,7 @@ import { createRun } from './state/initial';
 import type { GameOverSummary, GameState, Records, Weapon } from './state/types';
 import { SaveManager, type LoadSource, type StorageLike } from './save/save';
 import { enhance, type EnhanceBlock, type EnhanceOptions, type EnhanceResult } from './systems/enhancement';
-import { equip, grantDaily, type GrantResult } from './systems/weapons';
+import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
 import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/skills';
@@ -23,6 +23,7 @@ export type Action =
   | ({ type: 'NIGHT_LOST'; reason: 'death' | 'abandon' } & NightReport)
   | { type: 'NEW_RUN'; seed?: number }
   | { type: 'SELL'; weaponId: string }
+  | { type: 'BUY_WEAPON' }
   | { type: 'BUY'; item: ItemId }
   | { type: 'TOGGLE_ITEM'; item: EnhanceItem }
   | { type: 'UNDO_ENHANCE' }
@@ -39,6 +40,8 @@ export type ActionResult =
   | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null; prologue?: boolean }
   | { type: 'sold'; price: number }
   | { type: 'sellBlocked'; reason: SellBlock | 'prologue' }
+  | { type: 'weaponBought'; weapon: Weapon; price: number }
+  | { type: 'weaponBuyBlocked'; reason: WeaponBuyBlock | 'prologue' }
   | { type: 'bought'; item: ItemId }
   | { type: 'buyBlocked'; reason: BuyBlock }
   | { type: 'undone'; weapon: Weapon }
@@ -244,6 +247,15 @@ export class GameCore {
         this.commit(grant.state);
         this.emit('changed', this.state);
         return { type: 'ok' };
+      }
+      case 'BUY_WEAPON': {
+        // the first-day prologue is scripted: no shopping your way out of it
+        if (inPrologue(this.state)) return { type: 'weaponBuyBlocked', reason: 'prologue' };
+        const r = buyWeapon(this.state);
+        if (!r.ok) return { type: 'weaponBuyBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'weaponBought', weapon: r.weapon, price: r.price };
       }
       case 'SELL': {
         if (inPrologue(this.state)) return { type: 'sellBlocked', reason: 'prologue' };
