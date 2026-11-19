@@ -107,11 +107,15 @@ async function mountGoogle(el: HTMLElement, text: 'continue_with' | 'signin_with
 
 // ───────────────────────── login screen (first launch)
 
-export function showLoginIfNeeded(): void {
+export async function showLoginIfNeeded(): Promise<void> {
   if (account.user || account.skipped || new URLSearchParams(location.search).has('slot')) {
     void refreshMe();
     return;
   }
+  // Only when the ranking server answers quickly: a sleeping or missing server must never put a dead
+  // login screen in front of the game (the 🏆 button still offers sign-in later).
+  const up = await Promise.race([serverConfig().then(() => true, () => false), new Promise<boolean>((r) => setTimeout(() => r(false), 8000))]);
+  if (!up || account.user) return;
   style();
   const back = document.createElement('div');
   back.className = 'ol-back';

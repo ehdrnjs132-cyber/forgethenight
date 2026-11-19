@@ -47,7 +47,7 @@ function goFullscreenOnTouch() {
 /** Login screen on first launch, and every new personal best goes to the ranking (real save slot only). */
 function setupOnline(core: GameCore) {
   if (new URLSearchParams(location.search).has('slot')) return;
-  showLoginIfNeeded();
+  void showLoginIfNeeded();
   const report = (level: number, weapon: string) => void submitBest(level, weapon, core.state.day);
   core.on('enhanced', (r) => {
     if (r.weaponAfter) report(r.weaponAfter.level, `${weaponDisplayName(r.weaponAfter)}`);
