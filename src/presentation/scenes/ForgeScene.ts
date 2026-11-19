@@ -1129,6 +1129,11 @@ export class ForgeScene extends Phaser.Scene {
     this.equipBtn.setEnabled(false);
     this.sellBtn.setEnabled(false);
     this.renderItems();
+    // the camera leans in on the smith and the anvil for the blow (user feedback 2026-11-19: the
+    // character should look bigger while enhancing), then eases back out
+    const cam = this.cameras.main;
+    cam.pan(this.face.x, this.face.y - (PORTRAIT ? 120 : 90), 260, 'Cubic.easeOut');
+    cam.zoomTo(PORTRAIT ? 1.28 : 1.35, 260, 'Cubic.easeOut');
     void this.fx
       .play(r, {
         onImpact: () => {
@@ -1144,6 +1149,8 @@ export class ForgeScene extends Phaser.Scene {
         },
       })
       .then(() => {
+        cam.pan(W / 2, H / 2, 380, 'Cubic.easeInOut');
+        cam.zoomTo(1, 380, 'Cubic.easeInOut');
         this.animating = false;
         this.refresh();
         this.afterEnhanceLine(r.outcome);
