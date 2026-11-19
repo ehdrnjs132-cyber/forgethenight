@@ -1091,7 +1091,7 @@ export class ForgeScene extends Phaser.Scene {
       full: '무기걸이가 가득 찼습니다 · 무기를 팔거나 상인에게서 열쇠를 사세요',
       gold: `골드가 부족합니다 (${weaponPrice(this.core.state).toLocaleString()}G)`,
       night: '밤에는 받을 수 없습니다',
-      prologue: '오늘은 받은 무기로 벼려야 합니다',
+      prologue: '오늘은 받은 무기로 강화해야 합니다',
       daily: `오늘 받을 수 있는 무기를 다 받았습니다 (하루 ${DAILY_WEAPON_LIMIT}자루) · 내일 다시 오세요`,
     }[r.reason];
     this.toast(why, C.dangerHi);

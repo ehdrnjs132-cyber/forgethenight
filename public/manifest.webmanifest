@@ -2,7 +2,7 @@
   "id": "/",
   "name": "FORGE THE NIGHT",
   "short_name": "FORGE",
-  "description": "낮에는 벼리고, 밤에는 다른 세계의 대장장이와 싸운다.",
+  "description": "낮에는 무기를 강화하고, 밤에는 다른 세계의 대장장이와 겨룬다.",
   "start_url": "/",
   "scope": "/",
   "display": "fullscreen",

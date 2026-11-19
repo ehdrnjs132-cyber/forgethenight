@@ -3,9 +3,9 @@
 
 export const SMITH_LINES = {
   /** First morning, before anything (prologue). */
-  prologueArrive: ['…또 아침이군. 망치가 무겁다.', '세계에서 무기 세 자루가 도착했다. 오늘 밤 전에 벼려 둬야 해.'],
+  prologueArrive: ['…또 아침이군. 망치가 무겁다.', '세계에서 무기 세 자루가 도착했다. 오늘 밤 전에 강화해 둬야 해.'],
   /** DAY 1 again, after the scripted defeat. */
-  afterPrologue: ['…살아 있다? 밤이 나를 돌려보냈다.', '새벽에 무기 세 자루가 다시 도착했다.', '이번엔… 제대로 벼린다.'],
+  afterPrologue: ['…살아 있다? 밤이 나를 돌려보냈다.', '새벽에 무기 세 자루가 다시 도착했다.', '이번엔… 제대로 강화한다.'],
   select: ['좋은 쇠다. 이걸로 해 보자.', '이 녀석, 가능성이 보인다.', '손에 착 감기는군.', '흠, 결이 곱다.'],
   enhanceStart: ['흐읍—!', '이번엔 된다!', '집중해라, 손목…', '불꽃아, 버텨 줘!'],
   great: ['이거다! 손이 돌아왔어!', '두 단계?! 오늘 운이 좋은데!'],
@@ -20,9 +20,9 @@ export const SMITH_LINES = {
     '뭐…? 쇠가 산산조각 났다고?',
   ],
   equip: ['오늘 밤은 이 녀석과 함께다.', '좋아, 너로 정했다.'],
-  sell: ['돈이 있어야 다시 벼리지.', '아깝지만… 다음을 위해서다.'],
+  sell: ['돈이 있어야 다시 강화하지.', '아깝지만… 다음을 위해서다.'],
   buy: ['새 쇠다. 이번엔 끝까지 가 보자.', '쇠는 얼마든지 있다. 문제는 내 손이지.'],
-  sellPrologue: ['팔 생각은 없다. 오늘은 벼려야 해.'],
+  sellPrologue: ['팔 생각은 없다. 오늘은 강화해야 해.'],
   skills: ['기술보다 손부터 풀어야겠어.', '별자리가 희미하다. 경험이 더 필요해.'],
   nightStart: ['누가 오든 막는다.', '해가 진다. 가자.'],
   nightStartHammer: ['이 망치 하나로… 버텨야 한다.'],
@@ -55,7 +55,7 @@ export type CoachStep = keyof typeof COACH;
 
 export const NARRATOR_LINES = {
   allShattered: '해가 진다. 무기는 모두 부서졌다 — 낡은 망치를 들고 밤을 맞이하라. (밤 전투 시작)',
-  prologueNight: '균열 너머에서 같은 얼굴들이 걸어 나온다. 머리 위 숫자가 그들이 벼려 온 강화 단계다.',
+  prologueNight: '균열 너머에서 같은 얼굴들이 걸어 나온다. 머리 위 숫자가 그들이 강화해 온 단계다.',
   prologueDeath: '첫 밤은 누구에게나 진다. 하지만 대장장이는 다시 일어난다.',
 };
 
@@ -76,6 +76,6 @@ export const TAUNTS = [
 ];
 
 /** The player's last words when the first night ends in defeat. */
-export const LAST_WORDS = ['…이렇게 끝나는 건가.', '아직… 아직 벼릴 게 남았는데…'];
+export const LAST_WORDS = ['…이렇게 끝나는 건가.', '아직… 아직 강화할 게 남았는데…'];
 
 export const pick = <T>(list: readonly T[]): T => list[Math.floor(Math.random() * list.length)];

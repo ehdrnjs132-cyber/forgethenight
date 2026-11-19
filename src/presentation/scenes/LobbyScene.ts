@@ -44,7 +44,7 @@ export class LobbyScene extends Phaser.Scene {
 
     const title = label(this, colX, titleY, 'FORGE THE NIGHT', PORTRAIT ? 54 : 58, C.gold, { display: true, weight: 900, origin: [0.5, 0.5] });
     title.setStroke('#140a05', 8).setShadow(0, 4, '#000', 12, true, true);
-    label(this, colX, titleY + (PORTRAIT ? 52 : 56), '밤을 벼리는 대장장이', PORTRAIT ? 20 : 20, C.text, { weight: 700, origin: [0.5, 0.5] }).setAlpha(0.85);
+    label(this, colX, titleY + (PORTRAIT ? 52 : 56), '무기를 강화하는 대장장이', PORTRAIT ? 20 : 20, C.text, { weight: 700, origin: [0.5, 0.5] }).setAlpha(0.85);
 
     // account (top right)
     this.accountBtn = new Button(this, W - 86, 40, 148, 48, '로그인', { variant: 'dark', size: 18, onClick: () => this.accountAction() });

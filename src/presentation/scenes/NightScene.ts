@@ -287,7 +287,7 @@ export class NightScene extends Phaser.Scene {
   private intro() {
     const t = label(this, W / 2, H / 2 - 70, `DAY ${this.nd.day} · 밤`, 46, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
-    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 벼려 온 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
+    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 강화해 온 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
     for (const o of [t, s, s2]) {
       o.setAlpha(0);
       this.tweens.add({ targets: o, alpha: 1, duration: 300 });
@@ -1153,7 +1153,7 @@ export class NightScene extends Phaser.Scene {
       const rows = this.summaryRows();
       rows.unshift(['골드', `${r.goldBefore.toLocaleString()}G → ${r.goldAfter.toLocaleString()}G`]);
       const notes = [this.rivalSummary()];
-      notes.push(`DAY ${r.day} 아침 · 모루가 새 무기 ${r.granted}자루를 벼려 냈습니다`);
+      notes.push(`DAY ${r.day} 아침 · 새 무기 ${r.granted}자루가 도착했습니다`);
       this.openModal({
         kind: 'result',
         tone: 'victory',

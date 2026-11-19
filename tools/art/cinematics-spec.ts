@@ -159,7 +159,7 @@ export const GAME_VIDEOS: CineVideo[] = [
 export const SHORT_INTRO = [
   '모든 세계에는 같은 대장장이가 산다.',
   'THE FIRST가 명령했다. 다른 세계의 너를 죽여라.',
-  '밤이 오면, 그들이 온다. 몇 강을 벼려 왔는지는 아무도 모른다.',
+  '밤이 오면, 그들이 온다. 몇 강을 강화해 왔는지는 아무도 모른다.',
 ];
 
 /** Appended to every motion prompt. */
