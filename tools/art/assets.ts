@@ -138,6 +138,19 @@ export const ASSETS: AssetSpec[] = [
       'Ready to strike straight down onto the centre of the anvil. He is large in the frame. ' +
       `Whole figure and whole anvil fully visible with empty margin above the hammer and around everything. ${SPRITE} ${STYLE_V2}`,
   },
+  // 2026-11-19: the user found the front-facing smith too confrontational; a side view instead.
+  {
+    key: 'smith_side',
+    aspect: '4:3',
+    transparent: true,
+    refs: ['smith_anvil_v3'],
+    prompt:
+      'Side view (profile) of the same blacksmith as the reference image, identical face, braided auburn beard, clothes and colours, standing on the LEFT and facing RIGHT. ' +
+      'In front of him on the right stands the same heavy iron anvil on a wooden tree stump, also seen exactly from the side: long flat top face running horizontally, the pointed horn on the far right. ' +
+      'The flat top of the anvil is clear and empty. He holds ONE forging hammer with ONE long wooden handle in both gloved hands, raised high up and back over his shoulder, ' +
+      'about to swing it down onto the middle of the anvil top. Strong, focused pose. ' +
+      `Whole figure, whole hammer and whole anvil fully visible with empty margin around everything. ${SPRITE} ${STYLE_V2}`,
+  },
   // 2026-11-19: portrait (phone) forge background
   {
     key: 'forge_bg_portrait',
