@@ -23,7 +23,9 @@ export const PARAMS: CurveParams = {
   great: [10, 6, 1],
   success: [56, 52, 1],
   down: [3, 7, 1],
-  destroy: [3, 28, 1.4],
+  // 2026-11-19: harsher from the very start (user: "초반에는 파괴확률을 높게"); skills such as 불사조의 모루
+  // are what make the early game survivable now. Was [3, 28, 1.4].
+  destroy: [5, 30, 1.2],
 };
 
 const round1 = (v: number) => Math.round(v * 10) / 10;

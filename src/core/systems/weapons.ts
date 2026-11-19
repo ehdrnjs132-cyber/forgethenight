@@ -1,6 +1,7 @@
 // WeaponManager: daily grant, equip, lookup (§4, §24). Pure functions over GameState.
 import { DAILY_GRANT, ELEMENTS, WEAPON_CLASSES, type Element, type WeaponClass } from '../../config/weapons';
-import { SALE_PRICES, WEAPON_BASE_PRICE } from '../../config/economy';
+import { DAILY_WEAPON_LIMIT, SALE_PRICES, WEAPON_BASE_PRICE } from '../../config/economy';
+import { daily, withDaily } from './forgeSkills';
 import { Rng } from '../rng';
 import type { GameState, Weapon } from '../state/types';
 
@@ -62,15 +63,22 @@ export function weaponPrice(state: GameState): number {
   return WEAPON_BASE_PRICE * 2 ** (state.weaponsBought ?? 0);
 }
 
-export type WeaponBuyBlock = 'night' | 'full' | 'gold';
+export type WeaponBuyBlock = 'night' | 'full' | 'gold' | 'daily';
 
-/** Buy one fresh +0 weapon: random class and element, like the daily delivery. */
+/** Extra weapons the forge button can still give today (the morning delivery counts toward the day's 6). */
+export function freeWeaponsLeft(state: GameState): number {
+  return Math.max(0, DAILY_WEAPON_LIMIT - DAILY_GRANT.length - daily(state).freeWeapons);
+}
+
+/** Take one fresh +0 weapon: random class and element, like the daily delivery. */
 export function buyWeapon(prev: GameState): { ok: true; state: GameState; weapon: Weapon; price: number } | { ok: false; reason: WeaponBuyBlock } {
   if (prev.phase !== 'day') return { ok: false, reason: 'night' };
+  if (freeWeaponsLeft(prev) <= 0) return { ok: false, reason: 'daily' };
   if (prev.weapons.length >= prev.inventoryCap) return { ok: false, reason: 'full' };
   const price = weaponPrice(prev);
   if (prev.gold < price) return { ok: false, reason: 'gold' };
-  const state: GameState = { ...prev, weapons: [...prev.weapons], gold: prev.gold - price, weaponsBought: (prev.weaponsBought ?? 0) + 1 };
+  const counted = withDaily(prev, { freeWeapons: daily(prev).freeWeapons + 1 });
+  const state: GameState = { ...counted, weapons: [...prev.weapons], gold: prev.gold - price, weaponsBought: (prev.weaponsBought ?? 0) + 1 };
   const rng = new Rng(state.rng);
   const w = makeWeapon(state, rng.pick(WEAPON_CLASSES), rng.pick(ELEMENTS));
   state.rng = rng.state;

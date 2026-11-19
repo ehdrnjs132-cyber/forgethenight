@@ -41,6 +41,18 @@ export const ENHANCE_COST_MIN = 1;
  */
 export const WEAPON_BASE_PRICE = 0;
 
+/**
+ * The king's rent (user decision 2026-11-19): first visit on day 1 + firstAfter, then every minGap..maxGap
+ * days; the amount is base × growth^(day−1), rounded to 10G. Unpaid rent costs a life.
+ */
+export const RENT = { base: 150, growth: 1.22, firstAfter: 3, minGap: 3, maxGap: 5 };
+
+/** Weapons per day (user decision 2026-11-19: up to 6): the morning delivery plus free ones from the forge button. */
+export const DAILY_WEAPON_LIMIT = 6;
+
+/** Night gamble (user decision 2026-11-19): win → gold × winMul, lose → gold × loseMul. */
+export const NIGHT_STAKE = { winMul: 1.5, loseMul: 0.5 };
+
 /** Rack keys at the merchant: each opens one locked slot; price doubles with each key bought. */
 export const KEY_BASE_PRICE = 300;
 

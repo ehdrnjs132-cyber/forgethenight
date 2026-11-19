@@ -50,9 +50,11 @@ describe('selling (QA 6, 7)', () => {
     game.dispatch({ type: 'START_NIGHT' });
     game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 5 });
     expect(price).toBeGreaterThan(0);
-    expect(game.state.gold).toBe(START_GOLD + price);
-    expect(game.state.weapons).toHaveLength(2);
-    expect(new GameCore(storage).state.gold).toBe(START_GOLD + price);
+    // the sale stands; the lost gamble then halves whatever gold there was (sale included)
+    const expected = Math.floor((START_GOLD + price) / 2) + game.lastOverflow.gold;
+    expect(game.state.gold).toBe(expected);
+    expect(game.state.weapons.find((w) => w.id === a.id)).toBeUndefined();
+    expect(new GameCore(storage).state.gold).toBe(expected);
   });
 
   it('the sale is on disk immediately (§25: closing mid-sale cannot duplicate gold)', () => {
@@ -110,19 +112,19 @@ describe('merchant Morr (§15)', () => {
     expect(buy({ ...s, day: 4 }, 'protect')).toEqual({ ok: false, reason: 'closed' });
   });
 
-  it('a retry sees the same shelf and purchases made before the night are kept', () => {
+  it('purchases made before a lost night gamble are kept (only the gold is halved)', () => {
     const storage = new MemoryStorage();
     const game = new GameCore(storage, 5);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
-    game.state = openMerchant({ ...game.state, day: 3, gold: 5_000, merchant: null });
+    game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
+    game.state = openMerchant({ ...game.state, day: 3, gold: 5_000, merchant: null, rentDueDay: 99 });
     game.state = { ...game.state, merchant: { day: 3, stock: [{ item: 'protect', price: 1200, left: 2 }] } };
     game.dispatch({ type: 'BUY', item: 'protect' });
     game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     game.dispatch({ type: 'START_NIGHT' });
     game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 1 });
     expect(game.state.items.protect).toBe(1);
-    expect(game.state.gold).toBe(3_800);
-    expect(game.state.merchant?.stock[0].left).toBe(1);
+    expect(game.state.gold).toBe(1_900 + game.lastOverflow.gold);
   });
 });
 

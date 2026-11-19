@@ -1,18 +1,21 @@
 // GameStateManager (§24): owns the current state, applies actions, saves after every change,
 // then notifies the presentation layer. Phaser never mutates state directly.
 import { createRun } from './state/initial';
-import type { GameOverSummary, GameState, Records, Weapon } from './state/types';
+import type { EnhanceCandidate, GameOverSummary, GameState, Records, RentNotice, Weapon } from './state/types';
 import { SaveManager, type LoadSource, type StorageLike } from './save/save';
-import { enhance, type EnhanceBlock, type EnhanceOptions, type EnhanceResult } from './systems/enhancement';
+import { beginSplit, chooseSplit, enhance, type EnhanceOptions, type EnhanceResult, type SplitBlock } from './systems/enhancement';
 import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
+import { buySkill, fateSplitLeft, type SkillBuyBlock } from './systems/forgeSkills';
+import type { ForgeSkillId } from '../config/forgeSkills';
+import { collectRent } from './systems/rent';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
 import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/skills';
 import { completeTutorial, type TutorialId } from './systems/tutorial';
-import { loseNight, startNight, winNight, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
+import { loseGamble, sleep, startNight, winGamble, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
 import { endPrologue, inPrologue } from './systems/prologue';
-import { generateNight, type Doppelganger } from './systems/doppelganger';
+import { tonightsRivals, type Doppelganger } from './systems/doppelganger';
 
 export type Action =
   | { type: 'ENHANCE'; weaponId: string; confirmLast?: boolean }
@@ -29,15 +32,24 @@ export type Action =
   | { type: 'UNDO_ENHANCE' }
   | { type: 'USE_REVIVE' }
   | { type: 'LEARN_SKILL'; id: string }
-  | { type: 'RESET_SKILLS' };
+  | { type: 'RESET_SKILLS' }
+  | { type: 'SLEEP' }
+  | { type: 'TOGGLE_SPLIT' }
+  | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
+  | { type: 'BUY_SKILL'; id: ForgeSkillId };
 
 export type ActionResult =
   | { type: 'enhanced'; result: EnhanceResult }
-  | { type: 'blocked'; reason: EnhanceBlock }
+  | { type: 'blocked'; reason: SplitBlock | 'split-pending' }
+  | { type: 'splitPending'; candidates: [EnhanceCandidate, EnhanceCandidate] }
   | { type: 'nightStarted'; weapon: NightWeapon; lineup: Doppelganger[] }
   | { type: 'nightBlocked'; reason: NightBlock }
-  | { type: 'nightWon'; day: number; levelBefore: number; level: number; levelsGained: number; granted: number; cleared: boolean }
-  | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null; prologue?: boolean }
+  | { type: 'nightWon'; day: number; levelBefore: number; level: number; levelsGained: number; granted: number; cleared: boolean; goldBefore: number; goldAfter: number; gameOver: GameOverSummary | null }
+  | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null; prologue?: boolean; goldBefore?: number; goldAfter?: number }
+  | { type: 'slept'; day: number; rent: RentNotice | null; gameOver: GameOverSummary | null }
+  | { type: 'sleepBlocked' }
+  | { type: 'skillBought'; id: ForgeSkillId; level: number; cost: number }
+  | { type: 'skillBlocked'; reason: SkillBuyBlock }
   | { type: 'sold'; price: number }
   | { type: 'sellBlocked'; reason: SellBlock | 'prologue' }
   | { type: 'weaponBought'; weapon: Weapon; price: number }
@@ -86,23 +98,59 @@ export class GameCore {
     this.recoveredFromCorruption = loaded.recovered;
     this.records = this.save.loadRecords();
     this.state = loaded.state ?? this.startRun(seed);
-    // §25: closing the game during a night must not dodge the death. It counts as a lost night.
+    // §25: closing the game during a night must not dodge the outcome. It counts as a lost night.
     if (this.state.phase === 'night') {
-      const r = this.applyLoss({ kills: 0, seconds: 0 });
-      this.notice = r.gameOver ? { kind: 'gameOver', summary: r.gameOver } : { kind: 'abandoned', livesLeft: r.livesLeft };
+      if (inPrologue(this.state)) {
+        const g = endPrologue(this.state);
+        this.commit(g.state);
+        return;
+      }
+      const r = this.loseNight({ kills: 0, seconds: 0 });
+      this.notice = r.gameOver ? { kind: 'gameOver', summary: r.gameOver } : { kind: 'abandoned', livesLeft: this.state.lives };
       return;
     }
-    // Today's weapons, once per day. A no-op if they were already handed out.
-    const grant = this.beginDay(this.state);
-    this.lastGrant = grant.granted;
-    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
-    this.commit(grant.state);
+    // Today's weapons (once per day), Morr, and the king's rent (once per visit).
+    const over = this.morning(this.state);
+    if (over) this.notice = { kind: 'gameOver', summary: over };
   }
 
-  /** Morning: today's free weapons (once per day) and, on visiting days, Morr's shelf. */
-  private beginDay(state: GameState): GrantResult {
+  /** Morning: today's free weapons (once per day), Morr's shelf on visiting days, the king's rent. */
+  private beginDay(state: GameState): GrantResult & { rent: RentNotice | null } {
     const grant = grantDaily(state);
-    return { ...grant, state: openMerchant(grant.state) };
+    const rent = collectRent(openMerchant(grant.state));
+    return { ...grant, state: rent.state, rent: rent.notice };
+  }
+
+  /** The king's visit this morning, if he came (for the forge to announce once). */
+  lastRentNotice: RentNotice | null = null;
+
+  /**
+   * Start a morning and save it. Unpaid rent can take the last life: then the run ends here and a fresh
+   * one begins; the summary is returned so the caller can show the game-over screen.
+   */
+  private morning(state: GameState): GameOverSummary | null {
+    const g = this.beginDay(state);
+    this.lastGrant = g.granted;
+    this.lastOverflow = { count: g.overflow, gold: g.overflowGold };
+    this.lastRentNotice = g.rent;
+    if (g.state.lives <= 0) {
+      const s = g.state.stats;
+      const summary: GameOverSummary = { day: g.state.day, bestLevel: s.bestLevel, kills: s.kills, bossesKilled: s.bossesKilled, nightSeconds: s.nightSeconds };
+      this.save.clearRun();
+      const fresh = this.beginDay(this.startRun(randomSeed(), g.state.tutorials));
+      this.lastGrant = fresh.granted;
+      this.commit(fresh.state);
+      return summary;
+    }
+    this.commit(g.state);
+    return null;
+  }
+
+  /** Lost (or abandoned) night gamble: half the gold, then the next morning. */
+  private loseNight(report: NightReport): { goldBefore: number; goldAfter: number; gameOver: GameOverSummary | null } {
+    const r = loseGamble(this.state, report);
+    this.addRecords({ kills: report.kills, deaths: 1 });
+    return { goldBefore: r.goldBefore, goldAfter: r.goldAfter, gameOver: this.morning(r.state) };
   }
 
   /** A fresh run. Tutorial progress is knowledge, not run state, so it carries over. */
@@ -156,28 +204,20 @@ export class GameCore {
     this.save.saveRecords(this.records);
   }
 
-  /** Lost night: restore the snapshot with a life fewer, or end the run at zero lives (§13). */
-  private applyLoss(report: NightReport) {
-    const r = loseNight(this.state, report);
-    this.addRecords({ kills: report.kills, deaths: 1 });
-    if (r.gameOver) {
-      this.save.clearRun();
-      const fresh = this.startRun(randomSeed(), this.state.tutorials);
-      const grant = this.beginDay(fresh);
-      this.lastGrant = grant.granted;
-    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
-      this.commit(grant.state);
-    } else {
-      this.commit(r.state);
-    }
-    return r;
-  }
-
   dispatch(action: Action): ActionResult {
     switch (action.type) {
       case 'ENHANCE': {
         if (this.state.phase !== 'day') return { type: 'ok' };
+        if (this.state.pendingSplit) return { type: 'blocked', reason: 'split-pending' };
         const opts: EnhanceOptions = { confirmLast: action.confirmLast, force: inPrologue(this.state) ? 'destroy' : undefined };
+        // 운명 분열 switched on: pay, roll two, and wait for the pick
+        if (this.state.splitArmed && !opts.force) {
+          const s = beginSplit(this.state, action.weaponId, opts);
+          if (!s.ok) return { type: 'blocked', reason: s.blocked };
+          this.commit(s.state);
+          this.emit('changed', this.state);
+          return { type: 'splitPending', candidates: s.candidates };
+        }
         const attempt = enhance(this.state, action.weaponId, opts);
         if (!attempt.ok) return { type: 'blocked', reason: attempt.blocked };
         this.commit(attempt.state); // saved before any animation starts
@@ -196,22 +236,20 @@ export class GameCore {
         return { type: 'ok' };
       }
       case 'START_NIGHT': {
+        if (this.state.pendingSplit) return { type: 'nightBlocked', reason: 'not-day' };
         // Night is a new action: the time stone can no longer undo the day's last attempt.
         const r = startNight({ ...this.state, lastEnhance: null });
         if (!r.ok) return { type: 'nightBlocked', reason: r.reason };
-        // Tonight's rivals come from the saved RNG (after the snapshot), so a same-day retry meets the same ones.
-        const g = generateNight(r.state.day, r.state.rng);
+        // Tonight's rivals come from the saved RNG (after the snapshot): the same ones the preview showed.
+        const g = tonightsRivals(r.state);
         this.commit({ ...r.state, rng: g.rng }); // phase 'night' is on disk before the fight begins
-        return { type: 'nightStarted', weapon: r.weapon, lineup: g.doppelgangers };
+        return { type: 'nightStarted', weapon: r.weapon, lineup: g.lineup };
       }
       case 'NIGHT_WON': {
         if (this.state.phase !== 'night') return { type: 'ok' };
-        const r = winNight(this.state, action);
+        const r = winGamble(this.state, action);
         this.addRecords({ kills: action.kills });
-        const grant = this.beginDay(r.state);
-        this.lastGrant = grant.granted;
-    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
-        this.commit(grant.state);
+        const over = this.morning(r.state);
         this.emit('changed', this.state);
         return {
           type: 'nightWon',
@@ -219,9 +257,42 @@ export class GameCore {
           levelBefore: r.levelBefore,
           level: this.state.player.level,
           levelsGained: r.levelsGained,
-          granted: grant.granted.length,
+          granted: this.lastGrant.length,
           cleared: r.cleared,
+          goldBefore: r.goldBefore,
+          goldAfter: r.state.gold,
+          gameOver: over,
         };
+      }
+      case 'SLEEP': {
+        // the night is optional: go straight to the next morning
+        if (this.state.phase !== 'day' || this.state.pendingSplit) return { type: 'ok' };
+        if (inPrologue(this.state)) return { type: 'sleepBlocked' };
+        const over = this.morning(sleep(this.state));
+        this.emit('changed', this.state);
+        return { type: 'slept', day: this.state.day, rent: this.lastRentNotice, gameOver: over };
+      }
+      case 'TOGGLE_SPLIT': {
+        if (this.state.phase !== 'day' || this.state.pendingSplit) return { type: 'ok' };
+        if (!this.state.splitArmed && fateSplitLeft(this.state) <= 0) return { type: 'ok' };
+        this.commit({ ...this.state, splitArmed: !this.state.splitArmed });
+        this.emit('changed', this.state);
+        return { type: 'ok' };
+      }
+      case 'CHOOSE_SPLIT': {
+        const r = chooseSplit(this.state, action.index);
+        if (!r.ok) return { type: 'ok' };
+        this.commit(r.state);
+        this.emit('enhanced', r.result);
+        this.emit('changed', this.state);
+        return { type: 'enhanced', result: r.result };
+      }
+      case 'BUY_SKILL': {
+        const r = buySkill(this.state, action.id);
+        if (!r.ok) return { type: 'skillBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'skillBought', id: action.id, level: r.level, cost: r.cost };
       }
       case 'NIGHT_LOST': {
         if (this.state.phase !== 'night') return { type: 'ok' };
@@ -234,17 +305,14 @@ export class GameCore {
           this.emit('changed', this.state);
           return { type: 'nightLost', livesLeft: this.state.lives, gameOver: null, prologue: true };
         }
-        const r = this.applyLoss(action);
+        const r = this.loseNight(action);
         this.emit('changed', this.state);
-        return { type: 'nightLost', livesLeft: r.livesLeft, gameOver: r.gameOver };
+        return { type: 'nightLost', livesLeft: this.state.lives, gameOver: r.gameOver, goldBefore: r.goldBefore, goldAfter: r.goldAfter };
       }
       case 'NEW_RUN': {
         this.save.clearRun();
         const fresh = this.startRun(action.seed ?? randomSeed(), this.state.tutorials);
-        const grant = this.beginDay(fresh);
-        this.lastGrant = grant.granted;
-    this.lastOverflow = { count: grant.overflow, gold: grant.overflowGold };
-        this.commit(grant.state);
+        this.morning(fresh);
         this.emit('changed', this.state);
         return { type: 'ok' };
       }

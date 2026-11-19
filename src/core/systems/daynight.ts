@@ -3,6 +3,7 @@
 // restores the snapshot with one life fewer and throws away that night's XP.
 import { addXp } from '../../combat/rules';
 import { LAST_DAY } from '../../config/rules';
+import { NIGHT_STAKE } from '../../config/economy';
 import type { GameOverSummary, GameState, NightSnapshot, Weapon } from '../state/types';
 import { equippedWeapon } from './weapons';
 
@@ -60,6 +61,34 @@ export function winNight(prev: GameState, report: NightReport & { xp: number }):
     },
   };
   return { state, levelBefore: prev.player.level, levelsGained: r.levelsGained, cleared };
+}
+
+/** Night gamble won (user decision 2026-11-19): gold × NIGHT_STAKE.winMul, on top of the usual win. */
+export function winGamble(prev: GameState, report: NightReport & { xp: number }): WinResult & { goldBefore: number } {
+  const r = winNight(prev, report);
+  const goldBefore = prev.gold;
+  return { ...r, goldBefore, state: { ...r.state, gold: Math.floor(goldBefore * NIGHT_STAKE.winMul) } };
+}
+
+/**
+ * Night gamble lost (or abandoned): back to the state the night began with, half the gold gone, and on to
+ * the next morning. No life is lost (lives now go only to unpaid rent).
+ */
+export function loseGamble(prev: GameState, report: NightReport): { state: GameState; goldBefore: number; goldAfter: number } {
+  const base: GameState = prev.nightSnapshot ? { ...prev.nightSnapshot, nightSnapshot: null } : { ...prev, nightSnapshot: null };
+  const goldAfter = Math.floor(base.gold * NIGHT_STAKE.loseMul);
+  const stats = {
+    ...base.stats,
+    kills: base.stats.kills + report.kills,
+    nightSeconds: base.stats.nightSeconds + report.seconds,
+    deaths: base.stats.deaths + 1,
+  };
+  return { state: { ...base, phase: 'day', day: base.day + 1, gold: goldAfter, stats, lastEnhance: null }, goldBefore: base.gold, goldAfter };
+}
+
+/** Skip the night (user decision 2026-11-19: the night is optional): straight to the next morning. */
+export function sleep(prev: GameState): GameState {
+  return { ...prev, phase: 'day', day: prev.day + 1, nightSnapshot: null, lastEnhance: null };
 }
 
 export interface LoseResult {

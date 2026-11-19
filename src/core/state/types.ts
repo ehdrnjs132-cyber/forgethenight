@@ -1,6 +1,7 @@
 import type { Element, WeaponClass } from '../../config/weapons';
 import type { Outcome } from '../../config/enhancement';
 import type { EnhanceItem, ItemId } from '../../config/economy';
+import type { ForgeSkillId } from '../../config/forgeSkills';
 
 export interface StockEntry {
   item: ItemId;
@@ -21,6 +22,43 @@ export interface Weapon {
   level: number;
   /** Day the weapon was handed out. */
   bornDay: number;
+  /** 과열 단조: successes in a row on this weapon (absent = 0). */
+  streak?: number;
+}
+
+/** One possible enhancement result, already including the skill conversions (운명 분열 shows two). */
+export interface EnhanceCandidate {
+  /** Outcome rolled from the table. */
+  rolled: Outcome;
+  /** Outcome after 기적의 불꽃 / 과열 단조 / 신의 망치. */
+  outcome: Outcome;
+  /** Level after it; null = destroyed (before 불사조의 모루, which is decided when it is applied). */
+  level: number | null;
+  miracle: boolean;
+  divine: boolean;
+}
+
+/** 운명 분열 waiting for the player's pick; survives a reload. */
+export interface PendingSplit {
+  weaponId: string;
+  before: Weapon;
+  candidates: [EnhanceCandidate, EnhanceCandidate];
+}
+
+/** Per-day counters, reset when the day changes. */
+export interface DailyCounters {
+  day: number;
+  phoenix: number;
+  fateSplit: number;
+  freeWeapons: number;
+}
+
+/** The king's last rent visit, for the morning notice. */
+export interface RentNotice {
+  day: number;
+  amount: number;
+  paid: number;
+  lifeLost: boolean;
 }
 
 /** The most recent enhancement, kept for the time-reversal stone (DECISIONS.md, H). */
@@ -52,6 +90,15 @@ export interface GameState {
   grantedDays: number[];
   /** Weapons bought at the forge this run; each purchase doubles the next price (absent in older saves = 0). */
   weaponsBought?: number;
+  /** Enhancement skill levels (absent = all 0). */
+  forgeSkills?: Partial<Record<ForgeSkillId, number>>;
+  daily?: DailyCounters;
+  /** 운명 분열 switched on for the next enhancement. */
+  splitArmed?: boolean;
+  pendingSplit?: PendingSplit | null;
+  /** Day the king next comes for rent (absent = 3 days after the day it is first needed). */
+  rentDueDay?: number;
+  lastRent?: RentNotice | null;
   player: { level: number; xp: number; skillPoints: number };
   skills: Record<string, number>;
   totems: { owned: string[]; equipped: string[] };

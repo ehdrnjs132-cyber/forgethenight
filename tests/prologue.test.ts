@@ -39,12 +39,12 @@ describe('first-day prologue (user decision 2026-11-18)', () => {
     expect(game.state.weapons).toHaveLength(3);
     expect(inPrologue(game.state)).toBe(false);
 
-    // from now on DAY 1 is a normal day: a second loss costs a life and gives nothing new
+    // from now on the night is the normal gamble: a loss halves the gold and moves to DAY 2
     game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     game.dispatch({ type: 'START_NIGHT' });
     const again = game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 20 });
-    expect(again).toMatchObject({ type: 'nightLost', livesLeft: START_LIVES - 1 });
-    expect(game.state.weapons).toHaveLength(3);
+    expect(again).toMatchObject({ type: 'nightLost', livesLeft: START_LIVES });
+    expect(game.state.day).toBe(2);
   });
 
   it('rivals are named "earth N" with N in 1..999', () => {

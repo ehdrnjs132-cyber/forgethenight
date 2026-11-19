@@ -113,6 +113,26 @@ export function generateNight(day: number, seed: number): { doppelgangers: Doppe
   return { doppelgangers: list, rng: rng.state };
 }
 
+/** Rivals in the night gamble (user decision 2026-11-19). */
+export const GAMBLE_RIVALS = { count: 2, minLevel: 1, maxLevel: 50 };
+
+/**
+ * Tonight's gamble: GAMBLE_RIVALS.count dwarves with weapons of random level +1..+50 (any day).
+ * Deterministic from the state's RNG, so the forge can preview exactly who will come before you accept.
+ * The first-day prologue keeps the scripted visitors.
+ */
+export function tonightsRivals(state: { day: number; rng: number; tutorials: Record<string, boolean>; stats: { nightsWon: number } }): { lineup: Doppelganger[]; rng: number } {
+  const prologue = state.day === 1 && !state.tutorials.prologueDone && state.stats.nightsWon === 0;
+  const g = generateNight(state.day, state.rng);
+  if (prologue) return { lineup: g.doppelgangers, rng: g.rng };
+  const rng = new Rng(g.rng);
+  const lineup = g.doppelgangers.slice(0, GAMBLE_RIVALS.count).map((d) => ({
+    ...d,
+    weapon: { ...d.weapon, level: GAMBLE_RIVALS.minLevel + rng.int(GAMBLE_RIVALS.maxLevel - GAMBLE_RIVALS.minLevel + 1) },
+  }));
+  return { lineup, rng: rng.state };
+}
+
 /** "FIRE SWORD +??" before the showdown, "+43 THUNDER SPEAR" after. */
 export function weaponLabel(d: Doppelganger, revealed: boolean): string {
   // Hidden: only element and class (a sword's form name would give its level away).

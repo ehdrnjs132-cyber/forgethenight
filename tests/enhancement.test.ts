@@ -18,9 +18,10 @@ describe('enhancement table (QA 1)', () => {
     });
   });
 
-  it('respects the destroy range (raised 2026-11-18): 3% at +0, at most 28%', () => {
-    expect(ENHANCE_TABLE[0].destroy).toBe(3);
-    for (const row of ENHANCE_TABLE) expect(row.destroy).toBeLessThanOrEqual(28);
+  it('respects the destroy range (raised again 2026-11-19): 5% at +0, rising to at most 30%', () => {
+    expect(ENHANCE_TABLE[0].destroy).toBe(5);
+    for (let i = 1; i < ENHANCE_TABLE.length; i++) expect(ENHANCE_TABLE[i].destroy).toBeGreaterThanOrEqual(ENHANCE_TABLE[i - 1].destroy);
+    for (const row of ENHANCE_TABLE) expect(row.destroy).toBeLessThanOrEqual(30);
   });
 
   it('modifiers keep the total at 100 and destroy at or above the floor', () => {

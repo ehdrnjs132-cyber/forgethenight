@@ -3,7 +3,9 @@ import { DESTROY_FLOOR, ENHANCE_TABLE, OUTCOMES, OUTCOME_INFO, type EnhanceRow, 
 import { MAX_LEVEL } from '../../config/weapons';
 import { appearanceStage, milestoneCrossed, type Milestone } from '../../config/appearance';
 import { Rng } from '../rng';
-import type { GameState, Weapon } from '../state/types';
+import type { EnhanceCandidate, GameState, Weapon } from '../state/types';
+import { daily, fateSplitLeft, phoenixLeft, rollCandidate, skillLevel, withDaily } from './forgeSkills';
+import { SKILL_TABLE } from '../../config/forgeSkills';
 import { findWeapon, isLastWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
 import { consume, enhanceCost, isArmed } from './economy';
@@ -99,7 +101,7 @@ export function checkEnhance(state: GameState, weaponId: string, opts: EnhanceOp
 export interface EnhanceResult {
   outcome: Outcome;
   weaponBefore: Weapon;
-  /** The weapon after the attempt, or null if it was destroyed. */
+  /** The weapon after the attempt, or null if it was destroyed (and not revived). */
   weaponAfter: Weapon | null;
   /** The row used for the roll, for display. */
   row: EnhanceRow;
@@ -109,61 +111,152 @@ export interface EnhanceResult {
   protectedFrom: Outcome | null;
   /** Stones spent on this attempt. */
   used: EnhanceItem[];
+  /** 기적의 불꽃 / 과열 단조 turned a success into a great success. */
+  miracle: boolean;
+  /** 신의 망치: +5. */
+  divine: boolean;
+  /** 불사조의 모루 revived the destroyed weapon at this level (outcome stays 'destroy'). */
+  phoenix: number | null;
 }
 
 export type EnhanceAttempt =
   | { ok: true; state: GameState; result: EnhanceResult }
   | { ok: false; state: GameState; blocked: EnhanceBlock };
 
-/** Step 4 of §6.4: decide and apply. The caller saves (step 5) before animating (6–8). */
-export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): EnhanceAttempt {
-  const blocked = checkEnhance(prev, weaponId, opts);
-  if (blocked) return { ok: false, state: prev, blocked };
+/** Cost, stones and RNG of an attempt that passed its checks; shared by a normal attempt and 운명 분열. */
+interface Prepared {
+  state: GameState;
+  before: Weapon;
+  row: EnhanceRow;
+  rng: Rng;
+  /** luck / master stones spent on the roll itself. */
+  used: EnhanceItem[];
+}
 
+function prepare(prev: GameState, weaponId: string): Prepared {
   const before = findWeapon(prev, weaponId)!;
   const row = effectiveRow(before.level, collectEnhanceMods(prev, before));
-  const rng = new Rng(prev.rng);
-  const roll = rng.next();
-  const rolled = opts.force ?? rollOutcome(row, roll);
-  // Protection stone: a drop or destruction becomes keep, and only then is the stone spent.
-  const protectedFrom = (rolled === 'down' || rolled === 'destroy') && isArmed(prev, 'protect') ? rolled : null;
-  const outcome: Outcome = protectedFrom ? 'keep' : rolled;
-  const newLevel = levelAfter(before.level, outcome);
   const used: EnhanceItem[] = [];
   if (isArmed(prev, 'luck')) used.push('luck');
   if (isArmed(prev, 'master')) used.push('master');
-  if (protectedFrom) used.push('protect');
-
   const cost = enhanceCost(before.level);
   let state: GameState = {
     ...prev,
     gold: prev.gold - cost,
-    rng: rng.state,
-    lastEnhance: {
-      day: prev.day,
-      weaponBefore: { ...before },
-      wasEquipped: prev.equippedId === weaponId,
-      outcome,
-      index: prev.weapons.findIndex((w) => w.id === weaponId),
-    },
     stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1, goldSpentEnhancing: prev.stats.goldSpentEnhancing + cost },
   };
   for (const item of used) state = consume(state, item);
+  return { state, before, row, rng: new Rng(prev.rng), used };
+}
 
+/**
+ * Make a candidate real: protection stone, 불사조의 모루, the 과열 단조 streak, stats and the undo record.
+ * Exactly one call per attempt, so a destruction or a counter can never be applied twice.
+ */
+function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; result: EnhanceResult } {
+  const { before, row } = prepared;
+  let state = prepared.state;
+  const used = [...prepared.used];
+  // Protection stone: a drop or destruction becomes keep, and only then is the stone spent.
+  const protectedFrom = (cand.outcome === 'down' || cand.outcome === 'destroy') && isArmed(state, 'protect') ? cand.outcome : null;
+  const outcome: Outcome = protectedFrom ? 'keep' : cand.outcome;
+  let newLevel = protectedFrom ? before.level : cand.level;
+  if (protectedFrom) {
+    used.push('protect');
+    state = consume(state, 'protect');
+  }
+  const upward = outcome === 'success' || outcome === 'great';
+  let phoenix: number | null = null;
+  if (newLevel === null && phoenixLeft(state) > 0) {
+    // 불사조의 모루: the weapon comes back (same class and element) instead of being lost
+    phoenix = Math.min(MAX_LEVEL, SKILL_TABLE.phoenix[skillLevel(state, 'phoenix')].level);
+    newLevel = phoenix;
+    state = withDaily(state, { phoenix: daily(state).phoenix + 1 });
+  }
+  state = {
+    ...state,
+    lastEnhance: {
+      day: state.day,
+      weaponBefore: { ...before },
+      wasEquipped: state.equippedId === before.id,
+      outcome,
+      index: state.weapons.findIndex((w) => w.id === before.id),
+    },
+  };
   let after: Weapon | null = null;
   if (newLevel === null) {
-    state = removeWeapon(state, weaponId);
+    state = removeWeapon(state, before.id);
     state.stats = { ...state.stats, destroyed: state.stats.destroyed + 1 };
   } else {
-    after = { ...before, level: newLevel };
+    after = { ...before, level: newLevel, streak: upward && phoenix === null ? (before.streak ?? 0) + 1 : 0 };
     state = {
       ...state,
-      weapons: state.weapons.map((w) => (w.id === weaponId ? after! : w)),
-      stats: { ...state.stats, bestLevel: Math.max(state.stats.bestLevel, newLevel) },
+      weapons: state.weapons.map((w) => (w.id === before.id ? after! : w)),
+      stats: {
+        ...state.stats,
+        bestLevel: Math.max(state.stats.bestLevel, newLevel),
+        ...(phoenix !== null ? { destroyed: state.stats.destroyed + 1 } : {}),
+      },
     };
   }
-
   const stageChanged = after !== null && appearanceStage(after.level) !== appearanceStage(before.level);
-  const milestone = after ? milestoneCrossed(before.level, after.level) : null;
-  return { ok: true, state, result: { outcome, weaponBefore: before, weaponAfter: after, row, stageChanged, milestone, protectedFrom, used } };
+  const milestone = after && phoenix === null ? milestoneCrossed(before.level, after.level) : null;
+  return {
+    state,
+    result: {
+      outcome,
+      weaponBefore: before,
+      weaponAfter: after,
+      row,
+      stageChanged,
+      milestone,
+      protectedFrom,
+      used,
+      miracle: !protectedFrom && cand.miracle,
+      divine: !protectedFrom && cand.divine,
+      phoenix,
+    },
+  };
+}
+
+/** Step 4 of §6.4: decide and apply. The caller saves (step 5) before animating (6–8). */
+export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): EnhanceAttempt {
+  const blocked = checkEnhance(prev, weaponId, opts);
+  if (blocked) return { ok: false, state: prev, blocked };
+  const p = prepare(prev, weaponId);
+  const cand = rollCandidate(p.state, p.before, p.row, p.rng, opts.force);
+  p.state = { ...p.state, rng: p.rng.state };
+  const r = apply(p, cand);
+  return { ok: true, state: r.state, result: r.result };
+}
+
+// ───────────────────────── 운명 분열 (Fate Split)
+
+export type SplitBlock = EnhanceBlock | 'no-uses' | 'pending';
+
+/**
+ * Pay for the attempt and roll two independent candidates (skills included). The weapon is not touched
+ * yet; the pick is saved, so closing the game keeps it waiting. The use is spent here.
+ */
+export function beginSplit(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): { ok: true; state: GameState; candidates: [EnhanceCandidate, EnhanceCandidate] } | { ok: false; blocked: SplitBlock } {
+  if (prev.pendingSplit) return { ok: false, blocked: 'pending' };
+  const blocked = checkEnhance(prev, weaponId, opts);
+  if (blocked) return { ok: false, blocked };
+  if (fateSplitLeft(prev) <= 0) return { ok: false, blocked: 'no-uses' };
+  const p = prepare(prev, weaponId);
+  const a = rollCandidate(p.state, p.before, p.row, p.rng);
+  const b = rollCandidate(p.state, p.before, p.row, p.rng);
+  const candidates: [EnhanceCandidate, EnhanceCandidate] = [a, b];
+  let state: GameState = { ...p.state, rng: p.rng.state, splitArmed: false, pendingSplit: { weaponId, before: { ...p.before }, candidates } };
+  state = withDaily(state, { fateSplit: daily(state).fateSplit + 1 });
+  return { ok: true, state, candidates };
+}
+
+/** Commit the chosen candidate. Only now does the weapon change (and 불사조 spend a revival). */
+export function chooseSplit(prev: GameState, index: 0 | 1): EnhanceAttempt {
+  const pending = prev.pendingSplit;
+  if (!pending || !findWeapon(prev, pending.weaponId)) return { ok: false, state: prev, blocked: 'no-weapon' };
+  const p: Prepared = { state: { ...prev, pendingSplit: null }, before: { ...pending.before }, row: effectiveRow(pending.before.level), rng: new Rng(prev.rng), used: [] };
+  const r = apply(p, pending.candidates[index]);
+  return { ok: true, state: r.state, result: r.result };
 }
