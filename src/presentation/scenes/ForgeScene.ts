@@ -2,7 +2,11 @@
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import type { Weapon } from '../../core/state/types';
-import { collectEnhanceMods, effectiveRow } from '../../core/systems/enhancement';
+import { collectEnhanceMods, effectiveRow, type EnhanceResult } from '../../core/systems/enhancement';
+import { checkBuySkill, fateSplitLeft, overheatBonus, phoenixLeft, skillLevel } from '../../core/systems/forgeSkills';
+import { DIVINE_STEP, FORGE_SKILLS, FORGE_SKILL_BY_ID, SKILL_TABLE } from '../../config/forgeSkills';
+import { rentAmount, rentDueDay } from '../../core/systems/rent';
+import { tonightsRivals } from '../../core/systems/doppelganger';
 import { equippedWeapon, findWeapon, weaponPrice } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
@@ -25,7 +29,7 @@ import { LevelBadge } from '../ui/levelBadge';
 import { PORTRAIT } from '../layout';
 import { canUndo, enhanceCost, itemCount, isArmed, merchantHere, sellPrice } from '../../core/systems/economy';
 import { isTutorialDone } from '../../core/systems/tutorial';
-import { DAILY_WEAPON_LIMIT, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
+import { DAILY_WEAPON_LIMIT, ENHANCE_ITEMS, ITEMS, MERCHANT, NIGHT_STAKE, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
 import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
 
@@ -127,6 +131,9 @@ export class ForgeScene extends Phaser.Scene {
   private sellBtn!: Button;
   private nightBtn!: Button;
   private buyBtn!: Button;
+  private sleepBtn!: Button;
+  private splitBtn!: Button;
+  private rentText!: Phaser.GameObjects.Text;
   /** DAY 1 lines over the blacksmith's head. */
   private bubble!: Bubble;
   private undoBtn!: Button;
@@ -171,7 +178,8 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-UP', () => this.step(-1));
     kb.on('keydown-DOWN', () => this.step(1));
     kb.on('keydown-E', () => this.equipSelected());
-    kb.on('keydown-N', () => this.startNight());
+    kb.on('keydown-N', () => this.offerNight());
+    kb.on('keydown-Z', () => this.sleepUntilMorning());
     kb.on('keydown-S', () => this.trySell());
     kb.on('keydown-M', () => this.openShop());
     kb.on('keydown-K', () => this.openSkills());
@@ -191,8 +199,9 @@ export class ForgeScene extends Phaser.Scene {
       if (parts.length) this.toast(`DAY ${this.core.state.day} · ${parts.join(' · ')}`, ov.count ? C.text : C.goldHi);
     }
     // §8.5 첫 스킬 포인트: a short hint once, after the day's own message.
-    if (this.core.state.player.skillPoints > 0 && !isTutorialDone(this.core.state, 'firstSkillPoint'))
-      this.time.delayedCall(3200, () => this.toast('첫 스킬 포인트를 얻었습니다 · 상단의 스킬트리(K)에서 별자리를 이어 보세요', 0x7fe9ff));
+    // the king's rent this morning, and a 운명 분열 pick left waiting (it survives a reload)
+    this.time.delayedCall(400, () => this.announceRent());
+    if (this.core.state.pendingSplit) this.time.delayedCall(300, () => this.showSplitChoice());
     this.core.notice = null;
     this.core.recoveredFromCorruption = false;
     this.core.lastGrant = [];
@@ -297,9 +306,10 @@ export class ForgeScene extends Phaser.Scene {
     this.dayText = label(this, 664, 32, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
     label(this, 900, 32, '목숨', 14, C.mute, { weight: 700, origin: [0, 0.5] });
     this.livesG = this.add.graphics();
-    this.goldText = label(this, W - 24, 32, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
+    this.goldText = label(this, W - 24, 26, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
+    this.rentText = label(this, W - 24, 50, '', 11, C.mute, { weight: 700, origin: [1, 0.5] });
     new Button(this, 540, 32, 120, 40, '🏆 랭킹', { variant: 'gold', size: 16, onClick: () => void openRanking() });
-    this.skillBtn = new Button(this, 340, 32, 170, 42,'스킬트리', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
+    this.skillBtn = new Button(this, 340, 32, 170, 42, '강화 스킬', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
     this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
@@ -310,10 +320,11 @@ export class ForgeScene extends Phaser.Scene {
     g.lineStyle(1, C.edge, 1).lineBetween(0, 112.5, W, 112.5);
     label(this, 16, 30, 'FORGE THE NIGHT', 17, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
     this.dayText = label(this, W / 2 + 40, 30, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
-    this.goldText = label(this, W - 16, 30, '', 22, C.goldHi, { weight: 900, origin: [1, 0.5] });
+    this.goldText = label(this, W - 16, 24, '', 22, C.goldHi, { weight: 900, origin: [1, 0.5] });
+    this.rentText = label(this, W - 16, 50, '', 13, C.mute, { weight: 700, origin: [1, 0.5] });
     this.livesG = this.add.graphics();
     // bigger thumb-sized buttons (user 2026-11-19); the intro button is gone
-    this.skillBtn = new Button(this, 104, 82, 192, 50, '스킬트리', { variant: 'dark', size: 19, sub: ' ', subSize: 12, onClick: () => this.openSkills() });
+    this.skillBtn = new Button(this, 104, 82, 192, 50, '강화 스킬', { variant: 'dark', size: 19, sub: ' ', subSize: 12, onClick: () => this.openSkills() });
     new Button(this, 274, 82, 136, 50, '🏆 랭킹', { variant: 'gold', size: 19, onClick: () => void openRanking() });
     this.shopBtn = new Button(this, 434, 82, 172, 50, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 18, onClick: () => this.openShop() });
   }
@@ -606,10 +617,14 @@ export class ForgeScene extends Phaser.Scene {
     });
     // sub: ' ' so the sub line exists (cost, price, weapon) and can be filled in by renderOdds
     this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, W - 32, 100, '강화', { variant: 'gold', size: 40, sub: ' ', subSize: 17, onClick: () => this.tryEnhance() });
-    const bw = (W - 32 - 20) / 3;
-    this.equipBtn = new Button(this, 16 + bw / 2, PB.rowY, bw, 78, '장착', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.equipSelected() });
-    this.sellBtn = new Button(this, W / 2, PB.rowY, bw, 78, '판매', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.trySell() });
-    this.nightBtn = new Button(this, W - 16 - bw / 2, PB.rowY, bw, 78, '밤 전투', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.startNight() });
+    // 장착 · 판매 · 밤 내기 · 다음 날 (the night is an optional gamble now)
+    const bw = (W - 32 - 24) / 4;
+    const bx = (i: number) => 16 + bw / 2 + i * (bw + 8);
+    this.equipBtn = new Button(this, bx(0), PB.rowY, bw, 78, '장착', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.equipSelected() });
+    this.sellBtn = new Button(this, bx(1), PB.rowY, bw, 78, '판매', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.trySell() });
+    this.nightBtn = new Button(this, bx(2), PB.rowY, bw, 78, '밤 내기', { variant: 'danger', size: 22, sub: ' ', subSize: 13, onClick: () => this.offerNight() });
+    this.sleepBtn = new Button(this, bx(3), PB.rowY, bw, 78, '다음 날', { variant: 'dark', size: 22, sub: '잠자기', subSize: 13, onClick: () => this.sleepUntilMorning() });
+    this.splitBtn = new Button(this, W - 16 - 110, PB.stonesY, 220, 36, '운명 분열', { variant: 'ghost', size: 15, onClick: () => this.toggleSplit() });
   }
 
   private buildOdds() {
@@ -652,7 +667,10 @@ export class ForgeScene extends Phaser.Scene {
     });
     this.equipBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 518, 134, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
     this.sellBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 518, 134, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
-    this.nightBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 578, 276, 50, '밤 전투 시작', { variant: 'dark', sub: '', onClick: () => this.startNight() });
+    // the night is an optional gamble; "다음 날" skips it
+    this.nightBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 578, 134, 50, '밤 내기', { variant: 'danger', sub: ' ', onClick: () => this.offerNight() });
+    this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 578, 134, 50, '다음 날', { variant: 'dark', sub: '잠자기 · Z', onClick: () => this.sleepUntilMorning() });
+    this.splitBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 70, RIGHT.y + 312, 140, 30, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
   }
 
   private buildToast() {
@@ -870,7 +888,16 @@ export class ForgeScene extends Phaser.Scene {
     });
     const st = this.core.state.stats;
     this.stageText.setText(w ? `외형 단계 ${appearanceStage(w.level) + 1} / ${APPEARANCE_STAGES.length}` : '');
-    this.statsText.setText(`누적 강화 ${st.enhanceAttempts}회 · 파괴 ${st.destroyed}자루 · 최고 +${st.bestLevel}`);
+    // learned enhancement skills and what they do right now; otherwise the run totals
+    const sk = this.core.state;
+    const parts: string[] = [];
+    if (skillLevel(sk, 'miracle')) parts.push(`기적 ${SKILL_TABLE.miracle[skillLevel(sk, 'miracle')]}%`);
+    if (skillLevel(sk, 'overheat') && w) parts.push(`과열 +${overheatBonus(sk, w)}%p`);
+    if (skillLevel(sk, 'phoenix')) parts.push(`불사조 ${phoenixLeft(sk)}회`);
+    if (skillLevel(sk, 'fateSplit')) parts.push(`분열 ${fateSplitLeft(sk)}회`);
+    if (skillLevel(sk, 'divine')) parts.push(`신의 망치 ${SKILL_TABLE.divine[skillLevel(sk, 'divine')]}%`);
+    this.statsText.setText(parts.length ? parts.join(' · ') : `누적 강화 ${st.enhanceAttempts}회 · 파괴 ${st.destroyed}자루 · 최고 +${st.bestLevel}`);
+    this.statsText.setColor(css(parts.length ? 0xffd27a : C.dim));
     const canEnhance = !!w && w.level < MAX_LEVEL && !this.animating;
     this.enhanceBtn.setEnabled(canEnhance);
     const cost = w ? enhanceCost(w.level) : 0;
@@ -888,13 +915,22 @@ export class ForgeScene extends Phaser.Scene {
     this.renderItems();
     const armed = equippedWeapon(this.core.state);
     const hammer = this.core.state.weapons.length === 0;
+    const st0 = this.core.state;
     this.nightBtn.setEnabled((!!armed || hammer) && !this.animating);
-    if (PORTRAIT) this.nightBtn.setLabel('밤 전투', armed ? `+${armed.level} 장착` : hammer ? '망치로 싸움' : '장착 필요');
-    else
-      this.nightBtn.setLabel(
-        '밤 전투 시작',
-        armed ? `${weaponName(armed)} +${armed.level} (N)` : hammer ? '기본 망치로 싸웁니다 (N)' : '먼저 무기를 장착하세요',
-      );
+    this.nightBtn.setLabel('밤 내기', armed ? `+${armed.level}로 도전` : hammer ? '망치로 도전' : '장착 필요');
+    this.sleepBtn.setEnabled(!this.animating && !inPrologue(st0));
+    // 운명 분열 toggle: only once learned; shows today's uses left
+    const splitLv = skillLevel(st0, 'fateSplit');
+    this.splitBtn.setVisible(splitLv > 0);
+    if (splitLv > 0) {
+      const left = fateSplitLeft(st0);
+      this.splitBtn.setLabel(st0.splitArmed ? `운명 분열 ON · ${left}회` : `운명 분열 · ${left}회`);
+      this.splitBtn.setAlpha(st0.splitArmed ? 1 : 0.7);
+      this.splitBtn.setEnabled(!this.animating && (st0.splitArmed || left > 0));
+    }
+    // the king's next visit
+    const due = rentDueDay(st0);
+    this.rentText.setText(due <= st0.day ? '' : `월세 D-${due - st0.day} · ${rentAmount(due).toLocaleString()}G`);
   }
 
   private startNight() {
@@ -934,13 +970,24 @@ export class ForgeScene extends Phaser.Scene {
     this.shopBtn.setVisible(merchantHere(s));
     const pts = s.player.skillPoints;
     const k = PORTRAIT ? '' : ' · K';
-    this.skillBtn.setLabel('스킬트리', pts > 0 ? `포인트 ${pts}${k}` : `Lv ${s.player.level}${k}`);
-    if (pts > 0 && !this.skillPulse) this.skillPulse = this.tweens.add({ targets: this.skillBtn, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
-    else if (pts === 0 && this.skillPulse) {
+    // enhancement skills are bought with gold: pulse when the next one is affordable
+    const learned = FORGE_SKILLS.reduce((a, f) => a + skillLevel(s, f.id), 0);
+    const affordable = FORGE_SKILLS.some((f) => checkBuySkill(s, f.id) === null);
+    this.skillBtn.setLabel('강화 스킬', `${learned} / ${FORGE_SKILLS.length * 5}${k}`);
+    void pts;
+    if (affordable && !this.skillPulse) this.skillPulse = this.tweens.add({ targets: this.skillBtn, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    else if (!affordable && this.skillPulse) {
       this.skillPulse.remove();
       this.skillPulse = null;
       this.skillBtn.setScale(1);
     }
+  }
+
+  private toggleSplit() {
+    if (this.animating) return;
+    this.sfx.click();
+    this.core.dispatch({ type: 'TOGGLE_SPLIT' });
+    this.toast(this.core.state.splitArmed ? '운명 분열: 다음 강화에서 결과 두 개를 보고 고릅니다' : '운명 분열을 쓰지 않습니다', FORGE_SKILL_BY_ID.fateSplit.color);
   }
 
   private openSkills() {
@@ -1145,11 +1192,25 @@ export class ForgeScene extends Phaser.Scene {
         this.sfx.denied();
         this.toast(`골드가 부족합니다 (강화 ${enhanceCost(w.level).toLocaleString()}G) · 무기를 팔아 골드를 마련하세요`, C.dangerHi);
         this.say(SMITH_LINES.noGold);
-      }
+      } else if (res.reason === 'no-uses') this.toast('오늘은 운명 분열을 더 쓸 수 없습니다', C.dangerHi);
+      else if (res.reason === 'split-pending' || res.reason === 'pending') this.showSplitChoice();
+      return;
+    }
+    if (res.type === 'splitPending') {
+      // 운명 분열: paid and rolled; the weapon waits for the pick
+      this.sfx.raise();
+      this.refresh();
+      this.showSplitChoice();
       return;
     }
     if (res.type !== 'enhanced') return;
-    const r = res.result;
+    this.animating = true;
+    this.playResult(res.result);
+  }
+
+  /** Play an enhancement that the core already decided (normal attempt or a 운명 분열 pick). */
+  private playResult(r: EnhanceResult) {
+    this.animating = true;
     this.say(SMITH_LINES.enhanceStart);
     this.enhanceBtn.setEnabled(false);
     this.equipBtn.setEnabled(false);
@@ -1175,7 +1236,132 @@ export class ForgeScene extends Phaser.Scene {
         this.afterEnhanceLine(r.outcome);
         if (r.protectedFrom)
           this.toast(`강화 보호석 발동 · ${r.protectedFrom === 'destroy' ? '파괴' : '하락'}을 막았습니다`, ITEMS.protect.color);
+        else if (r.phoenix !== null) this.toast(`불사조의 모루 · 무기가 +${r.phoenix}으로 되살아났습니다 (오늘 남은 복구 ${phoenixLeft(this.core.state)}회)`, FORGE_SKILL_BY_ID.phoenix.color);
+        else if (r.divine) this.toast(`신의 망치 발동 · +${DIVINE_STEP}!`, FORGE_SKILL_BY_ID.divine.color);
+        else if (r.miracle) this.toast('기적의 불꽃 · 성공이 대성공으로 바뀌었습니다', FORGE_SKILL_BY_ID.miracle.color);
         else if (r.used.length) this.toast(`${r.used.map((i) => ITEMS[i].name).join(', ')} 사용`, C.mute);
       });
+  }
+
+  // ───────────────────────── 운명 분열 (Fate Split)
+  private splitLayer: Phaser.GameObjects.Container | null = null;
+
+  /** Two possible results side by side; the pick is final (no cancel, no reroll). */
+  private showSplitChoice() {
+    const pending = this.core.state.pendingSplit;
+    if (!pending || this.splitLayer) return;
+    this.animating = true;
+    const layer = this.add.container(0, 0).setDepth(80);
+    this.splitLayer = layer;
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x05030a, 0.82).setInteractive();
+    layer.add(dim);
+    const cy = H / 2;
+    const title = label(this, W / 2, cy - (PORTRAIT ? 330 : 230), '운명 분열', PORTRAIT ? 40 : 34, FORGE_SKILL_BY_ID.fateSplit.color, { display: true, weight: 900, origin: [0.5, 0.5] });
+    const sub = label(this, W / 2, cy - (PORTRAIT ? 280 : 188), `${weaponName(pending.before)} +${pending.before.level} · 두 운명 중 하나를 고르세요 (취소할 수 없습니다)`, PORTRAIT ? 17 : 15, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 });
+    layer.add([title, sub]);
+    const phoenixOk = phoenixLeft(this.core.state) > 0;
+    const phoenixLv = SKILL_TABLE.phoenix[skillLevel(this.core.state, 'phoenix')].level;
+    const cw = PORTRAIT ? 320 : 300;
+    const ch = PORTRAIT ? 400 : 300;
+    pending.candidates.forEach((c, i) => {
+      const x = W / 2 + (i === 0 ? -1 : 1) * (cw / 2 + 14);
+      const card = this.add.container(x, cy + 30);
+      const info = OUTCOME_INFO[c.outcome];
+      const g = this.add.graphics();
+      g.fillStyle(0x15101c, 1).fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 18);
+      g.lineStyle(4, info.color, 1).strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 18);
+      const name = label(this, 0, -ch / 2 + 54, c.divine ? '신의 망치!' : info.name, PORTRAIT ? 40 : 34, info.color, { display: true, weight: 900, origin: [0.5, 0.5] });
+      const lv = c.level === null ? '파괴' : `+${pending.before.level} → +${c.level}`;
+      const lvText = label(this, 0, -ch / 2 + 120, lv, PORTRAIT ? 30 : 26, c.level === null ? C.dangerHi : C.text, { weight: 900, origin: [0.5, 0.5] });
+      const tags: string[] = [];
+      if (c.divine) tags.push(`신의 망치 +${DIVINE_STEP}`);
+      if (c.miracle) tags.push('기적의 불꽃 → 대성공');
+      if (c.level === null) tags.push(phoenixOk ? `불사조의 모루로 +${phoenixLv} 복구` : '무기가 영원히 사라집니다');
+      if (c.outcome === 'down' && isArmed(this.core.state, 'protect')) tags.push('강화 보호석이 막아 줍니다');
+      const tagText = label(this, 0, -ch / 2 + 190, tags.join('\n'), PORTRAIT ? 17 : 15, C.mute, { weight: 700, origin: [0.5, 0], align: 'center', wrap: cw - 30, lineSpacing: 6 });
+      const pick = new Button(this, 0, ch / 2 - 50, cw - 40, PORTRAIT ? 66 : 56, '이 운명으로', { variant: c.level === null && !phoenixOk ? 'danger' : 'gold', size: PORTRAIT ? 22 : 18, onClick: () => this.chooseSplit(i as 0 | 1) });
+      card.add([g, name, lvText, tagText, pick]);
+      card.setScale(0.8).setAlpha(0);
+      this.tweens.add({ targets: card, scale: 1, alpha: 1, delay: 150 + i * 220, duration: 320, ease: 'Back.easeOut' });
+      layer.add(card);
+    });
+  }
+
+  private chooseSplit(index: 0 | 1) {
+    const r = this.core.dispatch({ type: 'CHOOSE_SPLIT', index });
+    this.splitLayer?.destroy(true);
+    this.splitLayer = null;
+    if (r.type !== 'enhanced') {
+      this.animating = false;
+      this.refresh();
+      return;
+    }
+    this.selectedId = r.result.weaponBefore.id;
+    this.playResult(r.result);
+  }
+
+  // ───────────────────────── night gamble and sleeping
+  /** Show tonight's two rivals and the stakes; the fight only starts if you accept. */
+  private offerNight() {
+    if (this.animating || this.leaving) return;
+    const s = this.core.state;
+    if (inPrologue(s)) return this.startNight();
+    const armed = equippedWeapon(s);
+    if (!armed && s.weapons.length > 0) {
+      this.toast('밤에 들고 갈 무기를 먼저 장착하세요', C.dangerHi);
+      this.say(SMITH_LINES.needEquip);
+      return;
+    }
+    const rivals = tonightsRivals(s).lineup;
+    const mine = armed ? `${weaponName(armed)} +${armed.level}` : '기본 대장장이 망치';
+    const list = rivals.map((d) => `· ${d.name}  +${d.weapon.level} ${d.weapon.cls === 'sword' ? weaponDisplayName(d.weapon) : ''}`).join('\n');
+    const win = Math.floor(s.gold * NIGHT_STAKE.winMul);
+    const lose = Math.floor(s.gold * NIGHT_STAKE.loseMul);
+    this.openModal({
+      kind: 'confirm',
+      danger: true,
+      title: '밤의 내기',
+      body: `오늘 밤 찾아올 다른 세계의 대장장이\n${list}\n\n내 무기: ${mine}\n\n이기면 골드 ${s.gold.toLocaleString()} → ${win.toLocaleString()}G (×1.5)\n지면 골드 ${s.gold.toLocaleString()} → ${lose.toLocaleString()}G (절반)\n어느 쪽이든 끝나면 다음 날 아침이 됩니다.`,
+      confirmLabel: '내기에 응한다',
+      onConfirm: () => this.startNight(),
+    });
+  }
+
+  /** Skip the night: the next morning (new weapons, maybe the king's rent). */
+  private sleepUntilMorning() {
+    if (this.animating || this.leaving) return;
+    const r = this.core.dispatch({ type: 'SLEEP' });
+    if (r.type === 'sleepBlocked') {
+      this.toast('오늘 밤은 피할 수 없습니다 · 밤 전투로 나가세요', C.dangerHi);
+      return;
+    }
+    if (r.type !== 'slept') return;
+    if (r.gameOver) {
+      this.leaving = true;
+      this.cameras.main.fadeOut(700, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('GameOver', { summary: r.gameOver, reason: 'died' }));
+      return;
+    }
+    this.leaving = true;
+    this.cameras.main.fadeOut(350, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.restart());
+  }
+
+  /** The king's visit this morning, announced once. */
+  private announceRent() {
+    const n = this.core.lastRentNotice;
+    if (!n) return;
+    this.core.lastRentNotice = null;
+    this.openModal({
+      kind: 'confirm',
+      danger: n.lifeLost,
+      title: '왕이 월세를 걷으러 왔다',
+      body: n.lifeLost
+        ? `DAY ${n.day} 월세 ${n.amount.toLocaleString()}G\n가진 골드 ${n.paid.toLocaleString()}G를 모두 바쳤지만 모자랐다.\n목숨 −1 · 남은 목숨 ${this.core.state.lives}`
+        : `DAY ${n.day} 월세 ${n.amount.toLocaleString()}G를 냈습니다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentAmount(rentDueDay(this.core.state)).toLocaleString()}G`,
+      confirmLabel: '알겠다',
+      cancelLabel: '닫기',
+      onConfirm: () => undefined,
+    });
   }
 }

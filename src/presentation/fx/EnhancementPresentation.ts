@@ -172,7 +172,8 @@ export class EnhancementPresentation {
         this.ring(0xffffff, 1.8, 300);
         this.burst(Math.round(70 * density), [0xffd34d, 0xffe9a8, 0xffffff], { speed: [200, 680], life: 800 });
         weapon.flare(0xffd34d, 1.4);
-        this.banner(`${info.name}!`, `+${before} → +${after}${renamed}`, info.color, 64);
+        // skill-made great successes say where they came from
+        this.banner(result.divine ? '신의 망치!' : result.miracle ? '기적의 불꽃!' : `${info.name}!`, `+${before} → +${after}${renamed}`, result.divine ? 0xffe27a : info.color, result.divine ? 72 : 64);
         break;
       case 'success':
         sfx.success();
@@ -200,10 +201,21 @@ export class EnhancementPresentation {
         this.shatter(result);
         this.banner(
           info.name,
-          `${weaponDisplayName(result.weaponBefore)} +${before}이(가) 영구히 사라졌습니다`,
+          result.phoenix !== null
+            ? `불사조의 모루 — 잿더미에서 +${result.phoenix}으로 되살아난다`
+            : `${weaponDisplayName(result.weaponBefore)} +${before}이(가) 영구히 사라졌습니다`,
           C.dangerHi,
           60,
         );
+        if (result.phoenix !== null) {
+          // the revived weapon rises from the ashes
+          this.scene.time.delayedCall(700, () => {
+            weapon.setVisible(true).setAlpha(0);
+            this.scene.tweens.add({ targets: weapon, alpha: 1, duration: 500 });
+            weapon.flare(0xff4fa0, 1.2);
+            this.ring(0xff4fa0, 2.6, 520);
+          });
+        }
         break;
     }
 

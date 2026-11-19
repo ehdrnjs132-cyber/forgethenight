@@ -339,7 +339,9 @@ export class NightScene extends Phaser.Scene {
     const hpBar = this.add.graphics().setDepth(30);
     const telegraph = this.add.graphics().setDepth(6);
     // the scripted first night cannot be won: rivals take 20× the HP
-    const maxHp = Math.round(DOPPEL_COMBAT.hp.base * Math.pow(DOPPEL_COMBAT.hp.growth, this.nd.day - 1) * Math.pow(DOPPEL_COMBAT.hp.levelGrowth, d.weapon.level) * (this.prologue ? 20 : 1));
+    // gamble nights (2026-11-19): rival levels are random +1..+50 any day, so strength follows the weapon
+    // only (no extra growth per day); the scripted first night cannot be won (20× HP)
+    const maxHp = Math.round(DOPPEL_COMBAT.hp.base * Math.pow(DOPPEL_COMBAT.hp.levelGrowth, d.weapon.level) * (this.prologue ? 20 : 1));
     const shape = COMBOS[d.weapon.cls].steps[0].shape;
     const r: Rival = {
       d, sprite: s, aura, telegraph, plate, levelTag, bubble, nextTaunt: this.elapsed + 1.5 + i * 1.3, hpBar, sparks, hp: maxHp, maxHp, state: 'arrive', t: 0.6, heavy: false, aim: 0,
@@ -361,7 +363,10 @@ export class NightScene extends Phaser.Scene {
   }
 
   private rivalDamage(r: Rival): number {
-    const base = DOPPEL_COMBAT.damage.base * Math.pow(DOPPEL_COMBAT.damage.growth, r.d.weapon.level) * (this.prologue ? 1.5 : 1);
+    // hits hurt by how far their weapon is above yours: an even match stays survivable, a +40 gap does not
+    const mine = this.nd.weapon.kind === 'weapon' ? this.nd.weapon.weapon.level : 0;
+    const gap = Math.max(0, r.d.weapon.level - mine);
+    const base = DOPPEL_COMBAT.damage.base * Math.pow(DOPPEL_COMBAT.damage.growth, gap) * (this.prologue ? 1.5 : 1);
     return Math.round(base * (r.heavy ? DOPPEL_COMBAT.damage.heavyMul : 1));
   }
 
@@ -1105,17 +1110,17 @@ export class NightScene extends Phaser.Scene {
       });
       return;
     }
-    const left = r.livesLeft;
+    // the gamble is lost: half the gold, and the next morning
+    const rows = this.summaryRows();
+    if (r.goldBefore !== undefined && r.goldAfter !== undefined) rows.unshift(['골드', `${r.goldBefore.toLocaleString()}G → ${r.goldAfter.toLocaleString()}G`]);
     this.openModal({
       kind: 'result',
       tone: 'defeat',
       title: reason === 'death' ? '밤에 쓰러졌습니다' : '전투를 포기했습니다',
-      subtitle: `목숨 −1 · 남은 목숨 ${left}`,
-      rows: this.summaryRows(),
-      note:
-        `같은 상대들이 다시 찾아온다. DAY ${this.nd.day} 낮으로 돌아가 더 벼려 오세요.` +
-        (left === 1 ? '\n⚠ 마지막 목숨입니다. 다음 패배는 모든 것을 잃습니다.' : ''),
-      buttonLabel: `DAY ${this.nd.day} 다시 도전`,
+      subtitle: '내기에서 졌다 · 가진 골드의 절반을 잃었습니다',
+      rows,
+      note: `DAY ${this.core.state.day} 아침이 밝았다.`,
+      buttonLabel: `DAY ${this.core.state.day} 시작`,
       onClose: () => this.scene.start('Forge'),
     });
   }
@@ -1141,16 +1146,19 @@ export class NightScene extends Phaser.Scene {
         this.scene.start('Forge');
         return;
       }
+      if (r.gameOver) {
+        this.goGameOver(r.gameOver);
+        return;
+      }
       const rows = this.summaryRows();
-      rows.push(['대장장이 레벨', r.levelsGained > 0 ? `Lv ${r.levelBefore} → Lv ${r.level}` : `Lv ${r.level}`]);
+      rows.unshift(['골드', `${r.goldBefore.toLocaleString()}G → ${r.goldAfter.toLocaleString()}G`]);
       const notes = [this.rivalSummary()];
-      if (r.levelsGained > 0) notes.push(`스킬 포인트 +${r.levelsGained}`);
-      notes.push(r.cleared ? '마지막 밤을 버텼습니다.' : `DAY ${r.day} 아침 · 모루가 새 무기 ${r.granted}자루를 벼려 냈습니다`);
+      notes.push(`DAY ${r.day} 아침 · 모루가 새 무기 ${r.granted}자루를 벼려 냈습니다`);
       this.openModal({
         kind: 'result',
         tone: 'victory',
-        title: '살아남았습니다',
-        subtitle: `DAY ${this.nd.day} — 다른 세계의 대장장이 ${this.kills}명을 쓰러뜨렸다`,
+        title: '내기에서 이겼습니다',
+        subtitle: `골드 ×1.5 · 다른 세계의 대장장이 ${this.kills}명을 쓰러뜨렸다`,
         rows,
         note: notes.join('\n'),
         buttonLabel: r.cleared ? '대장간으로' : `DAY ${r.day} 시작`,
