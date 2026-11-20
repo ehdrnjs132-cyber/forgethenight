@@ -11,14 +11,19 @@ import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 
 export const DUEL = {
-  arena: { w: 1000, h: 1000 },
-  hp: 1000,
-  /** Damage of one hit for a weapon of `level`. */
-  damage: (level) => 40 + Math.max(0, Math.min(50, level)) * 5,
-  range: 130,
-  /** Extra distance allowed for network lag when checking a hit. */
-  slack: 110,
-  swingMs: 420,
+  // the night-gamble fight's field and player HP (src/config/hackslash.ts PLAYER_COMBAT.maxHp)
+  arena: { w: 1400, h: 1400 },
+  hp: 120,
+  /**
+   * Damage of one hit, the night rule (DOPPEL_COMBAT.damage): base × growth^(how far the attacker's
+   * weapon is above the defender's) × the attack's multiplier (combo step, heavy charge, element skill).
+   */
+  damage: (attLv, defLv, mul) => Math.max(1, Math.round(12 * clamp(mul, 0.5, 3.5) * Math.pow(1.12, Math.max(0, attLv - defLv)))),
+  /** Longest reach of any attack (spear finisher + lunge, element skill) plus lag slack. */
+  reach: 330,
+  slack: 160,
+  /** Fastest two hits may follow each other (combo steps are ≥ 0.26 s). */
+  hitGapMs: 150,
   countdownMs: 3000,
   fightMs: 75_000,
   challengeMs: 20_000,
@@ -83,7 +88,7 @@ export function attachDuels(server, { auth, store }) {
   function startMatch(a, b, bet) {
     const id = crypto.randomBytes(6).toString('hex');
     const side = (p, x) => ({ uid: p.uid, name: p.name, level: p.weapon.level, element: p.weapon.element, weaponName: p.weapon.name, x, y: DUEL.arena.h / 2, lastSwing: 0 });
-    const m = { id, bet, sides: [side(a, 250), side(b, 750)], hp: [DUEL.hp, DUEL.hp], over: false, startAt: Date.now() + DUEL.countdownMs, timer: null };
+    const m = { id, bet, sides: [side(a, 450), side(b, 950)], hp: [DUEL.hp, DUEL.hp], over: false, startAt: Date.now() + DUEL.countdownMs, timer: null };
     m.timer = setTimeout(() => {
       const [h0, h1] = m.hp;
       endMatch(m, h0 === h1 ? null : h0 > h1 ? 0 : 1, 'time');
@@ -186,7 +191,16 @@ export function attachDuels(server, { auth, store }) {
           const s = m.sides[i];
           s.x = clamp(Number(msg.x) || 0, 0, DUEL.arena.w);
           s.y = clamp(Number(msg.y) || 0, 0, DUEL.arena.h);
-          toUid(m.sides[1 - i].uid, { t: 'opp', x: s.x, y: s.y, fx: Number(msg.fx) || 0, fy: Number(msg.fy) || 0, act: String(msg.act || 'idle').slice(0, 8) });
+          toUid(m.sides[1 - i].uid, { t: 'opp', x: s.x, y: s.y, aim: Number(msg.aim) || 0, act: String(msg.act || 'idle').slice(0, 8) });
+          break;
+        }
+        case 'fx': {
+          // what my attack looks like, for the other screen (no game effect)
+          const m = matches.get(me.matchId);
+          if (!m || m.over) return;
+          const i = m.sides[0].uid === me.uid ? 0 : 1;
+          const fx = msg.fx && typeof msg.fx === 'object' ? msg.fx : null;
+          if (fx && JSON.stringify(fx).length < 400) toUid(m.sides[1 - i].uid, { t: 'oppFx', fx });
           break;
         }
         case 'hit': {
@@ -196,10 +210,10 @@ export function attachDuels(server, { auth, store }) {
           const a = m.sides[i];
           const d = m.sides[1 - i];
           const now = Date.now();
-          if (now - a.lastSwing < DUEL.swingMs * 0.8) return; // faster than the swing allows
-          if (Math.hypot(a.x - d.x, a.y - d.y) > DUEL.range + DUEL.slack) return; // out of reach
+          if (now - a.lastSwing < DUEL.hitGapMs) return; // faster than any attack allows
+          if (Math.hypot(a.x - d.x, a.y - d.y) > DUEL.reach + DUEL.slack) return; // out of reach
           a.lastSwing = now;
-          const dmg = DUEL.damage(a.level);
+          const dmg = DUEL.damage(a.level, d.level, Number(msg.mul) || 1);
           m.hp[1 - i] = Math.max(0, m.hp[1 - i] - dmg);
           for (const s of m.sides) toUid(s.uid, { t: 'hp', hp: m.hp, by: i, dmg });
           if (m.hp[1 - i] <= 0) endMatch(m, i, 'ko');

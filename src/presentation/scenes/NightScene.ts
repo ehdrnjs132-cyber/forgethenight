@@ -17,6 +17,7 @@ import { ITEMS, REVIVE } from '../../config/economy';
 import { ARMOR_CAP, CRIT_BASE, LAST_STAND_HP, type SkillEffects } from '../../config/skills';
 import { milestoneTier } from '../../config/appearance';
 import { glowStrength } from '../weaponArt';
+import type { WeaponClass } from '../../config/weapons';
 import { C, DISPLAY, H, W, css, label } from '../theme';
 import { Sfx } from '../audio/sfx';
 import { TouchPad, isTouchDevice } from '../ui/touchPad';
@@ -27,14 +28,18 @@ import { LAST_WORDS, NARRATOR_LINES, TAUNTS, pick } from '../../config/dialogue'
 import { inPrologue } from '../../core/systems/prologue';
 import { PROP_COUNT } from './BootScene';
 import type { ModalData, ModalRequest } from './ModalScene';
+import { DUEL_RULES, duel, type DuelFx, type DuelMsg, type MatchInfo } from '../../online/duel';
+import { weaponLookTexture, type WeaponLook } from '../weaponArt';
 
 export interface NightData {
   weapon: NightWeapon;
   day: number;
   lineup: Doppelganger[];
+  /** Online duel (2026-11-20): the same fight, against another player instead of AI rivals. */
+  online?: MatchInfo;
 }
 
-type AiState = 'arrive' | 'approach' | 'circle' | 'windup' | 'recover' | 'stagger' | 'dash' | 'dead';
+type AiState = 'arrive' | 'approach' | 'circle' | 'windup' | 'recover' | 'stagger' | 'dash' | 'dead' | 'remote';
 
 interface Rival {
   d: Doppelganger;
@@ -62,6 +67,8 @@ interface Rival {
   engagedAt: number;
   shape: AttackShape;
   anim: string;
+  /** The rival's own forged weapon, slung on its back and swung on attacks. */
+  blade: Phaser.GameObjects.Image | null;
 }
 
 /** Portrait: a taller field, so the tall phone screen never runs past its bottom edge. */
@@ -83,6 +90,18 @@ export class NightScene extends Phaser.Scene {
   private touch: TouchPad | null = null;
   /** The scripted first night: rivals cannot really be beaten, and the loss costs no life. */
   private prologue = false;
+  /** Online duel: the match, where the other player is according to the network, and the clock. */
+  private online: MatchInfo | null = null;
+  private remote = { x: 0, y: 0, aim: 0, act: 'idle' };
+  private fightAt = 0;
+  private endsAt = 0;
+  private lastSend = 0;
+  private countdown: Phaser.GameObjects.Text | null = null;
+  /** The field: the night's own, or a fixed square for duels so both screens agree on positions. */
+  private field: { width: number; height: number } = ARENA;
+  /** The player's real weapon (user 2026-11-20: show each fighter's own weapon in battle). */
+  private myBlade: Phaser.GameObjects.Image | null = null;
+  private bladeBusy = new Set<Phaser.GameObjects.Image>();
 
   private player!: Phaser.Physics.Arcade.Sprite;
   private heroAnim: string | null = null;
@@ -147,8 +166,13 @@ export class NightScene extends Phaser.Scene {
     const high = w.kind === 'weapon' && w.weapon.level >= 20 ? this.sk.highLevel : 0;
     this.baseDamage = Math.round(raw * (1 + this.sk.damage + this.sk.mastery + high));
     this.levelGlow = w.kind === 'weapon' ? glowStrength(w.weapon.level) : 0;
-    this.prologue = inPrologue(this.core.state);
-    this.maxHp = Math.round(PLAYER_COMBAT.maxHp + this.sk.maxHp);
+    this.online = data.online ?? null;
+    this.field = this.online ? { width: DUEL_RULES.arena.w, height: DUEL_RULES.arena.h } : ARENA;
+    this.prologue = !this.online && inPrologue(this.core.state);
+    // duels: both players have the same HP, kept by the server
+    this.maxHp = this.online ? DUEL_RULES.hp : Math.round(PLAYER_COMBAT.maxHp + this.sk.maxHp);
+    this.myBlade = null;
+    this.bladeBusy = new Set();
     const p = this.core.state.player;
     Object.assign(this, {
       hp: this.maxHp, invuln: 0, comboStep: 0, swingT: 0, comboWindow: 0, queued: false, charging: false, chargeT: 0, heavyCd: 0,
@@ -163,13 +187,14 @@ export class NightScene extends Phaser.Scene {
 
   // ───────────────────────── setup
   create() {
-    this.physics.world.setBounds(0, 0, ARENA.width, ARENA.height);
+    const F = this.field;
+    this.physics.world.setBounds(0, 0, F.width, F.height);
     const art = this.textures.exists('art-night_ground');
-    this.add.tileSprite(0, 0, ARENA.width, ARENA.height, art ? 'art-night_ground' : 'ground').setOrigin(0);
+    this.add.tileSprite(0, 0, F.width, F.height, art ? 'art-night_ground' : 'ground').setOrigin(0);
     if (art) this.scatterProps();
     const edge = this.add.graphics();
-    edge.lineStyle(10, 0x6b3fd1, 0.35);
-    edge.strokeRect(5, 5, ARENA.width - 10, ARENA.height - 10);
+    edge.lineStyle(10, this.online ? 0xd13f3f : 0x6b3fd1, 0.35);
+    edge.strokeRect(5, 5, F.width - 10, F.height - 10);
 
     this.heroLight = this.add.graphics().setDepth(4).setBlendMode(Phaser.BlendModes.ADD);
     for (let i = 5; i >= 1; i--) {
@@ -179,9 +204,12 @@ export class NightScene extends Phaser.Scene {
     this.chargeRing = this.add.graphics().setDepth(11);
 
     this.heroAnim = this.textures.exists(`anim-hero_${this.cls}_walk`) ? `hero_${this.cls}` : null;
-    this.player = this.physics.add.sprite(ARENA.width / 2, ARENA.height / 2 + 120, this.heroAnim ? `anim-${this.heroAnim}_walk` : 'player', 0).setDepth(10);
+    const start = this.online ? this.online.sides[this.online.you] : { x: F.width / 2, y: F.height / 2 + 120 };
+    this.player = this.physics.add.sprite(start.x, start.y, this.heroAnim ? `anim-${this.heroAnim}_walk` : 'player', 0).setDepth(10);
     this.fitBody(this.player, 96, PLAYER_COMBAT.radius);
     this.player.setCollideWorldBounds(true);
+    const nw = this.nd.weapon;
+    this.myBlade = nw.kind === 'weapon' ? this.makeBlade(nw.weapon) : null;
 
     for (let i = 0; i < 90; i++) {
       this.numbers.push(
@@ -194,7 +222,7 @@ export class NightScene extends Phaser.Scene {
       );
     }
 
-    this.cameras.main.setBounds(0, 0, ARENA.width, ARENA.height);
+    this.cameras.main.setBounds(0, 0, F.width, F.height);
     this.cameras.main.startFollow(this.player, true, 0.14, 0.14);
     this.cameras.main.fadeIn(400, 0, 0, 0);
     this.add.image(W / 2, H / 2, 'vignette').setDisplaySize(W, H).setScrollFactor(0).setDepth(90);
@@ -227,7 +255,182 @@ export class NightScene extends Phaser.Scene {
 
     this.buildHud();
     this.intro();
-    this.nd.lineup.forEach((d, i) => this.time.delayedCall(900 + i * DOPPEL_AI.arrivalGap * 1000, () => this.arrive(d, i)));
+    if (this.online) this.startDuel(this.online);
+    else this.nd.lineup.forEach((d, i) => this.time.delayedCall(900 + i * DOPPEL_AI.arrivalGap * 1000, () => this.arrive(d, i)));
+  }
+
+  // ───────────────────────── each fighter's real weapon (2026-11-20)
+  /** The forged weapon itself (the same art as in the forge, glowing with its level). */
+  private makeBlade(look: WeaponLook): Phaser.GameObjects.Image | null {
+    const key = weaponLookTexture(this, look);
+    if (!this.textures.exists(key)) return null;
+    const img = this.add.image(0, 0, key).setOrigin(0.12, 0.5);
+    img.setScale((96 + Math.min(50, look.level) * 1.1) / img.width);
+    const st = glowStrength(look.level);
+    if (st > 0) img.preFX?.addGlow(ELEMENT_INFO[look.element].glow, Math.min(5, st * 0.7), 0, false, 0.1, 10);
+    return img;
+  }
+
+  /** Slung on the back, tip up behind the shoulder; it turns with the fighter. */
+  private placeBlade(img: Phaser.GameObjects.Image | null, sp: Phaser.GameObjects.Sprite, faceLeft: boolean) {
+    if (!img || this.bladeBusy.has(img)) return;
+    img.setPosition(sp.x + (faceLeft ? 12 : -12), sp.y - 26);
+    img.setRotation(faceLeft ? -Math.PI * 0.32 : -Math.PI * 0.68);
+    img.setDepth(sp.depth - 0.5).setAlpha(sp.alpha);
+  }
+
+  /** The real blade sweeps through the attack. */
+  private swingBlade(img: Phaser.GameObjects.Image | null, sp: Phaser.GameObjects.Sprite, ang: number, arcDeg: number, ms: number) {
+    if (!img) return;
+    const half = (arcDeg * Math.PI) / 360;
+    this.bladeBusy.add(img);
+    this.tweens.killTweensOf(img);
+    img.setDepth(sp.depth + 0.5).setPosition(sp.x, sp.y - 10).setRotation(ang - half);
+    this.tweens.add({
+      targets: img,
+      rotation: ang + half,
+      duration: ms,
+      ease: 'Cubic.easeOut',
+      onUpdate: () => img.setPosition(sp.x, sp.y - 10),
+      onComplete: () => this.time.delayedCall(90, () => this.bladeBusy.delete(img)),
+    });
+  }
+
+  // ───────────────────────── online duel (2026-11-20)
+  /** The other player appears as a rival whose moves come from the network instead of the AI. */
+  private startDuel(m: MatchInfo) {
+    const them = m.sides[1 - m.you];
+    this.remote = { x: them.x, y: them.y, aim: m.you === 0 ? Math.PI : 0, act: 'idle' };
+    this.fightAt = Date.now() + m.countdownMs;
+    this.endsAt = this.fightAt + m.fightMs;
+    this.aim = m.you === 0 ? 0 : Math.PI;
+    const d: Doppelganger = {
+      id: them.uid,
+      name: them.name,
+      temperament: 'challenger',
+      weapon: { cls: 'sword' as WeaponClass, element: (them.element as Element) ?? 'fire', level: them.level },
+      record: { attempts: 0, great: 0, success: 0, keep: 0, down: 0, destroyedWeapons: 0, lostAttempts: 0, lastStep: null, path: [] },
+    };
+    this.arrive(d, 0);
+    const r = this.rivals[0];
+    r.state = 'remote';
+    r.revealed = true;
+    r.nextTaunt = Infinity;
+    r.hp = r.maxHp = DUEL_RULES.hp;
+    r.sprite.setPosition(them.x, them.y).setImmovable(true);
+    this.updatePlate(r);
+    this.countdown = label(this, W / 2, H / 2 - 120, '', 110, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(115).setStroke('#140a05', 12);
+    const off = duel.on((msg) => this.onDuel(msg));
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+  }
+
+  private onDuel(m: DuelMsg) {
+    if (!this.online || !this.scene.isActive()) return;
+    const r = this.rivals[0];
+    switch (m.t) {
+      case 'opp':
+        this.remote = { x: m.x, y: m.y, aim: m.aim, act: m.act };
+        break;
+      case 'oppFx':
+        if (r) this.drawRemoteFx(r, m.fx);
+        break;
+      case 'hp': {
+        const mine = this.online.you;
+        const target = m.by === mine ? 1 - mine : mine;
+        if (target === mine) {
+          // the other player's blow landed (decided by the server)
+          this.hp = m.hp[mine];
+          this.sfx.hurt();
+          this.cameras.main.shake(m.dmg >= 30 ? 200 : 100, m.dmg >= 30 ? 0.012 : 0.006);
+          this.player.setTintFill(0xff4a4a);
+          this.time.delayedCall(80, () => this.player.clearTint());
+          this.number(this.player.x, this.player.y - 40, '-' + m.dmg, 0xff6b6b, m.dmg >= 30 ? 30 : 22);
+          this.comboCount = 0;
+        } else if (r) {
+          r.hp = m.hp[1 - mine];
+          this.number(r.sprite.x, r.sprite.y - 30, formatDamage(m.dmg), m.dmg >= 30 ? 0xff5a2a : 0xfff0b8, m.dmg >= 30 ? 30 : 24);
+          r.sprite.setTintFill(0xffffff);
+          this.time.delayedCall(60, () => r.sprite.setTint(RIVAL_TINT));
+        }
+        break;
+      }
+      case 'end':
+        this.endDuel(m.winner, m.reason, m.bet);
+        break;
+      case 'closed':
+        if (!this.ended) this.endDuel(null, 'lost', this.online.bet);
+        break;
+    }
+  }
+
+  /** The other player's attack, drawn where they stand, with their own blade. */
+  private drawRemoteFx(r: Rival, fx: DuelFx) {
+    const col = ELEMENT_INFO[r.d.weapon.element].glow;
+    const x = r.sprite.x;
+    const y = r.sprite.y;
+    this.sfx.swing(fx.kind === 'heavy');
+    if (fx.kind === 'heavy' || fx.kind === 'element') {
+      const c = fx.kind === 'element' && fx.el ? (ELEMENT_INFO[fx.el as Element]?.glow ?? col) : col;
+      const ring = this.add.image(x, y, 'ring').setTint(c).setBlendMode('ADD').setScale(0.2).setDepth(12);
+      this.tweens.add({ targets: ring, scale: (fx.range * 2) / 128, alpha: 0, duration: 360, ease: 'Cubic.easeOut', onComplete: () => ring.destroy() });
+      this.swingBlade(r.blade, r.sprite, fx.ang, 300, 260);
+      return;
+    }
+    const shape = { kind: fx.kind, range: fx.range, arcDeg: fx.arcDeg, width: fx.width, interval: 0, damageMul: 1, knockback: 0, engage: 1 } as AttackShape;
+    this.slashFx(x, y, fx.ang, shape, col, fx.power);
+    this.swingBlade(r.blade, r.sprite, fx.ang, fx.arcDeg ?? 60, 180);
+    if (r.anim) r.sprite.play({ key: 'anim-' + r.anim + '_attack', timeScale: 2 });
+  }
+
+  private sendFx(fx: DuelFx) {
+    if (this.online) duel.send({ t: 'fx', fx });
+  }
+
+  /** The other player moves as the network says, eased so it does not jitter. */
+  private followRemote(r: Rival, dt: number) {
+    const s = r.sprite;
+    const k = Math.min(1, dt * 12);
+    const nx = s.x + (this.remote.x - s.x) * k;
+    const ny = s.y + (this.remote.y - s.y) * k;
+    const moving = Math.hypot(nx - s.x, ny - s.y) > 0.6;
+    s.setPosition(nx, ny);
+    s.setVelocity(0, 0);
+    s.setFlipX(Math.cos(this.remote.aim) < 0);
+    s.setAlpha(this.remote.act === 'dash' ? 0.5 : 1);
+    if (r.anim && moving && !s.anims.isPlaying) s.play('anim-' + r.anim + '_walk');
+    else if (r.anim && !moving && s.anims.isPlaying && !s.anims.currentAnim?.key.endsWith('_attack')) s.anims.stop();
+    r.aura.setPosition(s.x, s.y + 20);
+    r.sparks.setPosition(s.x, s.y);
+    r.plate.setPosition(s.x, s.y - 74);
+    r.levelTag.setPosition(s.x, s.y - 116);
+    this.placeBlade(r.blade, s, s.flipX);
+    r.hpBar.clear();
+    r.hpBar.fillStyle(0x000000, 0.6);
+    r.hpBar.fillRoundedRect(s.x - 40, s.y - 52, 80, 7, 3);
+    r.hpBar.fillStyle(0xff4a4a, 1);
+    r.hpBar.fillRoundedRect(s.x - 40, s.y - 52, Math.max(0, (80 * r.hp) / r.maxHp), 7, 3);
+  }
+
+  private endDuel(winner: 0 | 1 | null, reason: string, bet: number) {
+    if (this.ended || !this.online) return;
+    this.ended = true;
+    this.player.setVelocity(0, 0);
+    const won = winner === this.online.you;
+    const draw = winner === null;
+    if (won) this.sfx.dawn();
+    else if (!draw) this.sfx.fall();
+    const lost = reason === 'lost';
+    const rows = this.summaryRows().filter(([k]) => k !== '쓰러뜨린 대장장이' && k !== '획득 경험치');
+    rows.unshift(['판돈', lost ? '서버가 정리합니다' : draw ? '그대로' : (won ? '+' : '−') + bet.toLocaleString() + 'G']);
+    this.openModal({
+      kind: 'result',
+      tone: won ? 'victory' : 'defeat',
+      title: lost ? '연결이 끊겼다' : draw ? '무승부' : won ? '결투에서 이겼다' : '결투에서 졌다',
+      subtitle: lost ? '' : reason === 'ko' ? (won ? '상대를 쓰러뜨렸다' : '쓰러졌다') : reason === 'time' ? '시간 종료 · 남은 체력으로 판정' : won ? '상대가 자리를 떴다' : '기권했다',
+      rows,
+      buttonLabel: '결투장으로',
+      onClose: () => this.scene.start('DuelLobby'),
+    });
   }
 
   /** Scale a sheet sprite to `height` px and give it a feet-level circle body of `radius` px. */
@@ -242,9 +445,9 @@ export class NightScene extends Phaser.Scene {
     const rnd = new Phaser.Math.RandomDataGenerator([`props-${this.nd.day}`]);
     const keys = Array.from({ length: PROP_COUNT }, (_, i) => `art-prop_${i}`).filter((k) => this.textures.exists(k));
     for (let i = 0; i < 26; i++) {
-      const x = rnd.between(60, ARENA.width - 60);
-      const y = rnd.between(60, ARENA.height - 60);
-      if (Phaser.Math.Distance.Between(x, y, ARENA.width / 2, ARENA.height / 2) < 300) continue;
+      const x = rnd.between(60, this.field.width - 60);
+      const y = rnd.between(60, this.field.height - 60);
+      if (Phaser.Math.Distance.Between(x, y, this.field.width / 2, this.field.height / 2) < 300) continue;
       const img = this.add.image(x, y, rnd.pick(keys)).setOrigin(0.5, 0.9);
       img.setScale(rnd.realInRange(0.32, 0.55)).setFlipX(rnd.frac() < 0.5).setDepth(2).setAlpha(0.95);
     }
@@ -262,7 +465,7 @@ export class NightScene extends Phaser.Scene {
     const hpText = fix(label(this, 32, 22, '', 14, C.text, { weight: 700 }));
     fix(label(this, 32, 66, name, 15, this.glowColor, { weight: 900 }));
     fix(label(this, 32, 86, `기본 피해 ${formatDamage(this.baseDamage)} · ${COMBOS[this.cls].steps.length}연타 콤보`, 12, C.mute, { weight: 700 }));
-    fix(label(this, W / 2, 20 + TITLE_Y, `DAY ${this.nd.day} · 다른 세계의 대장장이`, 12, C.mute, { weight: 700, origin: [0.5, 0] }));
+    fix(label(this, W / 2, 20 + TITLE_Y, this.online ? `온라인 결투 · 판돈 ${this.online.bet.toLocaleString()}G` : `DAY ${this.nd.day} · 다른 세계의 대장장이`, 12, C.mute, { weight: 700, origin: [0.5, 0] }));
     const rivals = fix(label(this, W / 2, 46 + TITLE_Y, '', 22, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
     const combo = fix(label(this, W - 40, 150, '', 40, C.goldHi, { display: true, weight: 900, origin: [1, 0.5] }));
     combo.setStroke('#140a05', 8);
@@ -285,6 +488,13 @@ export class NightScene extends Phaser.Scene {
   }
 
   private intro() {
+    if (this.online) {
+      const them = this.online.sides[1 - this.online.you];
+      const t = label(this, W / 2, H / 2 - 10, `⚔ ${them.name} · +${them.level}`, 30, C.dangerHi, { display: true, weight: 900, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
+      t.setStroke('#140a05', 7);
+      this.tweens.add({ targets: t, alpha: 0, delay: 2600, duration: 500, onComplete: () => t.destroy() });
+      return;
+    }
     const t = label(this, W / 2, H / 2 - 70, `DAY ${this.nd.day} · 밤`, 46, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
     const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
     const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 강화해 온 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
@@ -299,8 +509,8 @@ export class NightScene extends Phaser.Scene {
   private arrive(d: Doppelganger, i: number) {
     if (this.ended) return;
     const ang = -Math.PI / 2 + (i - (this.nd.lineup.length - 1) / 2) * 0.8;
-    const x = Phaser.Math.Clamp(this.player.x + Math.cos(ang) * 420, 80, ARENA.width - 80);
-    const y = Phaser.Math.Clamp(this.player.y + Math.sin(ang) * 380, 80, ARENA.height - 80);
+    const x = Phaser.Math.Clamp(this.player.x + Math.cos(ang) * 420, 80, this.field.width - 80);
+    const y = Phaser.Math.Clamp(this.player.y + Math.sin(ang) * 380, 80, this.field.height - 80);
     // the rift
     const rift = this.add.image(x, y, 'ring').setTint(0x9b5cff).setBlendMode('ADD').setScale(0.1).setDepth(7);
     this.tweens.add({ targets: rift, scale: 1.6, alpha: 0, duration: 700, ease: 'Cubic.easeOut', onComplete: () => rift.destroy() });
@@ -346,6 +556,7 @@ export class NightScene extends Phaser.Scene {
     const r: Rival = {
       d, sprite: s, aura, telegraph, plate, levelTag, bubble, nextTaunt: this.elapsed + 1.5 + i * 1.3, hpBar, sparks, hp: maxHp, maxHp, state: 'arrive', t: 0.6, heavy: false, aim: 0,
       strafeDir: Math.random() < 0.5 ? 1 : -1, dodgeCd: 0, flinch: 0, revealed: REVEAL.openFromStart, engagedAt: this.elapsed, shape, anim,
+      blade: this.makeBlade(d.weapon),
     };
     this.physics.add.collider(s, this.player);
     for (const o of this.rivals) this.physics.add.collider(s, o.sprite);
@@ -463,6 +674,7 @@ export class NightScene extends Phaser.Scene {
     r.plate.setPosition(s.x, s.y - 74);
     r.levelTag.setPosition(s.x, s.y - 116);
     r.bubble.setPosition(s.x, s.y - 140);
+    this.placeBlade(r.blade, s, s.flipX);
     // taunts: often on DAY 1, now and then on later nights
     if (this.elapsed >= r.nextTaunt) {
       const day1 = this.nd.day === 1;
@@ -541,6 +753,7 @@ export class NightScene extends Phaser.Scene {
     this.sfx.swing(r.heavy);
     const s = r.sprite;
     this.slashFx(s.x, s.y, r.aim, r.shape, r.heavy ? 0xff5a3a : ELEMENT_INFO[r.d.weapon.element].glow, r.heavy ? 1.3 : 0.9);
+    this.swingBlade(r.blade, s, r.aim, r.shape.arcDeg ?? 70, r.heavy ? 260 : 180);
     if (hits(r.shape, s.x, s.y, r.aim, this.player.x, this.player.y, PLAYER_COMBAT.radius) && this.dashT <= 0) {
       const dmg = this.rivalDamage(r);
       this.hurtPlayer(dmg, r.heavy);
@@ -607,9 +820,26 @@ export class NightScene extends Phaser.Scene {
       this.aim = Math.atan2(wp.y - this.player.y, wp.x - this.player.x);
     }
 
-    this.movePlayer(dt);
-    this.attackLoop(dt, p);
-    for (const r of this.rivals) if (r.state !== 'dead') this.thinkRival(r, dt);
+    // duel: nobody moves before FIGHT!, and my position goes to the other player 20 times a second
+    const waiting = this.online !== null && Date.now() < this.fightAt;
+    if (this.countdown) {
+      const now = Date.now();
+      this.countdown.setText(now < this.fightAt ? String(Math.ceil((this.fightAt - now) / 1000)) : now < this.fightAt + 700 ? 'FIGHT!' : '');
+    }
+    if (waiting) this.player.setVelocity(0, 0);
+    else {
+      this.movePlayer(dt);
+      this.attackLoop(dt, p);
+    }
+    this.placeBlade(this.myBlade, this.player, this.player.flipX);
+    if (this.online && Date.now() - this.lastSend > 50) {
+      this.lastSend = Date.now();
+      duel.send({ t: 'state', x: Math.round(this.player.x), y: Math.round(this.player.y), aim: +this.aim.toFixed(2), act: this.dashT > 0 ? 'dash' : this.swingT > 0 ? 'swing' : 'idle' });
+    }
+    for (const r of this.rivals) {
+      if (r.state === 'remote') this.followRemote(r, dt);
+      else if (r.state !== 'dead') this.thinkRival(r, dt);
+    }
     this.heroLight.setPosition(this.player.x, this.player.y + 14);
     this.drawCharge();
     this.renderHud();
@@ -712,7 +942,10 @@ export class NightScene extends Phaser.Scene {
       if (this.ended) return;
       this.sfx.swing(finisher || this.cls === 'axe');
       const sh = { ...shape, range: shape.range * (1 + this.sk.area) };
-      this.slashFx(this.player.x, this.player.y, ang, sh, this.glowColor, 0.8 + this.levelGlow * 0.12 + (finisher ? 0.3 : 0));
+      const power = 0.8 + this.levelGlow * 0.12 + (finisher ? 0.3 : 0);
+      this.slashFx(this.player.x, this.player.y, ang, sh, this.glowColor, power);
+      this.swingBlade(this.myBlade, this.player, ang, sh.arcDeg ?? 60, Math.max(120, time * 600));
+      this.sendFx({ kind: sh.kind as DuelFx['kind'], ang, range: sh.range, arcDeg: sh.arcDeg, width: sh.width, power });
       this.resolveHit(sh, ang, mul, finisher ? 0.25 : 0.1, finisher);
     });
   }
@@ -739,6 +972,8 @@ export class NightScene extends Phaser.Scene {
       this.cameras.main.shake(140, 0.006 + c * 0.006);
       this.sfx.strike(1 + Math.round(c * 2));
       const shape: AttackShape = { kind: 'circle', range: HEAVY.radius * (1 + c * 0.3), interval: 0, damageMul: 1, knockback: HEAVY.knockback, engage: 1 };
+      this.swingBlade(this.myBlade, this.player, this.aim, 340, 260);
+      this.sendFx({ kind: 'heavy', ang: this.aim, range: shape.range, power: 1 });
       this.resolveHit(shape, this.aim, mul, HEAVY.stagger, true, HEAVY.knockback);
     });
   }
@@ -774,6 +1009,7 @@ export class NightScene extends Phaser.Scene {
       this.time.delayedCall(560, () => b.destroy());
     };
     this.sfx.boom();
+    this.sendFx({ kind: 'element', el, ang: this.aim, range: 180, power: 1 });
     const circleAt = (x: number, y: number, radius: number, mul: number, stagger: number, kb = 260) => {
       for (const r of this.living()) if (Phaser.Math.Distance.Between(x, y, r.sprite.x, r.sprite.y) <= radius + 17) this.damageRival(r, this.baseDamage * mul, stagger, Math.atan2(r.sprite.y - y, r.sprite.x - x), kb, true);
     };
@@ -833,6 +1069,22 @@ export class NightScene extends Phaser.Scene {
 
   private damageRival(r: Rival, raw: number, stagger: number, ang: number, knock: number, heavy: boolean) {
     if (r.state === 'dead') return;
+    if (r.state === 'remote') {
+      // duel: my screen says it connected; the server checks reach and speed and decides the damage
+      if (this.remote.act === 'dash' || Date.now() < this.fightAt) return;
+      duel.send({ t: 'hit', mul: +(raw / this.baseDamage).toFixed(2), heavy });
+      this.sfx.hit(1);
+      this.comboCount++;
+      this.comboTimer = COMBO_COUNTER_WINDOW;
+      this.bestCombo = Math.max(this.bestCombo, this.comboCount);
+      const sp = this.add.particles(r.sprite.x, r.sprite.y, 'spark', { speed: { min: 80, max: 260 }, lifespan: 320, scale: { start: 0.5, end: 0 }, tint: [this.glowColor, 0xffffff], blendMode: 'ADD', emitting: false }).setDepth(12);
+      sp.explode(10);
+      this.time.delayedCall(400, () => sp.destroy());
+      void stagger;
+      void ang;
+      void knock;
+      return;
+    }
     const crit = Math.random() < this.sk.critChance;
     const amount = Math.round(raw * (crit ? CRIT_BASE + this.sk.critDamage : 1));
     r.hp -= amount;
@@ -874,7 +1126,7 @@ export class NightScene extends Phaser.Scene {
     this.cameras.main.shake(120, 0.006);
     if (!r.revealed) this.reveal(r, '쓰러지며 정체가 드러났다');
     r.sprite.disableBody(true, false);
-    this.tweens.add({ targets: [r.sprite, r.aura], alpha: 0, duration: 700, onComplete: () => r.sprite.setVisible(false) });
+    this.tweens.add({ targets: [r.sprite, r.aura, ...(r.blade ? [r.blade] : [])], alpha: 0, duration: 700, onComplete: () => r.sprite.setVisible(false) });
     this.tweens.add({ targets: [r.plate, r.levelTag, r.bubble], alpha: 0, delay: 1200, duration: 400 });
     const xp = Math.round(DOPPEL_COMBAT.xp * (1 + r.d.weapon.level * 0.1) * (1 + this.sk.xp));
     this.gainXp(xp);
@@ -938,7 +1190,7 @@ export class NightScene extends Phaser.Scene {
   }
 
   private hurtPlayer(raw: number, heavy: boolean) {
-    if (this.invuln > 0 || this.ended) return;
+    if (this.invuln > 0 || this.ended || this.online) return;
     const low = this.hp / this.maxHp < LAST_STAND_HP ? this.sk.lastStand : 0;
     const amount = Math.max(1, Math.round(raw * (1 - Math.min(ARMOR_CAP, this.sk.armor + low))));
     this.hp = Math.max(0, this.hp - amount);
@@ -1004,8 +1256,13 @@ export class NightScene extends Phaser.Scene {
     h.hpBar.fillStyle(this.hp / this.maxHp < 0.3 ? C.dangerHi : C.danger, 1);
     h.hpBar.fillRoundedRect(32, 42, Math.max(0, (hpw * this.hp) / this.maxHp), 14, 4);
     h.hpText.setText(`HP ${Math.ceil(this.hp)} / ${this.maxHp}`);
-    const left = this.nd.lineup.length - this.kills;
-    h.rivals.setText(left > 0 ? `남은 대장장이 ${left}` : '새벽이 온다');
+    if (this.online) {
+      const sec = Math.max(0, Math.ceil((this.endsAt - Math.max(Date.now(), this.fightAt)) / 1000));
+      h.rivals.setText(`남은 시간 ${sec}초`);
+    } else {
+      const left = this.nd.lineup.length - this.kills;
+      h.rivals.setText(left > 0 ? `남은 대장장이 ${left}` : '새벽이 온다');
+    }
     h.combo.setText(this.comboCount >= 3 ? `${this.comboCount} COMBO` : '');
     h.combo.setScale(1 + Math.min(0.4, this.comboCount * 0.01));
     const xw = 460;
@@ -1051,6 +1308,19 @@ export class NightScene extends Phaser.Scene {
 
   private askLeave() {
     if (this.ended) return;
+    if (this.online) {
+      const bet = this.online.bet;
+      this.openModal({
+        kind: 'confirm',
+        title: '기권할까요?',
+        body: '기권하면 결투에서 집니다.\n판돈 ' + bet.toLocaleString() + 'G를 잃습니다.',
+        confirmLabel: '기권하기',
+        cancelLabel: '계속 싸우기',
+        danger: true,
+        onConfirm: () => duel.send({ t: 'leave' }),
+      });
+      return;
+    }
     const lives = this.core.state.lives;
     this.openModal({
       kind: 'confirm',

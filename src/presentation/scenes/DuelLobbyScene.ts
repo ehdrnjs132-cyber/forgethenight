@@ -4,6 +4,7 @@
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { equippedWeapon } from '../../core/systems/weapons';
+import type { NightWeapon } from '../../core/systems/daynight';
 import { weaponDisplayName } from '../../config/swordNames';
 import { ELEMENT_INFO, type Element } from '../../config/weapons';
 import { C, H, W, label } from '../theme';
@@ -12,6 +13,13 @@ import { LevelBadge } from '../ui/levelBadge';
 import { PORTRAIT } from '../layout';
 import { Sfx } from '../audio/sfx';
 import { DUEL_RULES, duel, type DuelMsg, type LobbyPlayer, type MyDuelInfo } from '../../online/duel';
+
+/** The weapon taken into a duel: the equipped one, else the highest (else the starter hammer). */
+export function myNightWeapon(core: GameCore): NightWeapon {
+  const s = core.state;
+  const w = equippedWeapon(s) ?? [...s.weapons].sort((a, b) => b.level - a.level)[0];
+  return w ? { kind: 'weapon', weapon: w } : { kind: 'hammer' };
+}
 
 /** The weapon taken into a duel: the equipped one, else the highest. */
 export function myDuelInfo(core: GameCore): MyDuelInfo {
@@ -130,7 +138,8 @@ export class DuelLobbyScene extends Phaser.Scene {
       case 'start':
         this.sfx.levelUp();
         this.leaving = true;
-        this.scene.start('Duel', m.match);
+        // the duel is the night-gamble fight against the other player (NightScene online mode)
+        this.scene.start('Night', { weapon: myNightWeapon(this.core), day: this.core.state.day, lineup: [], online: m.match });
         break;
       case 'gold':
         this.meText.setText(`${myDuelInfo(this.core).weapon.name}  ·  ${this.core.state.gold.toLocaleString()}G`);

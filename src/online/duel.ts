@@ -2,19 +2,26 @@
 // One connection for the whole game; scenes listen to its messages while they are open.
 import { API, accountCreds, tempGuest } from './account';
 
-/** Must match DUEL in server/duel.js. */
+/**
+ * Must match DUEL in server/duel.js. The fight itself is the night-gamble fight (NightScene online mode):
+ * same moves, a fixed square field so both screens agree on positions, and the night's damage rule.
+ */
 export const DUEL_RULES = {
-  arena: { w: 1000, h: 1000 },
-  hp: 1000,
-  damage: (level: number) => 40 + Math.max(0, Math.min(50, level)) * 5,
-  range: 130,
-  swingMs: 420,
-  /** Swing arc either side of facing (radians). */
-  arc: 1.05,
-  speed: 320,
-  dash: { speed: 980, ms: 170, cooldownMs: 1100 },
+  arena: { w: 1400, h: 1400 },
+  hp: 120,
   betPcts: [10, 25, 50] as const,
 };
+
+/** One attack's look, sent so the other screen can draw it. */
+export interface DuelFx {
+  kind: 'arc' | 'line' | 'circle' | 'heavy' | 'element';
+  ang: number;
+  range: number;
+  arcDeg?: number;
+  width?: number;
+  power: number;
+  el?: string;
+}
 
 export interface LobbyPlayer {
   uid: string;
@@ -54,7 +61,8 @@ export type DuelMsg =
   | { t: 'challengeGone'; id: string }
   | { t: 'declined'; id: string; reason: 'no' | 'busy' | 'timeout' | 'left' }
   | { t: 'start'; match: MatchInfo }
-  | { t: 'opp'; x: number; y: number; fx: number; fy: number; act: string }
+  | { t: 'opp'; x: number; y: number; aim: number; act: string }
+  | { t: 'oppFx'; fx: DuelFx }
   | { t: 'hp'; hp: [number, number]; by: 0 | 1; dmg: number }
   | { t: 'end'; winner: 0 | 1 | null; reason: 'ko' | 'time' | 'leave'; bet: number; hp: [number, number] }
   | { t: 'gold'; delta: number; note: string }
