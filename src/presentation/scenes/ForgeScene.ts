@@ -8,7 +8,7 @@ import { DIVINE_STEP } from '../../config/forgeSkills';
 import { anyNodeAffordable, cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
 import { DIRECTION_INFO, RHYTHM_SECONDS, TREE } from '../../config/skillTree';
 import { rentDueDay, rentFor } from '../../core/systems/rent';
-import { equippedWeapon, findWeapon, weaponPrice } from '../../core/systems/weapons';
+import { equippedWeapon, findWeapon, freeWeaponsLeft, weaponPrice } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
 import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
@@ -37,7 +37,8 @@ import { formatDamage, weaponDamage } from '../../combat/rules';
 // odds row → big enhance button → equip / sell / night. Landscape keeps the original 1280×720 layout.
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
 /** Weapon rack: 2 × 4 planks on the left wall (landscape) or a 4 × 2 strip under the top bar (portrait). */
-const RACK = PORTRAIT ? { x: 14, y: 150, cols: 4, slotW: 165, slotH: 78, gapX: 9, gapY: 10 } : { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
+// portrait: below the taller top bar (2026-11-20, bigger buttons for phones)
+const RACK = PORTRAIT ? { x: 14, y: 210, cols: 4, slotW: 165, slotH: 70, gapX: 9, gapY: 10 } : { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
 /** Selected-weapon card (name, level badge, next milestone, damage). */
 const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 24, y: 490, w: 500, h: 226 };
 /**
@@ -47,6 +48,8 @@ const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 24, y: 
 // on a taller phone the smith grows into part of the extra room and the lower block moves down
 // Side view (2026-11-19): smith on the left, anvil on the right, so the stage is wider than tall.
 // portrait: the camera sits further back (user feedback 2026-11-19: the smith felt too big for the room)
+/** Portrait top bar height (two rows of thumb-sized buttons). */
+const TOP_BAR_H = 152;
 const STAGE = PORTRAIT ? { x: 340, bottom: 752 + EXTRA, height: 380 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
 /** Portrait bottom area: odds row, stones, enhance button, action row. */
 // 2026-11-19: bigger, starting right under the smith's boots (user: the controls were too small)
@@ -144,6 +147,8 @@ export class ForgeScene extends Phaser.Scene {
   private equipBtn!: Button;
   private sellBtn!: Button;
   private buyBtn!: Button;
+  private buyPulse: Phaser.Tweens.Tween | null = null;
+  private buyGlow: Phaser.FX.Glow | null = null;
   private sleepBtn!: Button;
   private splitBtn!: Button;
   private rentText!: Phaser.GameObjects.Text;
@@ -169,6 +174,8 @@ export class ForgeScene extends Phaser.Scene {
     }
     this.core = this.registry.get('core') as GameCore;
     this.animating = false;
+    this.buyPulse = null;
+    this.buyGlow = null;
     this.stoneChips = [];
     this.skillPulse = null;
     this.buildBackground();
@@ -297,7 +304,7 @@ export class ForgeScene extends Phaser.Scene {
     if (PORTRAIT) {
       // darker bands behind the rack strip and the controls so text stays readable on the painting
       const band = this.add.graphics();
-      band.fillStyle(0x000000, 0.42).fillRect(0, 112, W, 220);
+      band.fillStyle(0x000000, 0.42).fillRect(0, TOP_BAR_H, W, 360 - TOP_BAR_H);
       band.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.85, 0.85).fillRect(0, 716 + EXTRA, W, 60);
       band.fillStyle(0x000000, 0.85).fillRect(0, 776 + EXTRA, W, H - 776 - EXTRA);
     }
@@ -341,18 +348,18 @@ export class ForgeScene extends Phaser.Scene {
 
   /** Portrait top bar, two rows: title · DAY · gold, then the menu buttons and the hearts. */
   private buildTopBarPortrait() {
+    // big enough to read and hit on a phone (user 2026-11-20): row 1 lobby · DAY · gold and rent, row 2 menu
     const g = this.add.graphics();
-    g.fillStyle(0x000000, 0.6).fillRect(0, 0, W, 112);
-    g.lineStyle(1, C.edge, 1).lineBetween(0, 112.5, W, 112.5);
-    new Button(this, 74, 30, 132, 44, '🏠 로비', { variant: 'dark', size: 18, onClick: () => this.toLobby() });
-    this.dayText = label(this, W / 2 + 40, 30, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
-    this.goldText = label(this, W - 16, 24, '', 22, C.goldHi, { weight: 900, origin: [1, 0.5] });
-    this.rentText = label(this, W - 16, 50, '', 13, C.mute, { weight: 700, origin: [1, 0.5] });
+    g.fillStyle(0x000000, 0.7).fillRect(0, 0, W, TOP_BAR_H);
+    g.lineStyle(2, C.edge, 1).lineBetween(0, TOP_BAR_H + 0.5, W, TOP_BAR_H + 0.5);
+    new Button(this, 86, 40, 156, 64, '🏠 로비', { variant: 'dark', size: 24, onClick: () => this.toLobby() });
+    this.dayText = label(this, 262, 40, '', 32, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
+    this.goldText = label(this, W - 16, 26, '', 32, C.goldHi, { weight: 900, origin: [1, 0.5] }).setStroke('#140a05', 6);
+    this.rentText = label(this, W - 16, 62, '', 19, 0xffb08a, { weight: 900, origin: [1, 0.5] }).setStroke('#140a05', 5);
     this.livesG = this.add.graphics();
-    // bigger thumb-sized buttons (user 2026-11-19); the intro button is gone
-    this.skillBtn = new Button(this, 104, 82, 192, 50, '강화 스킬', { variant: 'dark', size: 19, sub: ' ', subSize: 12, onClick: () => this.openSkills() });
-    new Button(this, 274, 82, 136, 50, '🏆 랭킹', { variant: 'gold', size: 19, onClick: () => void openRanking() });
-    this.shopBtn = new Button(this, 434, 82, 172, 50, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 18, onClick: () => this.openShop() });
+    this.skillBtn = new Button(this, 130, 118, 244, 60, '스킬트리', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.openSkills() });
+    new Button(this, 352, 118, 184, 60, '🏆 랭킹', { variant: 'gold', size: 24, onClick: () => void openRanking() });
+    this.shopBtn = new Button(this, 558, 118, 212, 60, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 22, onClick: () => this.openShop() });
   }
 
   private drawLives(lives: number) {
@@ -384,11 +391,13 @@ export class ForgeScene extends Phaser.Scene {
     }
     // the rack belongs to the painting: only a small carved-sign style caption, no window
     const t = rackSlot(0);
-    this.rackTitle = label(this, t.x - t.w / 2, t.y - t.h / 2 - 22, '', 15, C.goldHi, { weight: 900, origin: [0, 0.5] });
+    const titleY = t.y - t.h / 2 - (PORTRAIT ? 26 : 22);
+    this.rackTitle = label(this, t.x - t.w / 2, titleY, '', PORTRAIT ? 17 : 15, C.goldHi, { weight: 900, origin: [0, 0.5] });
     this.rackTitle.setStroke('#140a05', 6);
     // buy a fresh weapon to enhance (price doubles with every purchase), at the end of the title row
     const end = rackSlot(PORTRAIT ? RACK.cols - 1 : 1);
-    this.buyBtn = new Button(this, end.x + end.w / 2 - 95, t.y - t.h / 2 - 22, 190, 34, '＋ 무기 구매', { variant: 'gold', size: 13, onClick: () => this.buyWeapon() });
+    const bw = PORTRAIT ? 330 : 190;
+    this.buyBtn = new Button(this, end.x + end.w / 2 - bw / 2, titleY, bw, PORTRAIT ? 46 : 34, '＋ 무기 구매', { variant: 'gold', size: PORTRAIT ? 21 : 13, onClick: () => this.buyWeapon() });
     this.rack = this.add.container(0, 0);
     // soft shadow behind the selected-weapon readout instead of a panel
     const shade = this.add.graphics();
@@ -738,10 +747,24 @@ export class ForgeScene extends Phaser.Scene {
   private renderRack() {
     const s = this.core.state;
     // landscape: short, so the buy button fits on the same row
-    this.rackTitle.setText(PORTRAIT ? `무기걸이 ${s.weapons.length} / ${s.inventoryCap}  ·  눌러서 선택` : `무기걸이 ${s.weapons.length} / ${s.inventoryCap}`);
+    this.rackTitle.setText(`무기걸이 ${s.weapons.length} / ${s.inventoryCap}`);
     const price = weaponPrice(s);
     this.buyBtn.setLabel(price > 0 ? `＋ 무기 구매 · ${price.toLocaleString()}G` : '＋ 새 무기 받기 (무료)');
-    this.buyBtn.setEnabled(!this.animating && !inPrologue(s) && s.weapons.length < s.inventoryCap && s.gold >= price);
+    const canBuy = !this.animating && !inPrologue(s) && s.weapons.length < s.inventoryCap && s.gold >= price;
+    this.buyBtn.setEnabled(canBuy);
+    // every weapon gone: the new-weapon button pulses and glows so the way forward is obvious
+    const empty = s.weapons.length === 0 && canBuy && freeWeaponsLeft(s) > 0;
+    if (empty && !this.buyPulse) {
+      this.buyPulse = this.tweens.add({ targets: this.buyBtn, scale: 1.12, duration: 420, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+      this.buyGlow?.destroy();
+      this.buyGlow = this.buyBtn.postFX?.addGlow(0xffe08a, 6, 0, false, 0.1, 14) ?? null;
+    } else if (!empty && this.buyPulse) {
+      this.buyPulse.remove();
+      this.buyPulse = null;
+      this.buyBtn.setScale(1);
+      if (this.buyGlow) this.buyBtn.postFX?.remove(this.buyGlow);
+      this.buyGlow = null;
+    }
     this.rack.removeAll(true);
     const plank = !this.painted && this.textures.exists('art-rack_slot');
     for (let i = 0; i < INVENTORY_CAP; i++) {
