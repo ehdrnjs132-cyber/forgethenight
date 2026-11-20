@@ -19,7 +19,7 @@ import { Sfx } from '../audio/sfx';
 import { EnhancementPresentation, HAMMER_IDLE, type Swing } from '../fx/EnhancementPresentation';
 import type { ModalData, ModalRequest } from './ModalScene';
 import { weaponDisplayName } from '../../config/swordNames';
-import { openRanking } from '../../online/ui';
+import { needsGoogle, openRanking } from '../../online/ui';
 import { inPrologue } from '../../core/systems/prologue';
 import { COACH, SMITH_LINES, pick, type CoachStep } from '../../config/dialogue';
 import { Bubble, SMITH_STYLE } from '../ui/speech';
@@ -155,6 +155,11 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   create() {
+    // no forge without a Google account (2026-11-20): the lobby shows the sign-in card
+    if (needsGoogle()) {
+      this.scene.start('Lobby');
+      return;
+    }
     this.core = this.registry.get('core') as GameCore;
     this.animating = false;
     this.stoneChips = [];

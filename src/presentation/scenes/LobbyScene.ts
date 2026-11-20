@@ -13,7 +13,7 @@ import { PORTRAIT } from '../layout';
 import { glowStrength, weaponLookTexture } from '../weaponArt';
 import { Sfx } from '../audio/sfx';
 import { account } from '../../online/account';
-import { openLogin, openRanking } from '../../online/ui';
+import { needsGoogle, openLogin, openRanking } from '../../online/ui';
 import { canOfferInstall, installApp } from '../../install';
 import type { CinematicData } from './CinematicScene';
 
@@ -114,7 +114,7 @@ export class LobbyScene extends Phaser.Scene {
       new Button(this, menuX, y, bw, bh, '↺ 처음부터 하기', { variant: 'ghost', size: 22, onClick: () => this.confirmRestart() });
     }
 
-    this.input.keyboard?.once('keydown-ENTER', () => this.enterForge());
+    this.input.keyboard?.on('keydown-ENTER', () => this.enterForge());
   }
 
   private drawBackground() {
@@ -144,14 +144,15 @@ export class LobbyScene extends Phaser.Scene {
   private refreshAccount() {
     if (!this.accountText?.active) return;
     const u = account.user;
-    this.accountText.setText(u ? `👤 ${u.name}${u.google ? ' · 구글' : ' · 게스트'}` : '로그인하지 않음 · 랭킹 미등록');
-    this.accountText.setColor(u ? '#f1e6d2' : '#9a8d7a');
-    this.accountBtn.setLabel?.(u ? '내 계정' : '로그인');
+    const signedIn = !needsGoogle();
+    this.accountText.setText(u?.google ? `👤 ${u.name} · 구글` : signedIn ? '테스트 슬롯' : '구글 로그인이 필요합니다');
+    this.accountText.setColor(signedIn ? '#f1e6d2' : '#ff9a7a');
+    this.accountBtn.setLabel(u?.google ? '내 계정' : '로그인');
   }
 
   private accountAction() {
-    if (account.user) void openRanking();
-    else void openLogin();
+    if (needsGoogle()) openLogin();
+    else void openRanking();
   }
 
   private toggleSound() {
@@ -193,6 +194,11 @@ export class LobbyScene extends Phaser.Scene {
   }
 
   private enterForge() {
+    // Google sign-in is required to play (2026-11-20)
+    if (needsGoogle()) {
+      openLogin();
+      return;
+    }
     this.input.enabled = false;
     this.cameras.main.fadeOut(300, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Forge'));

@@ -1,7 +1,7 @@
 // HTML overlays for the online part: the first-launch login screen (Google / guest nickname / later)
 // and the ranking page (best enhancement level, top 50 + my rank, my account).
 import { canOfferInstall, installApp } from '../install';
-import { account, googleLogin, ranking, refreshMe, rename, serverConfig, signOut, startGuest, type RankRow } from './account';
+import { account, googleLogin, ranking, refreshMe, rename, serverConfig, signOut, type RankRow } from './account';
 
 declare global {
   interface Window {
@@ -97,9 +97,15 @@ async function onCredential(r: { credential: string }) {
 
 async function mountGoogle(el: HTMLElement, text: 'continue_with' | 'signin_with') {
   el.innerHTML = '<span class="ol-small">구글 로그인 준비 중…</span>';
-  const ok = await loadGoogle();
+  let ok = await loadGoogle();
+  // the free server sleeps: keep trying while this button is still on screen
+  while (!ok && gisClient !== null && el.isConnected) {
+    el.innerHTML = '<span class="ol-small">서버를 깨우는 중이에요… (처음엔 30초쯤 걸려요)</span>';
+    await new Promise((r) => setTimeout(r, 4000));
+    ok = await loadGoogle();
+  }
   if (!ok) {
-    el.innerHTML = gisClient === null ? '' : '<span class="ol-small">서버가 깨어나는 중이에요. 잠시 후 다시 열어 주세요.</span>';
+    if (el.isConnected) el.innerHTML = '<span class="ol-small">구글 로그인을 준비하지 못했습니다. 잠시 후 다시 열어 주세요.</span>';
     return;
   }
   el.innerHTML = '';
@@ -108,63 +114,47 @@ async function mountGoogle(el: HTMLElement, text: 'continue_with' | 'signin_with
 
 // ───────────────────────── login screen (first launch)
 
-export async function showLoginIfNeeded(): Promise<void> {
-  if (account.user || account.skipped || new URLSearchParams(location.search).has('slot')) {
-    void refreshMe();
-    return;
-  }
-  // Only when the ranking server answers quickly: a sleeping or missing server must never put a dead
-  // login screen in front of the game (the 🏆 button still offers sign-in later).
-  const up = await Promise.race([serverConfig().then(() => true, () => false), new Promise<boolean>((r) => setTimeout(() => r(false), 8000))]);
-  if (!up || account.user) return;
-  openLogin();
+/** Google sign-in is required to play (user decision 2026-11-20); the test slot skips it. */
+export function needsGoogle(): boolean {
+  const q = new URLSearchParams(location.search);
+  // `&gate` keeps the check on a test slot, to try the sign-in wall without touching the real save
+  if (q.has('slot') && !q.has('gate')) return false;
+  return !account.user?.google;
 }
 
-/** The login card (Google / guest nickname / later); also opened from the lobby's 로그인 button. */
+export async function showLoginIfNeeded(): Promise<void> {
+  if (account.user) void refreshMe();
+  if (needsGoogle()) openLogin();
+}
+
+/**
+ * The login card: Google only, and it cannot be dismissed until a Google account is signed in
+ * (user decision 2026-11-20: no guest play, no "later"). A guest profile on this device is linked to
+ * the Google account, so its name carries over.
+ */
 export function openLogin(): void {
+  if (!needsGoogle()) return;
   style();
   document.querySelector('.ol-back')?.remove();
   const back = document.createElement('div');
   back.className = 'ol-back';
+  back.style.background = 'rgba(4,3,6,.92)';
   back.innerHTML = `<div class="ol-card">
     <div class="ol-title">FORGE THE NIGHT</div>
-    <div class="ol-sub">로그인하면 내 최고 강화 기록이 랭킹에 올라갑니다</div>
+    <div class="ol-sub">구글 계정으로 로그인해야 플레이할 수 있습니다<br>기록은 계정에 저장되고 랭킹에 올라갑니다</div>
     <div class="ol-g" id="ol-g"></div>
-    <div class="ol-or">또는 닉네임으로 시작</div>
-    <div class="ol-row"><input class="ol-input" id="ol-name" maxlength="12" placeholder="닉네임 (2~12자)" /><button class="ol-btn" id="ol-guest">게스트로 시작</button></div>
     <div class="ol-msg" id="ol-msg"></div>
-    <div class="ol-row" style="justify-content:center"><button class="ol-btn ghost" id="ol-later">나중에 하기 (랭킹 없이 플레이)</button></div>
     ${canOfferInstall() ? '<div class="ol-or">홈 화면에 설치하면 주소창 없이 꽉 찬 화면으로 즐길 수 있어요</div><div class="ol-row" style="justify-content:center"><button class="ol-btn" id="ol-install" style="background:#2f7bff;color:#fff">📲 앱 설치하기</button></div>' : ''}
   </div>`;
   document.body.append(back);
   const $ = <T extends HTMLElement>(id: string) => back.querySelector<T>(`#${id}`)!;
   const close = () => back.remove();
   const msg = (t: string) => ($('ol-msg').textContent = t);
-  afterGoogle = (m) => (account.user ? close() : msg(m ?? ''));
+  afterGoogle = (m) => (needsGoogle() ? msg(m ?? '구글 로그인에 실패했습니다') : close());
   void mountGoogle($('ol-g'), 'continue_with');
-
-  $('ol-guest').addEventListener('click', async () => {
-    const name = $<HTMLInputElement>('ol-name').value.trim();
-    if (name.length < 2) return msg('닉네임은 2자 이상으로 적어 주세요');
-    const b = $<HTMLButtonElement>('ol-guest');
-    b.disabled = true;
-    msg('서버에 연결하는 중… (처음엔 30초쯤 걸릴 수 있어요)');
-    try {
-      await startGuest(name);
-      close();
-    } catch {
-      msg('서버에 연결하지 못했습니다. 나중에 랭킹 버튼에서 다시 시도할 수 있어요');
-      b.disabled = false;
-    }
-  });
   back.querySelector('#ol-install')?.addEventListener('click', () => void installApp());
-  $('ol-later').addEventListener('click', () => {
-    account.skip();
-    close();
-  });
-  // keep keyboard input out of the game while typing
+  // keep keyboard input out of the game while this is open
   back.addEventListener('keydown', (e) => e.stopPropagation());
-  back.addEventListener('click', (e) => e.target === back && close());
 }
 
 // ───────────────────────── ranking page
@@ -194,22 +184,10 @@ export async function openRanking(): Promise<void> {
     const u = account.user;
     const me = $('ol-me');
     if (!u) {
-      me.innerHTML = `<b>로그인하면 내 기록이 랭킹에 올라갑니다</b>
+      me.innerHTML = `<b>구글로 로그인하면 내 기록이 랭킹에 올라갑니다</b>
         <div class="ol-g" id="ol-g" style="margin-top:10px"></div>
-        <div class="ol-row"><input class="ol-input" id="ol-name" maxlength="12" placeholder="닉네임 (2~12자)" /><button class="ol-btn" id="ol-guest">게스트로 시작</button></div>
         <div class="ol-msg" id="ol-msg"></div>`;
       void mountGoogle($('ol-g'), 'continue_with');
-      $('ol-guest').addEventListener('click', async () => {
-        const name = $<HTMLInputElement>('ol-name').value.trim();
-        if (name.length < 2) return ($('ol-msg').textContent = '닉네임은 2자 이상으로 적어 주세요');
-        $('ol-msg').textContent = '연결하는 중…';
-        try {
-          await startGuest(name);
-          void openRanking();
-        } catch {
-          $('ol-msg').textContent = '서버에 연결하지 못했습니다';
-        }
-      });
       return;
     }
     me.innerHTML = `<div class="ol-head"><div><b>${esc(u.name)}</b> ${u.google ? '<span class="ol-small">· 구글 연결됨</span>' : '<span class="ol-small">· 게스트</span>'}<br>
@@ -234,7 +212,9 @@ export async function openRanking(): Promise<void> {
         /* ignore */
       }
       signOut();
-      void openRanking();
+      close();
+      openLogin(); // no playing without a Google account
+
     });
   };
   afterGoogle = (m) => {
