@@ -16,11 +16,13 @@
   "dependencies": {
     "express": "^4.21.2",
     "pg": "^8.13.1",
-    "phaser": "3.90.0"
+    "phaser": "3.90.0",
+    "ws": "^8.18.3"
   },
   "devDependencies": {
     "@types/node": "26.6.6",
     "@types/pngjs": "6.0.5",
+    "@types/ws": "^8.18.1",
     "pngjs": "7.0.0",
     "tsx": "4.23.15",
     "typescript": "7.0.2",

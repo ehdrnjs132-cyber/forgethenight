@@ -89,7 +89,7 @@ export class LobbyScene extends Phaser.Scene {
 
     // menu
     const bw = PORTRAIT ? 520 : 420;
-    let y = PORTRAIT ? H * 0.68 : 290;
+    let y = PORTRAIT ? H * 0.64 : 290;
     const start = new Button(this, menuX, y, bw, PORTRAIT ? 104 : 92, fresh ? '게임 시작 ▶' : '이어하기 ▶', {
       variant: 'gold',
       size: PORTRAIT ? 36 : 32,
@@ -101,7 +101,7 @@ export class LobbyScene extends Phaser.Scene {
     y += PORTRAIT ? 118 : 96;
     const gap = 16;
     const half = (bw - gap) / 2;
-    const bh = PORTRAIT ? 84 : 64;
+    const bh = PORTRAIT ? 76 : 64;
     new Button(this, menuX - half / 2 - gap / 2, y, half, bh, '🏆 랭킹', { variant: 'dark', size: 22, onClick: () => void openRanking() });
     new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '🎬 인트로', { variant: 'dark', size: 22, onClick: () => this.replayIntro() });
     y += bh + gap;
@@ -109,6 +109,8 @@ export class LobbyScene extends Phaser.Scene {
     this.refreshSound();
     if (canOfferInstall()) new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📲 앱 설치', { variant: 'dark', size: 22, onClick: () => void installApp() });
     else new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📖 강화 규칙', { variant: 'dark', size: 22, onClick: () => this.openRules() });
+    y += bh + gap;
+    new Button(this, menuX, y, bw, bh, '⚔ 온라인 결투', { variant: 'danger', size: 24, sub: '로비에 있는 사람과 골드를 걸고 실시간 대결', subSize: 13, onClick: () => this.openDuels() });
     if (!fresh) {
       y += bh + gap;
       new Button(this, menuX, y, bw, bh, '↺ 처음부터 하기', { variant: 'ghost', size: 22, onClick: () => this.confirmRestart() });
@@ -191,6 +193,16 @@ export class LobbyScene extends Phaser.Scene {
         this.scene.restart();
       },
     });
+  }
+
+  private openDuels() {
+    if (needsGoogle()) {
+      openLogin();
+      return;
+    }
+    this.input.enabled = false;
+    this.cameras.main.fadeOut(250, 0, 0, 0);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('DuelLobby'));
   }
 
   private enterForge() {

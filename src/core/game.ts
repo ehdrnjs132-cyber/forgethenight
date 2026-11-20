@@ -37,7 +37,9 @@ export type Action =
   | { type: 'TOGGLE_SPLIT' }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
   | { type: 'BUY_NODE'; id: string }
-  | { type: 'PREPAY_RENT' };
+  | { type: 'PREPAY_RENT' }
+  /** Online duel settled by the server: the bet won (+) or lost (−). */
+  | { type: 'DUEL_GOLD'; delta: number };
 
 export type ActionResult =
   | { type: 'enhanced'; result: EnhanceResult }
@@ -279,6 +281,13 @@ export class GameCore {
         const over = this.morning(sleep(this.state));
         this.emit('changed', this.state);
         return { type: 'slept', day: this.state.day, rent: this.lastRentNotice, gameOver: over };
+      }
+      case 'DUEL_GOLD': {
+        const delta = Math.trunc(action.delta);
+        if (!Number.isFinite(delta) || delta === 0) return { type: 'ok' };
+        this.commit({ ...this.state, gold: Math.max(0, this.state.gold + delta) });
+        this.emit('changed', this.state);
+        return { type: 'ok' };
       }
       case 'PREPAY_RENT': {
         const r = prepayRent(this.state);

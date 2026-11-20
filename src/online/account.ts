@@ -127,6 +127,17 @@ async function call<T>(path: string, body?: unknown, timeoutMs = 40_000): Promis
 
 const creds = () => (saved ? { uid: saved.uid, token: saved.token } : {});
 
+/** Signed-in account's id and token (for the duel connection), or null. */
+export function accountCreds(): { uid: string; token: string } | null {
+  return saved ? { uid: saved.uid, token: saved.token } : null;
+}
+
+/** A throwaway guest identity that is NOT saved (test slot only: two tabs can duel each other). */
+export async function tempGuest(name: string): Promise<{ uid: string; token: string }> {
+  const r = await call<{ token: string; user: User }>('/api/guest', { name });
+  return { uid: r.user.uid, token: r.token };
+}
+
 function adopt(token: string, user: User) {
   saved = { uid: user.uid, token, user };
   write(saved);

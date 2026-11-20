@@ -11,6 +11,9 @@ import { SkillScene } from './presentation/scenes/SkillScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { EveningScene } from './presentation/scenes/EveningScene';
 import { LobbyScene } from './presentation/scenes/LobbyScene';
+import { DuelLobbyScene } from './presentation/scenes/DuelLobbyScene';
+import { DuelScene } from './presentation/scenes/DuelScene';
+import { duel } from './online/duel';
 import { H, W } from './presentation/theme';
 import { setupInstall } from './install';
 import { PORTRAIT } from './presentation/layout';
@@ -86,12 +89,14 @@ async function boot() {
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
     physics: { default: 'arcade', arcade: { debug: false } },
     // Lobby sits under Modal in the draw order so its confirm/rules pop-ups appear on top
-    scene: [BootScene, LobbyScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene],
+    scene: [BootScene, LobbyScene, DuelLobbyScene, DuelScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   goFullscreenOnTouch();
   setupInstall();
   setupOnline(core);
+  // online duels: the bet won or lost goes into the run (also for a duel that ended while away)
+  duel.onGold = (delta) => void core.dispatch({ type: 'DUEL_GOLD', delta });
   // Debug handle for manual testing in the browser console.
   (window as unknown as { __ftn: unknown }).__ftn = { core, game };
   document.getElementById('boot')?.remove();

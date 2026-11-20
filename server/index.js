@@ -11,6 +11,7 @@
 import crypto from 'node:crypto';
 import express from 'express';
 import { store } from './store.js';
+import { attachDuels } from './duel.js';
 
 const PORT = Number(process.env.PORT || 8787);
 const clean = (v) => String(v || '').trim().replace(/^[A-Z_]+\s*=\s*/, '').replace(/^(['"])(.*)\1$/, '$2').trim();
@@ -200,4 +201,6 @@ if ((store.get('meta:season') ?? 1) < SEASON) {
   store.set('meta:season', SEASON);
   console.log(`Ranking season ${SEASON}: cleared ${cleared} records`);
 }
-app.listen(PORT, () => console.log(`FORGE THE NIGHT online on :${PORT} (google ${GOOGLE_CLIENT_ID ? 'on' : 'off'})`));
+const server = app.listen(PORT, () => console.log(`FORGE THE NIGHT online on :${PORT} (google ${GOOGLE_CLIENT_ID ? 'on' : 'off'})`));
+// online duels over a WebSocket at /ws (server/duel.js)
+attachDuels(server, { auth, store });
