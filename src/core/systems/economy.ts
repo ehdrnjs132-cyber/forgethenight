@@ -5,6 +5,8 @@ import { Rng } from '../rng';
 import type { GameState, StockEntry } from '../state/types';
 import { findWeapon, removeWeapon } from './weapons';
 import { skillTotals } from './skills';
+import { treeEffects } from './skillTree';
+import { GOLDEN_SELL_MUL } from '../../config/skillTree';
 
 /** §14 price, log-interpolated between table rows and rounded to a readable number. */
 export function salePrice(level: number): number {
@@ -35,7 +37,7 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
   if (prev.phase !== 'day') return { ok: false, reason: 'night' };
   const w = findWeapon(prev, weaponId);
   if (!w) return { ok: false, reason: 'no-weapon' };
-  const price = sellPrice(prev, w.level);
+  const price = sellPrice(prev, w.level, w.golden);
   const state = removeWeapon(prev, weaponId);
   return {
     ok: true,
@@ -50,12 +52,12 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
   };
 }
 
-/** Sale price including 상인의 눈 and other sale bonuses. */
-export function sellPrice(state: GameState, level: number): number {
+/** Sale price including 상인의 눈, the tree's sale bonuses and 황금 무기. */
+export function sellPrice(state: GameState, level: number, golden = false): number {
   // fresh weapons are free at the forge, so an untouched +0 one is worth nothing (no free-gold loop)
   if (level <= 0) return 0;
-  const bonus = skillTotals(state, null).sellBonus;
-  return roundPrice(salePrice(level) * SALE_MULTIPLIER * (1 + bonus));
+  const bonus = skillTotals(state, null).sellBonus + treeEffects(state).sell;
+  return roundPrice(salePrice(level) * SALE_MULTIPLIER * (1 + bonus) * (golden ? GOLDEN_SELL_MUL : 1));
 }
 
 /** What Morr asks today, after 단골 discounts. */
@@ -67,6 +69,13 @@ export function shopPrice(state: GameState, entry: StockEntry): number {
 /** Gold for one enhancement attempt: a share of the weapon's sale value (user decision 2026-11-18). */
 export function enhanceCost(level: number): number {
   return Math.max(ENHANCE_COST_MIN, Math.round(salePrice(level) * ENHANCE_COST_RATE));
+}
+
+/** What this attempt actually costs: 절약 / 연금술 cuts, and nothing at all after 몰아치기. */
+export function enhanceCostFor(state: GameState, level: number): number {
+  if (state.freeEnhance) return 0;
+  const cut = Math.min(0.8, treeEffects(state).costCut);
+  return Math.max(ENHANCE_COST_MIN, Math.round(enhanceCost(level) * (1 - cut)));
 }
 
 /** Next rack key: doubles with every key already bought. */

@@ -7,7 +7,8 @@ import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { equippedWeapon } from '../../core/systems/weapons';
 import { tonightsRivals } from '../../core/systems/doppelganger';
-import { prepayPrice, rentAmount, rentDueDay } from '../../core/systems/rent';
+import { prepayPrice, rentDueDay, rentFor } from '../../core/systems/rent';
+import { PREPAY_BONUS } from '../../config/skillTree';
 import { NIGHT_STAKE } from '../../config/economy';
 import { weaponDisplayName } from '../../config/swordNames';
 import { C, DISPLAY, H, W, css, label } from '../theme';
@@ -60,7 +61,7 @@ export class EveningScene extends Phaser.Scene {
     const s = this.core.state;
     const title = label(this, W / 2, PORTRAIT ? 90 : 56, '오늘 밤은 어떻게 할까?', PORTRAIT ? 34 : 28, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] });
     root.add(title);
-    root.add(label(this, W / 2, PORTRAIT ? 132 : 92, `골드 ${s.gold.toLocaleString()}G · 목숨 ${s.lives}`, PORTRAIT ? 18 : 15, C.text, { weight: 700, origin: [0.5, 0.5] }));
+    root.add(label(this, W / 2, PORTRAIT ? 132 : 92, `골드 ${s.gold.toLocaleString()}G`, PORTRAIT ? 18 : 15, C.text, { weight: 700, origin: [0.5, 0.5] }));
 
     const order: ('night' | 'rent' | 'sleep')[] = ['night', 'rent', 'sleep'];
     let y = PORTRAIT ? 170 : 124;
@@ -94,7 +95,7 @@ export class EveningScene extends Phaser.Scene {
     const big = PORTRAIT ? 1.1 : 1;
     card.add(label(this, -CARD.w / 2 + pad, top + 22, '🌙 밤 내기', 26 * big, 0xd9b8ff, { weight: 900 }));
     card.add(
-      label(this, -CARD.w / 2 + pad, top + 64 * big, '다른 세계의 대장장이 2명이 내기를 걸어온다. 상대 무기는 +1~+50 중 무작위.\n이기면 골드 ×1.5 · 지면 골드 절반 · 목숨은 줄지 않는다.', 14 * big, C.text, { wrap, lineSpacing: 6 }),
+      label(this, -CARD.w / 2 + pad, top + 64 * big, '다른 세계의 대장장이 2명이 내기를 걸어온다. 상대 무기는 +1~+50 중 무작위.\n이기면 골드 ×1.5 · 지면 골드 절반.', 14 * big, C.text, { wrap, lineSpacing: 6 }),
     );
     const rivals = tonightsRivals(s).lineup;
     let y = top + (PORTRAIT ? 160 : 170);
@@ -123,12 +124,13 @@ export class EveningScene extends Phaser.Scene {
     const top = -h / 2;
     const big = PORTRAIT ? 1.1 : 1;
     const due = rentDueDay(s);
-    const later = rentAmount(due);
+    const later = rentFor(s, due);
     const now = prepayPrice(s);
     card.add(label(this, -CARD.w / 2 + pad, top + 22, '💰 월세 미리 내기', 24 * big, C.goldHi, { weight: 900 }));
+    const bonus = `미리 내면 왕이 올 때까지 망치질 +${Math.round(PREPAY_BONUS.speed * 100)}% · 성공 +${PREPAY_BONUS.success}%p`;
     const text = s.rentPrepaid
-      ? `다음 방문(DAY ${due}) 월세는 이미 냈다.`
-      : `다음 방문 DAY ${due} · 그날 내면 ${later.toLocaleString()}G\n오늘 내면 ${now.toLocaleString()}G (월세는 날마다 오른다)`;
+      ? `다음 방문(DAY ${due}) 월세는 이미 냈다.\n${bonus.replace('미리 내면 ', '')} 적용 중`
+      : `다음 방문 DAY ${due} · 그날 내면 ${later.toLocaleString()}G\n오늘 내면 ${now.toLocaleString()}G · 못 내면 대장간을 잃는다\n${bonus}`;
     card.add(label(this, -CARD.w / 2 + pad, top + 64 * big, text, 14 * big, C.text, { wrap, lineSpacing: 6 }));
     const can = !s.rentPrepaid && s.gold >= now;
     const btn = new Button(this, 0, h / 2 - 44, CARD.w - 40, 60, s.rentPrepaid ? '이미 냈다' : `미리 낸다 · ${now.toLocaleString()}G`, {

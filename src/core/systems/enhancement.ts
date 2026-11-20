@@ -4,11 +4,11 @@ import { MAX_LEVEL } from '../../config/weapons';
 import { appearanceStage, milestoneCrossed, type Milestone } from '../../config/appearance';
 import { Rng } from '../rng';
 import type { EnhanceCandidate, GameState, Weapon } from '../state/types';
-import { daily, fateSplitLeft, phoenixLeft, rollCandidate, skillLevel, withDaily } from './forgeSkills';
-import { SKILL_TABLE } from '../../config/forgeSkills';
+import { candidateScore, daily, fateSplitLeft, phoenixLeft, phoenixLevel, rollCandidate, withDaily } from './forgeSkills';
+import { treeEffects } from './skillTree';
 import { findWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
-import { consume, enhanceCost, isArmed } from './economy';
+import { consume, enhanceCostFor, isArmed, sellPrice } from './economy';
 import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 
@@ -21,12 +21,16 @@ export interface EnhanceMods {
 }
 
 /** Bonuses for the next attempt: switched-on stones now; totems and skills hook in here (M5, M6). */
-export function collectEnhanceMods(state: GameState, weapon: Weapon): EnhanceMods {
+export function collectEnhanceMods(state: GameState, weapon: Weapon, rhythm = false): EnhanceMods {
   const sk = skillTotals(state, null);
+  const t = treeEffects(state);
+  const great = (sk.enhanceGreat ?? 0) + t.great;
+  const success = (sk.enhanceSuccess ?? 0) + t.success + (rhythm ? t.rhythm : 0);
+  const destroy = -(sk.enhanceSafety ?? 0) - t.destroy;
   const mods: EnhanceMods = {
-    ...(sk.enhanceGreat ? { great: sk.enhanceGreat } : {}),
-    ...(sk.enhanceSuccess ? { success: sk.enhanceSuccess } : {}),
-    ...(sk.enhanceSafety ? { destroy: -sk.enhanceSafety } : {}),
+    ...(great ? { great } : {}),
+    ...(success ? { success } : {}),
+    ...(destroy ? { destroy } : {}),
   };
   if (isArmed(state, 'luck')) {
     mods.great = (mods.great ?? 0) + LUCK_BONUS.great;
@@ -85,6 +89,8 @@ export interface EnhanceOptions {
   confirmLast?: boolean;
   /** Scripted result (first-day prologue); skips the roll. */
   force?: Outcome;
+  /** 리듬: the player enhanced again within RHYTHM_SECONDS (decided by the presentation clock). */
+  rhythm?: boolean;
 }
 
 /** Steps 1–3 of §6.4. Returns why the attempt must not run, or null. */
@@ -93,7 +99,7 @@ export function checkEnhance(state: GameState, weaponId: string, opts: EnhanceOp
   if (!weapon) return 'no-weapon';
   if (weapon.level >= MAX_LEVEL) return 'max-level';
   if (!isTutorialDone(state, 'firstEnhance')) return 'tutorial';
-  if (state.gold < enhanceCost(weapon.level)) return 'gold';
+  if (state.gold < enhanceCostFor(state, weapon.level)) return 'gold';
   // (2026-11-19: no "last weapon" warning any more; weapons are free and the forge always gives more)
   void opts;
   return null;
@@ -118,6 +124,14 @@ export interface EnhanceResult {
   divine: boolean;
   /** 불사조의 모루 revived the destroyed weapon at this level (outcome stays 'destroy'). */
   phoenix: number | null;
+  /** 두 번 내려치기 rolled twice and kept the better result. */
+  doubled: boolean;
+  /** 파편 줍기 paid this much back for a destroyed weapon. */
+  refund: number;
+  /** The attempt was free (몰아치기). */
+  free: boolean;
+  /** 몰아치기 made the NEXT attempt free. */
+  nextFree: boolean;
 }
 
 export type EnhanceAttempt =
@@ -132,22 +146,25 @@ interface Prepared {
   rng: Rng;
   /** luck / master stones spent on the roll itself. */
   used: EnhanceItem[];
+  free: boolean;
+  doubled?: boolean;
 }
 
-function prepare(prev: GameState, weaponId: string): Prepared {
+function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): Prepared {
   const before = findWeapon(prev, weaponId)!;
-  const row = effectiveRow(before.level, collectEnhanceMods(prev, before));
+  const row = effectiveRow(before.level, collectEnhanceMods(prev, before, opts.rhythm));
   const used: EnhanceItem[] = [];
   if (isArmed(prev, 'luck')) used.push('luck');
   if (isArmed(prev, 'master')) used.push('master');
-  const cost = enhanceCost(before.level);
+  const cost = enhanceCostFor(prev, before.level);
   let state: GameState = {
     ...prev,
+    freeEnhance: false,
     gold: prev.gold - cost,
     stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1, goldSpentEnhancing: prev.stats.goldSpentEnhancing + cost },
   };
   for (const item of used) state = consume(state, item);
-  return { state, before, row, rng: new Rng(prev.rng), used };
+  return { state, before, row, rng: new Rng(prev.rng), used, free: prev.freeEnhance === true };
 }
 
 /**
@@ -170,7 +187,7 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
   let phoenix: number | null = null;
   if (newLevel === null && phoenixLeft(state) > 0) {
     // 불사조의 모루: the weapon comes back (same class and element) instead of being lost
-    phoenix = Math.min(MAX_LEVEL, SKILL_TABLE.phoenix[skillLevel(state, 'phoenix')].level);
+    phoenix = phoenixLevel(state, before.level);
     newLevel = phoenix;
     state = withDaily(state, { phoenix: daily(state).phoenix + 1 });
   }
@@ -185,9 +202,13 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
     },
   };
   let after: Weapon | null = null;
+  let refund = 0;
+  const t = treeEffects(state);
   if (newLevel === null) {
+    // 파편 줍기: part of what the weapon would have sold for comes back
+    refund = t.destroyRefund > 0 ? Math.round((sellPrice(state, before.level, before.golden) * t.destroyRefund) / 100) : 0;
     state = removeWeapon(state, before.id);
-    state.stats = { ...state.stats, destroyed: state.stats.destroyed + 1 };
+    state = { ...state, gold: state.gold + refund, stats: { ...state.stats, destroyed: state.stats.destroyed + 1 } };
   } else {
     after = { ...before, level: newLevel, streak: upward && phoenix === null ? (before.streak ?? 0) + 1 : 0 };
     state = {
@@ -200,6 +221,9 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
       },
     };
   }
+  // 몰아치기: every third success in a row makes the next attempt free
+  const nextFree = t.comboFree && after !== null && upward && phoenix === null && (after.streak ?? 0) > 0 && (after.streak ?? 0) % 3 === 0;
+  if (nextFree) state = { ...state, freeEnhance: true };
   const stageChanged = after !== null && appearanceStage(after.level) !== appearanceStage(before.level);
   const milestone = after && phoenix === null ? milestoneCrossed(before.level, after.level) : null;
   return {
@@ -216,6 +240,10 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
       miracle: !protectedFrom && cand.miracle,
       divine: !protectedFrom && cand.divine,
       phoenix,
+      doubled: prepared.doubled === true,
+      refund,
+      free: prepared.free,
+      nextFree,
     },
   };
 }
@@ -224,8 +252,15 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
 export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): EnhanceAttempt {
   const blocked = checkEnhance(prev, weaponId, opts);
   if (blocked) return { ok: false, state: prev, blocked };
-  const p = prepare(prev, weaponId);
-  const cand = rollCandidate(p.state, p.before, p.row, p.rng, opts.force);
+  const p = prepare(prev, weaponId, opts);
+  let cand = rollCandidate(p.state, p.before, p.row, p.rng, opts.force);
+  // 두 번 내려치기: sometimes a second roll, keeping the better one (drawn only when the node is owned)
+  const dbl = treeEffects(p.state).doubleRoll;
+  if (!opts.force && dbl > 0 && p.rng.next() * 100 < dbl) {
+    const second = rollCandidate(p.state, p.before, p.row, p.rng);
+    if (candidateScore(second) > candidateScore(cand)) cand = second;
+    p.doubled = true;
+  }
   p.state = { ...p.state, rng: p.rng.state };
   const r = apply(p, cand);
   return { ok: true, state: r.state, result: r.result };
@@ -244,7 +279,7 @@ export function beginSplit(prev: GameState, weaponId: string, opts: EnhanceOptio
   const blocked = checkEnhance(prev, weaponId, opts);
   if (blocked) return { ok: false, blocked };
   if (fateSplitLeft(prev) <= 0) return { ok: false, blocked: 'no-uses' };
-  const p = prepare(prev, weaponId);
+  const p = prepare(prev, weaponId, opts);
   const a = rollCandidate(p.state, p.before, p.row, p.rng);
   const b = rollCandidate(p.state, p.before, p.row, p.rng);
   const candidates: [EnhanceCandidate, EnhanceCandidate] = [a, b];
@@ -257,7 +292,7 @@ export function beginSplit(prev: GameState, weaponId: string, opts: EnhanceOptio
 export function chooseSplit(prev: GameState, index: 0 | 1): EnhanceAttempt {
   const pending = prev.pendingSplit;
   if (!pending || !findWeapon(prev, pending.weaponId)) return { ok: false, state: prev, blocked: 'no-weapon' };
-  const p: Prepared = { state: { ...prev, pendingSplit: null }, before: { ...pending.before }, row: effectiveRow(pending.before.level), rng: new Rng(prev.rng), used: [] };
+  const p: Prepared = { state: { ...prev, pendingSplit: null }, before: { ...pending.before }, row: effectiveRow(pending.before.level), rng: new Rng(prev.rng), used: [], free: false };
   const r = apply(p, pending.candidates[index]);
   return { ok: true, state: r.state, result: r.result };
 }

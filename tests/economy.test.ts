@@ -88,11 +88,8 @@ describe('merchant Morr (§15)', () => {
     }
   });
 
-  it('offers the heart on roughly 30% of visits', () => {
-    let n = 0;
-    for (let seed = 1; seed <= 2000; seed++) if (openMerchant({ ...runWith([], seed), day: 3 }).merchant!.stock.some((e) => e.item === 'heart')) n++;
-    expect(n / 2000).toBeGreaterThan(0.25);
-    expect(n / 2000).toBeLessThan(0.35);
+  it('never offers hearts any more (unpaid rent ends the run, 2026-11-20)', () => {
+    for (let seed = 1; seed <= 300; seed++) expect(openMerchant({ ...runWith([], seed), day: 3 }).merchant!.stock.some((e) => e.item === 'heart')).toBe(false);
   });
 
   it('sells for gold, respects stock and the 10-life cap (QA 14)', () => {

@@ -5,8 +5,8 @@ import type { EnhanceCandidate, GameOverSummary, GameState, Records, RentNotice,
 import { SaveManager, type LoadSource, type StorageLike } from './save/save';
 import { beginSplit, chooseSplit, enhance, type EnhanceOptions, type EnhanceResult, type SplitBlock } from './systems/enhancement';
 import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
-import { buySkill, fateSplitLeft, type SkillBuyBlock } from './systems/forgeSkills';
-import type { ForgeSkillId } from '../config/forgeSkills';
+import { fateSplitLeft } from './systems/forgeSkills';
+import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
 import { collectRent, prepayRent, type PrepayBlock } from './systems/rent';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
@@ -18,7 +18,7 @@ import { endPrologue, inPrologue } from './systems/prologue';
 import { tonightsRivals, type Doppelganger } from './systems/doppelganger';
 
 export type Action =
-  | { type: 'ENHANCE'; weaponId: string; confirmLast?: boolean }
+  | { type: 'ENHANCE'; weaponId: string; confirmLast?: boolean; rhythm?: boolean }
   | { type: 'EQUIP'; weaponId: string }
   | { type: 'COMPLETE_TUTORIAL'; id: TutorialId }
   | { type: 'START_NIGHT' }
@@ -36,7 +36,7 @@ export type Action =
   | { type: 'SLEEP' }
   | { type: 'TOGGLE_SPLIT' }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
-  | { type: 'BUY_SKILL'; id: ForgeSkillId }
+  | { type: 'BUY_NODE'; id: string }
   | { type: 'PREPAY_RENT' };
 
 export type ActionResult =
@@ -49,8 +49,8 @@ export type ActionResult =
   | { type: 'nightLost'; livesLeft: number; gameOver: GameOverSummary | null; prologue?: boolean; goldBefore?: number; goldAfter?: number }
   | { type: 'slept'; day: number; rent: RentNotice | null; gameOver: GameOverSummary | null }
   | { type: 'sleepBlocked' }
-  | { type: 'skillBought'; id: ForgeSkillId; level: number; cost: number }
-  | { type: 'skillBlocked'; reason: SkillBuyBlock }
+  | { type: 'nodeBought'; id: string; cost: number }
+  | { type: 'nodeBlocked'; reason: NodeBuyBlock }
   | { type: 'rentPrepaid'; price: number }
   | { type: 'prepayBlocked'; reason: PrepayBlock }
   | { type: 'sold'; price: number }
@@ -119,7 +119,11 @@ export class GameCore {
 
   /** Morning: today's free weapons (once per day), Morr's shelf on visiting days, the king's rent. */
   private beginDay(state: GameState): GrantResult & { rent: RentNotice | null } {
+    const newDay = !state.grantedDays.includes(state.day);
     const grant = grantDaily(state);
+    // 아침 보호석 (skill tree): stones every new morning
+    const stones = newDay ? treeEffects(grant.state).morningStones : 0;
+    if (stones > 0) grant.state = { ...grant.state, items: { ...grant.state.items, protect: (grant.state.items.protect ?? 0) + stones } };
     const rent = collectRent(openMerchant(grant.state));
     return { ...grant, state: rent.state, rent: rent.notice };
   }
@@ -140,6 +144,7 @@ export class GameCore {
       const s = g.state.stats;
       const summary: GameOverSummary = { day: g.state.day, bestLevel: s.bestLevel, kills: s.kills, bossesKilled: s.bossesKilled, nightSeconds: s.nightSeconds };
       this.save.clearRun();
+      this.lastRentNotice = null; // the game-over screen tells it; the new run starts clean
       const fresh = this.beginDay(this.startRun(randomSeed(), g.state.tutorials));
       this.lastGrant = fresh.granted;
       this.commit(fresh.state);
@@ -212,7 +217,7 @@ export class GameCore {
       case 'ENHANCE': {
         if (this.state.phase !== 'day') return { type: 'ok' };
         if (this.state.pendingSplit) return { type: 'blocked', reason: 'split-pending' };
-        const opts: EnhanceOptions = { confirmLast: action.confirmLast, force: inPrologue(this.state) ? 'destroy' : undefined };
+        const opts: EnhanceOptions = { confirmLast: action.confirmLast, rhythm: action.rhythm, force: inPrologue(this.state) ? 'destroy' : undefined };
         // 운명 분열 switched on: pay, roll two, and wait for the pick
         if (this.state.splitArmed && !opts.force) {
           const s = beginSplit(this.state, action.weaponId, opts);
@@ -297,12 +302,12 @@ export class GameCore {
         this.emit('changed', this.state);
         return { type: 'enhanced', result: r.result };
       }
-      case 'BUY_SKILL': {
-        const r = buySkill(this.state, action.id);
-        if (!r.ok) return { type: 'skillBlocked', reason: r.reason };
+      case 'BUY_NODE': {
+        const r = buyNode(this.state, action.id);
+        if (!r.ok) return { type: 'nodeBlocked', reason: r.reason };
         this.commit(r.state);
         this.emit('changed', this.state);
-        return { type: 'skillBought', id: action.id, level: r.level, cost: r.cost };
+        return { type: 'nodeBought', id: action.id, cost: r.cost };
       }
       case 'NIGHT_LOST': {
         if (this.state.phase !== 'night') return { type: 'ok' };

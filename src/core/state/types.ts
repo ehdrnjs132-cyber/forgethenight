@@ -1,7 +1,6 @@
 import type { Element, WeaponClass } from '../../config/weapons';
 import type { Outcome } from '../../config/enhancement';
 import type { EnhanceItem, ItemId } from '../../config/economy';
-import type { ForgeSkillId } from '../../config/forgeSkills';
 
 export interface StockEntry {
   item: ItemId;
@@ -24,6 +23,8 @@ export interface Weapon {
   bornDay: number;
   /** 과열 단조: successes in a row on this weapon (absent = 0). */
   streak?: number;
+  /** 황금 무기 (skill tree): sells for GOLDEN_SELL_MUL × the price. */
+  golden?: boolean;
 }
 
 /** One possible enhancement result, already including the skill conversions (운명 분열 shows two). */
@@ -58,7 +59,10 @@ export interface RentNotice {
   day: number;
   amount: number;
   paid: number;
+  /** Not paid: the run ends (user decision 2026-11-20; it used to cost one life). */
   lifeLost: boolean;
+  /** 왕의 자비 put the unpaid rent off to the next visit. */
+  mercy?: boolean;
   /** The visit was already paid in advance. */
   prepaid?: boolean;
 }
@@ -92,8 +96,14 @@ export interface GameState {
   grantedDays: number[];
   /** Weapons bought at the forge this run; each purchase doubles the next price (absent in older saves = 0). */
   weaponsBought?: number;
-  /** Enhancement skill levels (absent = all 0). */
-  forgeSkills?: Partial<Record<ForgeSkillId, number>>;
+  /** Legacy five-skill levels (2026-11-19); refunded and cleared on load. */
+  forgeSkills?: Partial<Record<string, number>>;
+  /** Skill tree nodes bought (config/skillTree.ts; absent = none). */
+  treeNodes?: string[];
+  /** 몰아치기: the next enhancement costs nothing. */
+  freeEnhance?: boolean;
+  /** 왕의 자비 already used this run. */
+  mercyUsed?: boolean;
   daily?: DailyCounters;
   /** 운명 분열 switched on for the next enhancement. */
   splitArmed?: boolean;

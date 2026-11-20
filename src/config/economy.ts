@@ -43,7 +43,7 @@ export const WEAPON_BASE_PRICE = 0;
 
 /**
  * The king's rent (user decision 2026-11-19): first visit on day 1 + firstAfter, then every minGap..maxGap
- * days; the amount is base × growth^(day−1), rounded to 10G. Unpaid rent costs a life.
+ * days; the amount is base × growth^(day−1), rounded to 10G. Unpaid rent ends the run (2026-11-20).
  */
 export const RENT = { base: 150, growth: 1.22, firstAfter: 3, minGap: 3, maxGap: 5 };
 
@@ -87,7 +87,8 @@ export const ITEMS: Record<ItemId, ItemDef> = {
 };
 
 /** Display order in the shop. */
-export const SHOP_ORDER: readonly ItemId[] = ['key', 'heart', 'timeStone', 'protect', 'master', 'revive', 'luck', 'resetBook'];
+// no hearts any more (2026-11-20): unpaid rent ends the run, so lives no longer matter
+export const SHOP_ORDER: readonly ItemId[] = ['key', 'timeStone', 'protect', 'master', 'revive', 'luck', 'resetBook'];
 
 export const LUCK_BONUS = { great: 3, success: 5 };
 /** The master stone multiplies the destroy chance by this. */

@@ -107,7 +107,7 @@ export class ShopScene extends Phaser.Scene {
   private render() {
     const s = this.core.state;
     this.goldText.setText(`${s.gold.toLocaleString()} G`);
-    this.livesText.setText(`목숨 ${s.lives} / ${MERCHANT.maxLives}`);
+    this.livesText.setText('');
     this.rows.removeAll(true);
     const x0 = (W - PW) / 2 + LX;
     const y0 = (H - PH) / 2 + LY;

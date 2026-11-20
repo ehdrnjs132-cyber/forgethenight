@@ -83,7 +83,7 @@ export class LobbyScene extends Phaser.Scene {
     g.fillStyle(0x0b0806, 0.78).fillRoundedRect(colX - cw / 2, cardY - ch / 2, cw, ch, 16);
     g.lineStyle(2, 0x8a6430, 1).strokeRoundedRect(colX - cw / 2, cardY - ch / 2, cw, ch, 16);
     const r = this.core.records;
-    label(this, colX, cardY - 34, fresh ? '새로운 대장간' : `DAY ${s.day}  ·  ♥ ${s.lives}  ·  ${s.gold.toLocaleString()}G`, PORTRAIT ? 28 : 26, C.text, { weight: 900, origin: [0.5, 0.5] });
+    label(this, colX, cardY - 34, fresh ? '새로운 대장간' : `DAY ${s.day}  ·  ${s.gold.toLocaleString()}G`, PORTRAIT ? 28 : 26, C.text, { weight: 900, origin: [0.5, 0.5] });
     label(this, colX, cardY + 12, `최고 강화 +${r.bestLevel}  ·  최장 생존 DAY ${Math.max(r.bestDay, s.day)}`, PORTRAIT ? 18 : 17, C.goldHi, { weight: 700, origin: [0.5, 0.5] });
     label(this, colX, cardY + 42, `도전 ${Math.max(1, r.runs)}회차  ·  밤 내기 패배 ${r.deaths}회`, PORTRAIT ? 15 : 14, C.mute, { weight: 700, origin: [0.5, 0.5] });
 

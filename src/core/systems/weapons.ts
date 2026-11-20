@@ -2,6 +2,7 @@
 import { DAILY_GRANT, DROP_CLASSES, ELEMENTS, type Element, type WeaponClass } from '../../config/weapons';
 import { DAILY_WEAPON_LIMIT, SALE_PRICES, WEAPON_BASE_PRICE } from '../../config/economy';
 import { daily, withDaily } from './forgeSkills';
+import { treeEffects } from './skillTree';
 import { Rng } from '../rng';
 import type { GameState, Weapon } from '../state/types';
 
@@ -18,9 +19,13 @@ export function isLastWeapon(state: GameState, id: string): boolean {
   return state.weapons.length === 1 && state.weapons[0].id === id;
 }
 
-function makeWeapon(state: GameState, cls: WeaponClass, element: Element): Weapon {
+function makeWeapon(state: GameState, cls: WeaponClass, element: Element, rng?: Rng): Weapon {
   state.weaponSeq += 1;
-  return { id: `w${state.weaponSeq}`, cls, element, level: 0, bornDay: state.day };
+  const w: Weapon = { id: `w${state.weaponSeq}`, cls, element, level: 0, bornDay: state.day };
+  // 황금 무기 (skill tree): drawn only when that node is owned, so other runs keep their sequence
+  const golden = treeEffects(state).golden;
+  if (rng && golden > 0 && rng.next() * 100 < golden) w.golden = true;
+  return w;
 }
 
 export interface GrantResult {
@@ -47,7 +52,7 @@ export function grantDaily(prev: GameState): GrantResult {
       overflow++;
       continue;
     }
-    const w = makeWeapon(state, cls, element);
+    const w = makeWeapon(state, cls, element, rng);
     state.weapons.push(w);
     granted.push(w);
   }
@@ -65,9 +70,14 @@ export function weaponPrice(state: GameState): number {
 
 export type WeaponBuyBlock = 'night' | 'full' | 'gold' | 'daily';
 
+/** Weapons a day: the base limit plus 추가 배달 / 큰 배달. */
+export function dailyWeaponLimit(state: GameState): number {
+  return DAILY_WEAPON_LIMIT + treeEffects(state).extraWeapons;
+}
+
 /** Extra weapons the forge button can still give today (the morning delivery counts toward the day's 6). */
 export function freeWeaponsLeft(state: GameState): number {
-  return Math.max(0, DAILY_WEAPON_LIMIT - DAILY_GRANT.length - daily(state).freeWeapons);
+  return Math.max(0, dailyWeaponLimit(state) - DAILY_GRANT.length - daily(state).freeWeapons);
 }
 
 /** Take one fresh +0 weapon: random class and element, like the daily delivery. */
@@ -80,7 +90,7 @@ export function buyWeapon(prev: GameState): { ok: true; state: GameState; weapon
   const counted = withDaily(prev, { freeWeapons: daily(prev).freeWeapons + 1 });
   const state: GameState = { ...counted, weapons: [...prev.weapons], gold: prev.gold - price, weaponsBought: (prev.weaponsBought ?? 0) + 1 };
   const rng = new Rng(state.rng);
-  const w = makeWeapon(state, rng.pick(DROP_CLASSES), rng.pick(ELEMENTS));
+  const w = makeWeapon(state, rng.pick(DROP_CLASSES), rng.pick(ELEMENTS), rng);
   state.rng = rng.state;
   state.weapons.push(w);
   return { ok: true, state, weapon: w, price };

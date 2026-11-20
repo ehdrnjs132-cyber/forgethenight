@@ -39,7 +39,7 @@ export class GameOverScene extends Phaser.Scene {
     const wrap = { align: 'center' as const, wrap: W - 60 };
     const title = label(this, W / 2, 132 + OY, 'YOUR FORGE HAS FALLEN', narrow ? 38 : 46, C.dangerHi, { display: true, weight: 900, origin: [0.5, 0.5] });
     const line = label(this, W / 2, 190 + OY, '불꽃은 꺼졌다. 하지만 아버지의 맹세는 사라지지 않는다.', 19, C.text, { weight: 700, origin: [0.5, 0.5], ...wrap });
-    const why = label(this, W / 2, 222 + OY + (narrow ? 14 : 0), data.reason === 'closed' ? '마지막 목숨이 남은 밤에 게임이 종료되어 패배로 처리되었습니다.' : '마지막 목숨을 잃었습니다. 모든 성장이 초기화되었습니다.', 14, C.mute, { origin: [0.5, 0.5], ...wrap });
+    const why = label(this, W / 2, 222 + OY + (narrow ? 14 : 0), '왕에게 월세를 내지 못해 대장간을 빼앗겼습니다. 무기와 골드, 스킬트리가 모두 초기화되었습니다.', 14, C.mute, { origin: [0.5, 0.5], ...wrap });
 
     const m = Math.floor(s.nightSeconds / 60);
     const sec = String(Math.floor(s.nightSeconds % 60)).padStart(2, '0');

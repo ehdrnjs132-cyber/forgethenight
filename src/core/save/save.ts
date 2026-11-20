@@ -3,6 +3,7 @@
 import { createRecords, createStats, STATE_VERSION } from '../state/initial';
 import type { GameState, Records } from '../state/types';
 import { INVENTORY_CAP, INVENTORY_START } from '../../config/weapons';
+import { legacyRefund } from '../../config/forgeSkills';
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -73,6 +74,16 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
   }
   // 2026-11-19: only swords exist now (they alone have a name and image per level). Spears and axes in
   // an older save become swords of the same element and level.
+  // 2026-11-20: the five-skill chain became the four-direction tree. Gold spent on it comes back.
+  const legacy = (x: GameState): GameState => {
+    const refund = legacyRefund(x.forgeSkills);
+    if (!x.forgeSkills) return x;
+    const { forgeSkills: _old, ...rest } = x;
+    void _old;
+    return { ...rest, gold: x.gold + refund, treeNodes: x.treeNodes ?? [] } as GameState;
+  };
+  s = legacy(s);
+  if (s.nightSnapshot) s = { ...s, nightSnapshot: legacy(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
   const toSwords = (x: GameState): GameState =>
     x.weapons.some((w) => w.cls !== 'sword') ? { ...x, weapons: x.weapons.map((w) => (w.cls === 'sword' ? w : { ...w, cls: 'sword' })) } : x;
   s = toSwords(s);

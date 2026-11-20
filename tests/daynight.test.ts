@@ -129,16 +129,17 @@ describe('the king\'s rent (user decision 2026-11-19)', () => {
     expect(rentAmount(20)).toBeGreaterThan(rentAmount(10));
   });
 
-  it('takes what you have and a life when you cannot pay', () => {
+  it('ends the run when you cannot pay (2026-11-20)', () => {
     const { game } = readyGame();
     game.state = { ...game.state, gold: 0 };
-    let notice = null;
+    let over = null;
     for (let i = 0; i < RENT.firstAfter; i++) {
       const r = game.dispatch({ type: 'SLEEP' });
-      if (r.type === 'slept' && r.rent) notice = r.rent;
+      if (r.type === 'slept' && r.gameOver) over = r.gameOver;
     }
-    expect(notice).toMatchObject({ lifeLost: true });
-    expect(game.state.lives).toBe(START_LIVES - 1);
+    expect(over).not.toBeNull();
+    expect(game.state.day).toBe(1);
+    expect(game.state.lives).toBe(START_LIVES);
   });
 
   it('can be paid in advance at today\'s cheaper rate; the next visit then costs nothing', () => {
