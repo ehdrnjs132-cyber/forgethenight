@@ -7,7 +7,8 @@ import { beginSplit, chooseSplit, enhance, type EnhanceOptions, type EnhanceResu
 import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
 import { drainStamina, fateSplitLeft, staminaLeft } from './systems/forgeSkills';
 import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
-import { collectRent, prepayRent, type PrepayBlock } from './systems/rent';
+import { collectRent } from './systems/rent';
+import { playCard, playWeaponCard, type CardBlock, type CardFace, type WeaponCardBlock } from './systems/cards';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
 import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/skills';
@@ -37,7 +38,10 @@ export type Action =
   | { type: 'TOGGLE_SPLIT' }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
   | { type: 'BUY_NODE'; id: string }
-  | { type: 'PREPAY_RENT' }
+  /** 운명의 카드: the chosen card and the bet (2026-11-26; replaces paying the rent early). */
+  | { type: 'CARD_BET'; pick: 0 | 1; bet: number }
+  /** 운명의 무기 카드 (DAY 30+): every weapon at stake. */
+  | { type: 'WEAPON_CARD'; pick: 0 | 1 }
   /** Work time passed at the forge: stamina drains (sent about once a second while the forge is open). */
   | { type: 'DRAIN_STAMINA'; seconds: number }
   /** Online duel settled by the server: the bet won (+) or lost (−). */
@@ -55,9 +59,11 @@ export type ActionResult =
   | { type: 'sleepBlocked' }
   | { type: 'nodeBought'; id: string; cost: number }
   | { type: 'nodeBlocked'; reason: NodeBuyBlock }
-  | { type: 'rentPrepaid'; price: number }
+  | { type: 'cardPlayed'; win: boolean; faces: [CardFace, CardFace]; bet: number; payout: number; goldBefore: number; goldAfter: number }
+  | { type: 'cardBlocked'; reason: CardBlock }
+  | { type: 'weaponCardPlayed'; win: boolean; faces: [CardFace, CardFace]; count: number }
+  | { type: 'weaponCardBlocked'; reason: WeaponCardBlock }
   | { type: 'drained'; left: number; secondWind: number }
-  | { type: 'prepayBlocked'; reason: PrepayBlock }
   | { type: 'sold'; price: number }
   | { type: 'sellBlocked'; reason: SellBlock | 'prologue' }
   | { type: 'weaponBought'; weapon: Weapon; price: number }
@@ -307,12 +313,21 @@ export class GameCore {
         if (d.drained !== 0) this.commit(d.state);
         return { type: 'drained', left: staminaLeft(this.state), secondWind: d.secondWind };
       }
-      case 'PREPAY_RENT': {
-        const r = prepayRent(this.state);
-        if (!r.ok) return { type: 'prepayBlocked', reason: r.reason };
-        this.commit(r.state);
+      case 'CARD_BET': {
+        const goldBefore = this.state.gold;
+        const r = playCard(this.state, action.pick, action.bet);
+        if (!r.ok) return { type: 'cardBlocked', reason: r.reason };
+        this.commit(r.state); // saved before the card turns
         this.emit('changed', this.state);
-        return { type: 'rentPrepaid', price: r.price };
+        return { type: 'cardPlayed', win: r.win, faces: r.faces, bet: action.bet, payout: r.payout, goldBefore, goldAfter: this.state.gold };
+      }
+      case 'WEAPON_CARD': {
+        if (this.state.pendingSplit) return { type: 'weaponCardBlocked', reason: 'night' };
+        const r = playWeaponCard(this.state, action.pick);
+        if (!r.ok) return { type: 'weaponCardBlocked', reason: r.reason };
+        this.commit(r.state); // saved before the card turns
+        this.emit('changed', this.state);
+        return { type: 'weaponCardPlayed', win: r.win, faces: r.faces, count: r.count };
       }
       case 'TOGGLE_SPLIT': {
         if (this.state.phase !== 'day' || this.state.pendingSplit) return { type: 'ok' };

@@ -72,18 +72,5 @@ export function rentPaidLine(n: RentNotice): string {
   return `DAY ${n.day} 월세는 ${when}${n.paid.toLocaleString()}G로 미리 내 두었습니다.`;
 }
 
-export type PrepayBlock = 'night' | 'already' | 'gold';
-
-/** What paying the next visit in advance costs today: today's rate, cheaper than on the visit day. */
-export function prepayPrice(state: GameState): number {
-  return rentFor(state, state.day);
-}
-
-/** 월세 미리 내기: pay the next visit now at today's rate; until the visit the hammer is faster and luckier. */
-export function prepayRent(prev: GameState): { ok: true; state: GameState; price: number } | { ok: false; reason: PrepayBlock } {
-  if (prev.phase !== 'day') return { ok: false, reason: 'night' };
-  if (prev.rentPrepaid) return { ok: false, reason: 'already' };
-  const price = prepayPrice(prev);
-  if (prev.gold < price) return { ok: false, reason: 'gold' };
-  return { ok: true, state: { ...prev, gold: prev.gold - price, rentPrepaid: true, rentPrepaidAmount: price, rentPrepaidDay: prev.day, rentDueDay: rentDueDay(prev) }, price };
-}
+// 월세 미리 내기 was removed on 2026-11-26 (user request). collectRent above still honours a visit that
+// an older save already paid in advance, so nobody pays twice.

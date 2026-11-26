@@ -119,8 +119,12 @@ export interface GameState {
   /** Day the king next comes for rent (absent = 3 days after the day it is first needed). */
   rentDueDay?: number;
   lastRent?: RentNotice | null;
-  /** The next visit was paid in advance (at the cheaper rate of the day it was paid). */
+  /** The next visit was paid in advance (prepaying was removed 2026-11-26; older saves may still have it). */
   rentPrepaid?: boolean;
+  /** Day the 운명의 카드 was last played (one game a day). */
+  cardDay?: number;
+  /** Day the 운명의 무기 카드 (DAY 30+, weapons at stake) was last played. */
+  weaponCardDay?: number;
   /** What the advance payment actually cost and on which day (QA 2026-11-20: the notice showed the visit-day rate). */
   rentPrepaidAmount?: number;
   rentPrepaidDay?: number;

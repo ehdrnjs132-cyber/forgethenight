@@ -64,8 +64,6 @@ export interface TreeEffects {
 
 export const RHYTHM_SECONDS = 4;
 export const GOLDEN_SELL_MUL = 2;
-/** Paying the rent early (user request 2026-11-20, like paying bills early): until the king's visit. */
-export const PREPAY_BONUS = { speed: 0.25, success: 1 };
 /** Hammer speed before any skill: 50% slower than the old normal (user decision 2026-11-26). */
 export const BASE_SPEED = 0.5;
 /**

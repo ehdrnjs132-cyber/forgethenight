@@ -1,6 +1,6 @@
 // The four-direction skill tree (config/skillTree.ts): owned nodes, what they add up to, and buying.
 // Pure functions over GameState.
-import { PREPAY_BONUS, TREE, TREE_BY_ID, baseEffects, type TreeEffects, type TreeNode } from '../../config/skillTree';
+import { TREE, TREE_BY_ID, baseEffects, type TreeEffects, type TreeNode } from '../../config/skillTree';
 import type { GameState } from '../state/types';
 
 export function ownsNode(state: GameState, id: string): boolean {
@@ -12,14 +12,11 @@ export function ownedCount(state: GameState): number {
   return (state.treeNodes ?? []).length;
 }
 
-/** Everything the owned nodes give (in tree order, so a later node of a line overrides an earlier one), plus the prepaid-rent bonus. */
+/** Everything the owned nodes give (in tree order, so a later node of a line overrides an earlier one). */
+// (2026-11-26: prepaying rent and its speed/success bonus were removed at the user's request.)
 export function treeEffects(state: GameState): TreeEffects {
   const e = baseEffects();
   for (const n of TREE) if (n.id !== 'root' && ownsNode(state, n.id)) n.apply(e);
-  if (state.rentPrepaid) {
-    e.speed += PREPAY_BONUS.speed;
-    e.success += PREPAY_BONUS.success;
-  }
   return e;
 }
 

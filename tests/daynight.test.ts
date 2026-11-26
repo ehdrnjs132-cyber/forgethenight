@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager } from '../src/core/save/save';
 import { START_GOLD, START_LIVES } from '../src/config/rules';
-import { NIGHT_STAKE, RENT } from '../src/config/economy';
+import { NIGHT_STAKE, NIGHT_UNLOCK_DAY, RENT } from '../src/config/economy';
+import { atNightDay } from './helpers';
 import { GAMBLE_RIVALS, tonightsRivals } from '../src/core/systems/doppelganger';
 import { rentAmount, rentPaidLine } from '../src/core/systems/rent';
 
@@ -14,15 +15,23 @@ function readyGame(storage = new MemoryStorage()) {
   return { game, storage };
 }
 
+/** A ready game on DAY 20, where the night battle is offered (2026-11-26). */
+function nightGame(storage = new MemoryStorage()) {
+  const r = readyGame(storage);
+  r.game.state = atNightDay(r.game.state);
+  return r;
+}
+
 describe('starting a night', () => {
   it('needs an equipped weapon when the player owns weapons', () => {
     const game = new GameCore(new MemoryStorage(), 1);
+    game.state = atNightDay(game.state);
     const r = game.dispatch({ type: 'START_NIGHT' });
     expect(r).toEqual({ type: 'nightBlocked', reason: 'no-weapon' });
   });
 
   it('falls back to the starter hammer when no weapons are left (§13, test 11: no weapons still plays)', () => {
-    const { game } = readyGame();
+    const { game } = nightGame();
     game.state = { ...game.state, weapons: [], equippedId: null };
     const r = game.dispatch({ type: 'START_NIGHT' });
     expect(r.type).toBe('nightStarted');
@@ -30,7 +39,7 @@ describe('starting a night', () => {
   });
 
   it('saves the night phase and a snapshot before the fight', () => {
-    const { game, storage } = readyGame();
+    const { game, storage } = nightGame();
     game.dispatch({ type: 'START_NIGHT' });
     const saved = new SaveManager(storage).loadRun().state!;
     expect(saved.phase).toBe('night');
@@ -38,7 +47,7 @@ describe('starting a night', () => {
   });
 
   it('refuses to enhance during the night', () => {
-    const { game } = readyGame();
+    const { game } = nightGame();
     game.dispatch({ type: 'START_NIGHT' });
     expect(game.dispatch({ type: 'ENHANCE', weaponId: game.state.weapons[0].id }).type).toBe('ok');
     expect(game.state.stats.enhanceAttempts).toBe(0);
@@ -47,7 +56,7 @@ describe('starting a night', () => {
 
 describe('the night gamble (user decision 2026-11-19)', () => {
   it('brings two dwarves with random +1..+50 weapons, exactly the ones the forge previews', () => {
-    const { game } = readyGame();
+    const { game } = nightGame();
     const preview = tonightsRivals(game.state).lineup;
     const r = game.dispatch({ type: 'START_NIGHT' });
     if (r.type !== 'nightStarted') throw new Error();
@@ -60,38 +69,38 @@ describe('the night gamble (user decision 2026-11-19)', () => {
   });
 
   it('a win multiplies the gold by 1.5 and moves on to the next morning, keeping the XP', () => {
-    const { game } = readyGame();
+    const { game } = nightGame();
     game.state = { ...game.state, gold: 1000 };
     game.dispatch({ type: 'START_NIGHT' });
     const r = game.dispatch({ type: 'NIGHT_WON', kills: 2, seconds: 60, xp: 250 });
     if (r.type !== 'nightWon') throw new Error();
     expect(r.goldBefore).toBe(1000);
     expect(r.goldAfter).toBe(1000 * NIGHT_STAKE.winMul);
-    expect(game.state.day).toBe(2);
+    expect(game.state.day).toBe(NIGHT_UNLOCK_DAY + 1);
     expect(game.state.phase).toBe('day');
     expect(game.state.player.level).toBe(2);
     expect(game.records.kills).toBe(2);
   });
 
   it('a loss halves the gold and moves on to the next morning; no life is lost', () => {
-    const { game } = readyGame();
+    const { game } = nightGame();
     game.state = { ...game.state, gold: 1000 };
     game.dispatch({ type: 'START_NIGHT' });
     const r = game.dispatch({ type: 'NIGHT_LOST', reason: 'death', kills: 0, seconds: 30 });
     expect(r).toMatchObject({ type: 'nightLost', goldBefore: 1000, goldAfter: 1000 * NIGHT_STAKE.loseMul, gameOver: null });
-    expect(game.state.day).toBe(2);
+    expect(game.state.day).toBe(NIGHT_UNLOCK_DAY + 1);
     expect(game.state.lives).toBe(START_LIVES);
     expect(game.state.gold).toBe(500 + game.lastOverflow.gold);
     expect(game.records.deaths).toBe(1);
   });
 
   it('closing the game during the fight counts as a loss', () => {
-    const { game, storage } = readyGame();
+    const { game, storage } = nightGame();
     game.state = { ...game.state, gold: 800 };
     game.dispatch({ type: 'START_NIGHT' });
     const reopened = new GameCore(storage);
     expect(reopened.state.phase).toBe('day');
-    expect(reopened.state.day).toBe(2);
+    expect(reopened.state.day).toBe(NIGHT_UNLOCK_DAY + 1);
     expect(reopened.notice?.kind).toBe('abandoned');
     expect(reopened.state.gold).toBe(400 + reopened.lastOverflow.gold);
   });
@@ -142,26 +151,21 @@ describe('the king\'s rent (user decision 2026-11-19)', () => {
     expect(game.state.lives).toBe(START_LIVES);
   });
 
-  it('can be paid in advance at today\'s cheaper rate; the next visit then costs nothing', () => {
+  // 2026-11-26: paying in advance was removed; a visit an older save already paid is still honoured once
+  it('a visit already paid in advance by an older save costs nothing and reports what was paid', () => {
     const { game } = readyGame();
-    game.state = { ...game.state, gold: 10_000 };
-    const r = game.dispatch({ type: 'PREPAY_RENT' });
-    if (r.type !== 'rentPrepaid') throw new Error(r.type);
-    expect(r.price).toBe(rentAmount(1));
-    expect(game.dispatch({ type: 'PREPAY_RENT' })).toEqual({ type: 'prepayBlocked', reason: 'already' });
+    const price = rentAmount(1);
+    game.state = { ...game.state, gold: 10_000, rentPrepaid: true, rentPrepaidAmount: price, rentPrepaidDay: 1, rentDueDay: 1 + RENT.firstAfter };
     const gold = game.state.gold;
     let notice = null;
     for (let i = 0; i < RENT.firstAfter; i++) {
       const s = game.dispatch({ type: 'SLEEP' });
       if (s.type === 'slept' && s.rent) notice = s.rent;
     }
-    // QA 2026-11-20: the notice reports what was actually paid in advance, not the visit-day rate
-    expect(notice).toMatchObject({ prepaid: true, paid: r.price, prepaidDay: 1, lifeLost: false });
-    expect(rentPaidLine(notice!)).toBe(`DAY ${1 + RENT.firstAfter} 월세는 DAY 1에 ${r.price.toLocaleString()}G로 미리 내 두었습니다.`);
-    expect(game.state.gold).toBeGreaterThanOrEqual(gold); // nothing taken on the visit day
+    expect(notice).toMatchObject({ prepaid: true, paid: price, prepaidDay: 1, lifeLost: false });
+    expect(rentPaidLine(notice!)).toBe(`DAY ${1 + RENT.firstAfter} 월세는 DAY 1에 ${price.toLocaleString()}G로 미리 내 두었습니다.`);
+    expect(game.state.gold).toBeGreaterThanOrEqual(gold);
     expect(game.state.rentPrepaid).toBe(false);
-    expect(game.state.rentPrepaidAmount).toBeUndefined();
-    expect(rentAmount(1 + RENT.firstAfter)).toBeGreaterThan(r.price);
   });
 
   it('an older save without the prepaid amount names no wrong figure', () => {

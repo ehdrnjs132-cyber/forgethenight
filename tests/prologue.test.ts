@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage } from '../src/core/save/save';
 import { inPrologue } from '../src/core/systems/prologue';
+import { atNightDay } from './helpers';
 
 describe('day 1 is a normal, guided day (user decision 2026-11-19)', () => {
   it('no scripted prologue: enhancing is a real roll, selling and sleeping work from the start', () => {
@@ -20,6 +21,7 @@ describe('day 1 is a normal, guided day (user decision 2026-11-19)', () => {
 
   it('rivals are named "earth N" with N in 1..999', () => {
     const game = new GameCore(new MemoryStorage(), 21);
+    game.state = atNightDay(game.state); // the night battle is offered from DAY 20
     game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     const r = game.dispatch({ type: 'START_NIGHT' });
     if (r.type !== 'nightStarted') throw new Error();

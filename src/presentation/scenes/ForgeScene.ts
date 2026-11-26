@@ -1077,7 +1077,6 @@ export class ForgeScene extends Phaser.Scene {
     const sk = this.core.state;
     const parts: string[] = [];
     const te = treeEffects(sk);
-    if (sk.rentPrepaid) parts.push('월세 선납');
     if (te.speed !== 1) parts.push(`속도 ×${te.speed.toFixed(2).replace(/0$/, '')}`);
     if (te.miracle) parts.push(`기적 ${te.miracle}%`);
     if (te.overheat.per && w) parts.push(`과열 +${overheatBonus(sk, w)}%p`);

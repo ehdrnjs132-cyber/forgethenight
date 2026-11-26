@@ -3,9 +3,10 @@
 // restores the snapshot with one life fewer and throws away that night's XP.
 import { addXp } from '../../combat/rules';
 import { LAST_DAY } from '../../config/rules';
-import { NIGHT_STAKE } from '../../config/economy';
+import { NIGHT_STAKE, NIGHT_UNLOCK_DAY } from '../../config/economy';
 import type { GameOverSummary, GameState, NightSnapshot, Weapon } from '../state/types';
 import { equippedWeapon } from './weapons';
+import { inPrologue } from './prologue';
 
 /** What the player fights with tonight: the equipped weapon, or the starter hammer when they own none (§13). */
 export type NightWeapon = { kind: 'weapon'; weapon: Weapon } | { kind: 'hammer' };
@@ -17,10 +18,16 @@ export function nightWeapon(state: GameState): NightWeapon | null {
   return null; // owns weapons but none equipped
 }
 
-export type NightBlock = 'not-day' | 'no-weapon';
+export type NightBlock = 'not-day' | 'no-weapon' | 'early';
+
+/** The dwarf battle is offered from DAY 20 (2026-11-26); the scripted first-day prologue night is the exception. */
+export function nightUnlocked(state: GameState): boolean {
+  return state.day >= NIGHT_UNLOCK_DAY || inPrologue(state);
+}
 
 export function startNight(prev: GameState): { ok: true; state: GameState; weapon: NightWeapon } | { ok: false; reason: NightBlock } {
   if (prev.phase !== 'day') return { ok: false, reason: 'not-day' };
+  if (!nightUnlocked(prev)) return { ok: false, reason: 'early' };
   const weapon = nightWeapon(prev);
   if (!weapon) return { ok: false, reason: 'no-weapon' };
   const { nightSnapshot: _old, ...rest } = prev;

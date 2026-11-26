@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { runWith, seedFor } from './helpers';
+import { atNightDay, runWith, seedFor } from './helpers';
 import { SALE_MULTIPLIER } from '../src/config/economy';
 import { keyPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, sellPrice, toggleArmed, undoEnhance } from '../src/core/systems/economy';
 import { effectiveRow, enhance } from '../src/core/systems/enhancement';
@@ -42,7 +42,7 @@ describe('selling (QA 6, 7)', () => {
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
     // a +1 weapon (an untouched +0 one sells for nothing since weapons became free)
-    game.state = { ...game.state, weapons: game.state.weapons.map((w, i) => (i === 0 ? { ...w, level: 1 } : w)) };
+    game.state = atNightDay({ ...game.state, weapons: game.state.weapons.map((w, i) => (i === 0 ? { ...w, level: 1 } : w)) });
     const [a, b] = game.state.weapons;
     const price = sellPrice(game.state, 1);
     game.dispatch({ type: 'SELL', weaponId: a.id });
@@ -114,8 +114,8 @@ describe('merchant Morr (§15)', () => {
     const game = new GameCore(storage, 5);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'prologueDone' });
-    game.state = openMerchant({ ...game.state, day: 3, gold: 5_000, merchant: null, rentDueDay: 99 });
-    game.state = { ...game.state, merchant: { day: 3, stock: [{ item: 'protect', price: 1200, left: 2 }] } };
+    game.state = openMerchant({ ...atNightDay(game.state), gold: 5_000, merchant: null });
+    game.state = { ...game.state, merchant: { day: game.state.day, stock: [{ item: 'protect', price: 1200, left: 2 }] } };
     game.dispatch({ type: 'BUY', item: 'protect' });
     game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     game.dispatch({ type: 'START_NIGHT' });
@@ -191,7 +191,7 @@ describe('revive stone', () => {
   it('is spent during the night, and returned if that night is lost anyway', () => {
     const game = new GameCore(new MemoryStorage(), 7);
     game.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstEnhance' });
-    game.state = { ...game.state, items: { revive: 1 } };
+    game.state = atNightDay({ ...game.state, items: { revive: 1 } });
     game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     expect(game.dispatch({ type: 'USE_REVIVE' })).toEqual({ type: 'noRevive' });
     game.dispatch({ type: 'START_NIGHT' });

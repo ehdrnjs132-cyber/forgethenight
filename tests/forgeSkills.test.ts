@@ -176,12 +176,12 @@ describe('✦ odds', () => {
 });
 
 describe('⚡ speed', () => {
-  it('starts 50% slower; every small star adds 5%; prepaid rent adds more', () => {
+  it('starts 50% slower; every small star adds 5%; a prepaid visit (older saves) adds nothing any more', () => {
     expect(BASE_SPEED).toBe(0.5);
     expect(treeEffects(withNodes([])).speed).toBe(0.5);
     expect(treeEffects(withNodes(['sp1'])).speed).toBeCloseTo(0.55, 6);
     expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(0.5 + 4 * 0.05, 6);
-    expect(treeEffects({ ...withNodes([]), rentPrepaid: true }).speed).toBeCloseTo(0.75, 6);
+    expect(treeEffects({ ...withNodes([]), rentPrepaid: true }).speed).toBeCloseTo(0.5, 6);
     expect(treeEffects(withNodes(pathTo('hold'))).holdRepeat).toBe(true);
     expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(0.5 + 15 * 0.05, 6);
   });

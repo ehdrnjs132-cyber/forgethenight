@@ -64,6 +64,20 @@ export const DAILY_WEAPON_LIMIT = 6;
 
 /** Night gamble (user decision 2026-11-19): win → gold × winMul, lose → gold × loseMul. */
 export const NIGHT_STAKE = { winMul: 1.5, loseMul: 0.5 };
+/** The dwarf battle at night is offered from this day on (user 2026-11-26; the first-day prologue keeps its scripted night). */
+export const NIGHT_UNLOCK_DAY = 20;
+
+/**
+ * 운명의 카드 (user request 2026-11-26): from DAY unlockDay, once a day in the evening. Two cards, one O
+ * and one X; O pays the bet × payoutMul (stake back plus the same again), X loses the bet.
+ */
+export const CARD_GAME = { unlockDay: 10, payoutMul: 2 };
+
+/**
+ * 운명의 무기 카드 (user request 2026-11-26): from DAY unlockDay, once a day. Same two cards, but the
+ * stake is every weapon on the rack: O → all of them +levels, X → all of them destroyed.
+ */
+export const WEAPON_CARD = { unlockDay: 30, levels: 10 };
 
 /** Rack keys at the merchant: each opens one locked slot; price doubles with each key bought. */
 export const KEY_BASE_PRICE = 300;
