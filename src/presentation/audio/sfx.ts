@@ -136,6 +136,39 @@ export class Sfx {
     this.master.gain.linearRampToValueAtTime(0.55, t + ms / 1000 + 0.25);
   }
 
+  // ───────── the king's wrath (unpaid rent ends the run, 2026-11-26)
+  /** A low rumble under the dark: the king is coming. */
+  rumble(dur = 2.4) {
+    this.noise(dur, { gain: 0.22, freq: 90, type: 'lowpass', q: 0.7 });
+    this.tone(38, dur, { type: 'sawtooth', gain: 0.08, attack: 0.6 });
+  }
+
+  /** One heartbeat (lub-dub). */
+  heartbeat() {
+    this.tone(62, 0.16, { gain: 0.35, slideTo: 40 });
+    this.tone(55, 0.14, { gain: 0.25, slideTo: 38, when: 0.18 });
+  }
+
+  /** The doors slam open. */
+  slam() {
+    this.noise(0.5, { gain: 0.5, freq: 400, type: 'lowpass' });
+    this.tone(48, 0.9, { gain: 0.45, slideTo: 28 });
+    this.noise(0.12, { gain: 0.25, freq: 2500, type: 'highpass' });
+  }
+
+  /** The king's voice: a deep, rough roar under the words. */
+  roar(dur = 1.4) {
+    this.tone(70, dur, { type: 'sawtooth', gain: 0.16, slideTo: 52, attack: 0.05 });
+    this.tone(105, dur, { type: 'square', gain: 0.05, slideTo: 80, attack: 0.05 });
+    this.noise(dur, { gain: 0.16, freq: 380, sweepTo: 220, q: 2.5 });
+  }
+
+  /** A shriek of metal as the forge is torn away. */
+  shriek() {
+    this.tone(1900, 0.9, { type: 'sawtooth', gain: 0.05, slideTo: 300 });
+    this.noise(0.9, { gain: 0.18, freq: 3500, sweepTo: 600, q: 4 });
+  }
+
   awaken(tier: number) {
     [392, 523.25, 659.25, 783.99].forEach((f, i) => this.tone(f * (1 + tier * 0.05), 1.2, { type: 'sine', gain: 0.08, when: 0.25 + i * 0.12 }));
   }

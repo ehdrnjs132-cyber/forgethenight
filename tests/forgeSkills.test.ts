@@ -328,6 +328,17 @@ describe('✚ insurance', () => {
 describe('rent (2026-11-20): unpaid rent ends the run', () => {
   const due = (s: GameState): GameState => ({ ...s, rentDueDay: s.day });
 
+  it('the king comes every 7 days (2026-11-26)', () => {
+    const s0 = withNodes([]);
+    expect(RENT.firstAfter).toBe(7);
+    let s = due({ ...s0, gold: 10_000_000 });
+    for (let i = 0; i < 3; i++) {
+      const r = collectRent(s);
+      expect(r.state.rentDueDay).toBe(s.day + 7);
+      s = due({ ...r.state, day: r.state.rentDueDay! });
+    }
+  });
+
   it('paid when there is enough gold', () => {
     const s = due({ ...withNodes([]), gold: 100_000 });
     const r = collectRent(s);

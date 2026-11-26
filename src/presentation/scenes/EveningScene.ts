@@ -208,7 +208,9 @@ export class EveningScene extends Phaser.Scene {
       this.time.delayedCall(1700, () => {
         if (r.gameOver) {
           this.scene.stop('Forge');
-          this.scene.start('GameOver', { summary: r.gameOver, reason: 'died' });
+          // unpaid rent: the king himself comes first (2026-11-26)
+          if (r.rent?.lifeLost) this.scene.start('KingWrath', { summary: r.gameOver, rent: r.rent });
+          else this.scene.start('GameOver', { summary: r.gameOver, reason: 'died' });
           return;
         }
         this.cameras.main.fadeOut(300, 0, 0, 0);

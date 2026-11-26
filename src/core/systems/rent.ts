@@ -1,4 +1,4 @@
-// The king's rent (user decisions 2026-11-19/20): he comes every 3–5 days and the rent rises every day.
+// The king's rent (user decisions 2026-11-19/20): he comes every 7 days (was 3–5 until 2026-11-26) and the rent rises every day.
 // Rent that cannot be paid ENDS THE RUN (2026-11-20, like Bills Must Be Paid; it used to cost a life),
 // unless 왕의 자비 puts it off once. Pure functions over GameState.
 import { RENT } from '../../config/economy';
@@ -28,7 +28,7 @@ export function mercyLeft(state: GameState): boolean {
 }
 
 /**
- * Morning check: on (or after) the due day the king collects, then sets his next visit 3–5 days later.
+ * Morning check: on (or after) the due day the king collects, then sets his next visit RENT.minGap..maxGap (7) days later.
  * Short of gold: the run ends (lives go to 0, which GameCore.morning turns into the game over), or
  * 왕의 자비 lets it go once and nothing is taken.
  */

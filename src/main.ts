@@ -10,6 +10,7 @@ import { ShopScene } from './presentation/scenes/ShopScene';
 import { SkillScene } from './presentation/scenes/SkillScene';
 import { CinematicScene } from './presentation/scenes/CinematicScene';
 import { EveningScene } from './presentation/scenes/EveningScene';
+import { KingWrathScene } from './presentation/scenes/KingWrathScene';
 import { LobbyScene } from './presentation/scenes/LobbyScene';
 import { DuelLobbyScene } from './presentation/scenes/DuelLobbyScene';
 import { duel } from './online/duel';
@@ -88,7 +89,7 @@ async function boot() {
     fps: new URLSearchParams(location.search).has('timer') ? { forceSetTimeOut: true, target: 60 } : undefined,
     physics: { default: 'arcade', arcade: { debug: false } },
     // Lobby sits under Modal in the draw order so its confirm/rules pop-ups appear on top
-    scene: [BootScene, LobbyScene, DuelLobbyScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene],
+    scene: [BootScene, LobbyScene, DuelLobbyScene, ForgeScene, NightScene, ModalScene, GameOverScene, ShopScene, SkillScene, CinematicScene, EveningScene, KingWrathScene],
     callbacks: { preBoot: (g) => g.registry.set('core', core) },
   });
   goFullscreenOnTouch();

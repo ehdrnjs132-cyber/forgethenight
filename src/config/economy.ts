@@ -56,7 +56,8 @@ export const WEAPON_BASE_PRICE = 0;
  * The king's rent (user decision 2026-11-19): first visit on day 1 + firstAfter, then every minGap..maxGap
  * days; the amount is base × growth^(day−1), rounded to 10G. Unpaid rent ends the run (2026-11-20).
  */
-export const RENT = { base: 150, growth: 1.22, firstAfter: 3, minGap: 3, maxGap: 5 };
+// 2026-11-26 (user): the king comes once every 7 days (was every 3–5 days).
+export const RENT = { base: 150, growth: 1.22, firstAfter: 7, minGap: 7, maxGap: 7 };
 
 /** Weapons per day (user decision 2026-11-19: up to 6): the morning delivery plus free ones from the forge button. */
 export const DAILY_WEAPON_LIMIT = 6;
