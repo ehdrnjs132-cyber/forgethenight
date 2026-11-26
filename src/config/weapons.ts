@@ -36,7 +36,8 @@ export const CLASS_INFO: Record<WeaponClass, ClassInfo> = {
   axe: { name: '도끼', style: '느리지만 강력한 광역 공격', attackInterval: 1.35 },
 };
 
-export const MAX_LEVEL = 50;
+/** Highest enhancement level for every weapon (user decision 2026-11-26: +100, was +50). */
+export const MAX_LEVEL = 100;
 
 /**
  * Classes that are handed out (2026-11-19): swords only, because only swords have a name and an image

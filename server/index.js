@@ -22,7 +22,7 @@ const ORIGINS = new Set([
   'http://localhost:5173',
   ...clean(process.env.ALLOWED_ORIGINS).split(',').map((s) => s.trim()).filter(Boolean),
 ]);
-const MAX_LEVEL = 50;
+const MAX_LEVEL = 100; // must match src/config/weapons.ts (cap raised 2026-11-26)
 const MAX_DEVICES = 10;
 const RANK_SIZE = 50;
 /**

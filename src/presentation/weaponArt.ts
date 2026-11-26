@@ -3,7 +3,7 @@
 // the look still reflects class, element, milestone tier and appearance stage so evolution is visible now.
 import Phaser from 'phaser';
 import { ELEMENT_INFO, type Element, type WeaponClass } from '../config/weapons';
-import { appearanceStage, milestoneTier } from '../config/appearance';
+import { milestoneTier, visualStage } from '../config/appearance';
 import { swordFormIndex } from '../config/swordNames';
 import { mix } from './theme';
 
@@ -33,8 +33,11 @@ export function swordFormTexture(element: Element, form: number): string {
  */
 export function weaponLookTexture(scene: Phaser.Scene, look: WeaponLook): string {
   if (look.cls === 'sword') {
-    const key = swordFormTexture(look.element, swordFormIndex(look.level));
-    if (scene.textures.exists(key)) return key;
+    // forms added for +60..+100 may not have their image yet: use the newest form image that exists
+    for (let i = swordFormIndex(look.level); i >= 0; i--) {
+      const key = swordFormTexture(look.element, i);
+      if (scene.textures.exists(key)) return key;
+    }
   }
   return weaponTexture(look.cls, look.element);
 }
@@ -44,7 +47,7 @@ export function weaponLookTexture(scene: Phaser.Scene, look: WeaponLook): string
  * Returned as the outer strength of Phaser's glow effect.
  */
 export function glowStrength(level: number): number {
-  const stage = appearanceStage(level);
+  const stage = visualStage(level);
   return stage <= 0 ? 0 : 0.5 + stage * 0.34;
 }
 
@@ -91,7 +94,7 @@ export function drawWeapon(g: Phaser.GameObjects.Graphics, look: WeaponLook, len
   const k = length / 300;
   const el = ELEMENT_INFO[look.element];
   const tier = milestoneTier(look.level);
-  const stage = appearanceStage(look.level);
+  const stage = visualStage(look.level);
   const metal = mix(0x7d828d, el.color, 0.22 + tier * 0.13);
   const metalDark = mix(metal, 0x000000, 0.35);
   const edge = mix(0xe4e8ef, el.glow, 0.2 + tier * 0.14);

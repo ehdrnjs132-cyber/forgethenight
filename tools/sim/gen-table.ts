@@ -28,12 +28,24 @@ export const PARAMS: CurveParams = {
   destroy: [5, 30, 1.2],
 };
 
+/**
+ * +50..+99 (user decision 2026-11-26: the cap went from +50 to +100). The confirmed +0..+49 rows stay
+ * exactly as they were; this second segment starts where they end and keeps getting harsher.
+ * [value at +50, value at +99, curve exponent]. First guess, awaiting the user's review.
+ */
+export const EXT_PARAMS: CurveParams = {
+  great: [6, 4, 1],
+  success: [52, 44, 1],
+  down: [7, 9, 1],
+  destroy: [30, 40, 1],
+};
+
 const round1 = (v: number) => Math.round(v * 10) / 10;
 
-export function generateTable(p: CurveParams): EnhanceRow[] {
+function segment(p: CurveParams, from: number, to: number): EnhanceRow[] {
   const rows: EnhanceRow[] = [];
-  for (let level = 0; level < 50; level++) {
-    const t = level / 49;
+  for (let level = from; level <= to; level++) {
+    const t = (level - from) / (to - from);
     const curve = ([a, b, e]: [number, number, number]) => round1(a + (b - a) * Math.pow(t, e));
     const great = curve(p.great);
     const success = curve(p.success);
@@ -46,13 +58,18 @@ export function generateTable(p: CurveParams): EnhanceRow[] {
   return rows;
 }
 
+export function generateTable(p: CurveParams, ext: CurveParams = EXT_PARAMS): EnhanceRow[] {
+  return [...segment(p, 0, 49), ...segment(ext, 50, 99)];
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const rows = generateTable(PARAMS);
   const out = {
-    note: 'Enhancement table (+0..+49), confirmed by the user on 2026-11-18. Percent per outcome; each row sums to 100. Tests verify the sums.',
+    note: 'Enhancement table (+0..+99). Rows +0..+49 confirmed by the user on 2026-11-18; +50..+99 added 2026-11-26 (cap raised to +100), first guess. Percent per outcome; each row sums to 100. Tests verify the sums.',
     status: 'confirmed',
     confirmedAt: '2026-11-18',
     params: PARAMS,
+    extParams: EXT_PARAMS,
     rows,
   };
   const path = fileURLToPath(new URL('../../src/config/enhancement-table.json', import.meta.url));

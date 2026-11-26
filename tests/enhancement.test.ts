@@ -7,8 +7,8 @@ import { runWith, seedFor } from './helpers';
 const sum = (r: Record<string, number>) => OUTCOMES.reduce((a, o) => a + r[o], 0);
 
 describe('enhancement table (QA 1)', () => {
-  it('has a row for +0..+49', () => {
-    expect(ENHANCE_TABLE).toHaveLength(50);
+  it('has a row for +0..+99 (cap +100 since 2026-11-26)', () => {
+    expect(ENHANCE_TABLE).toHaveLength(100);
   });
 
   it('every row sums to exactly 100 and has no negative chance', () => {
@@ -18,10 +18,11 @@ describe('enhancement table (QA 1)', () => {
     });
   });
 
-  it('respects the destroy range (raised again 2026-11-19): 5% at +0, rising to at most 30%', () => {
+  it('respects the destroy range (raised again 2026-11-19): 5% at +0, 30% by +49, at most 40% up to +99', () => {
     expect(ENHANCE_TABLE[0].destroy).toBe(5);
     for (let i = 1; i < ENHANCE_TABLE.length; i++) expect(ENHANCE_TABLE[i].destroy).toBeGreaterThanOrEqual(ENHANCE_TABLE[i - 1].destroy);
-    for (const row of ENHANCE_TABLE) expect(row.destroy).toBeLessThanOrEqual(30);
+    for (const row of ENHANCE_TABLE.slice(0, 50)) expect(row.destroy).toBeLessThanOrEqual(30);
+    for (const row of ENHANCE_TABLE) expect(row.destroy).toBeLessThanOrEqual(40);
   });
 
   it('modifiers keep the total at 100 and destroy at or above the floor', () => {
@@ -48,16 +49,18 @@ describe('outcome and level rules', () => {
     expect(rollOutcome(row, 0.99999)).toBe('destroy');
   });
 
-  it('caps at +50 (QA 2) and floors at +0 (QA 3)', () => {
-    expect(levelAfter(49, 'great')).toBe(50);
-    expect(levelAfter(50, 'success')).toBe(50);
+  it('caps at +100 (QA 2, raised 2026-11-26) and floors at +0 (QA 3)', () => {
+    expect(levelAfter(49, 'great')).toBe(51);
+    expect(levelAfter(99, 'great')).toBe(100);
+    expect(levelAfter(100, 'success')).toBe(100);
     expect(levelAfter(0, 'down')).toBe(0);
     expect(levelAfter(10, 'down')).toBe(9);
     expect(levelAfter(10, 'destroy')).toBeNull();
   });
 
-  it('refuses to enhance a +50 weapon (QA 2)', () => {
-    const s = runWith([{ level: 50 }, {}]);
+  it('enhances past +50 and refuses a +100 weapon (QA 2)', () => {
+    expect(enhance(runWith([{ level: 50 }, {}]), 'w1').ok).toBe(true);
+    const s = runWith([{ level: 100 }, {}]);
     const attempt = enhance(s, 'w1');
     expect(attempt.ok).toBe(false);
     if (!attempt.ok) expect(attempt.blocked).toBe('max-level');

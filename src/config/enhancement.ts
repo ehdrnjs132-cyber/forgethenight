@@ -13,7 +13,7 @@ export interface EnhanceRow {
   destroy: number;
 }
 
-/** Rows for +0 .. +49. A weapon at +50 cannot be enhanced. */
+/** Rows for +0 .. +99. A weapon at +100 (MAX_LEVEL) cannot be enhanced. */
 export const ENHANCE_TABLE: readonly EnhanceRow[] = table.rows;
 
 /** Whether the table is still the placeholder awaiting confirmation. */

@@ -1,22 +1,26 @@
-// Sword names (user decision 2026-11-18): 30 swords per element, from a plain blade to a cosmic one.
+// Sword names (user decision 2026-11-18): 30 swords per element, from a plain blade to a cosmic one;
+// 21 more per element since the cap went to +100 (2026-11-26), one form every +2.
 // The name changes with enhancement level; `look` is the English art brief for the sword's image
 // (one image per entry, made with Higgsfield after a sample is approved).
 // Each element has its own silhouette family so elements never look alike:
 //   fire = curved, wavy, flaring · earth = heavy, blunt, stone and crystal · lightning = thin, jagged, angular
 //   water = flowing curves, sea creatures · ice = translucent, faceted, spiky crystal.
-import { CLASS_INFO, ELEMENT_INFO, type Element, type WeaponClass } from './weapons';
+import { CLASS_INFO, ELEMENT_INFO, ELEMENTS, type Element, type WeaponClass } from './weapons';
+import { APPEARANCE_STAGES } from './appearance';
 
 export interface SwordForm {
   name: string;
   look: string;
 }
 
-/** Enhancement level at which each of the 30 names begins: every level up to +20, then wider steps to +50. */
-export const SWORD_NAME_LEVELS: readonly number[] = [
-  0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 23, 26, 29, 32, 35, 38, 41, 45, 50,
-];
+/**
+ * Enhancement level at which each name begins: a new form every +2 up to +100 (user decision 2026-11-26;
+ * it was 30 forms up to +50). Form i begins at +2i: the original 30 now cover +0..+58, the 21 added
+ * forms (EXTRA_FORMS) +60..+100.
+ */
+export const SWORD_NAME_LEVELS: readonly number[] = APPEARANCE_STAGES;
 
-export const SWORD_FORMS: Record<Element, readonly SwordForm[]> = {
+const BASE_FORMS: Record<Element, readonly SwordForm[]> = {
   fire: [
     { name: '녹슨 부지깽이검', look: 'a rusty bent iron blade that looks like a fire poker, crude wooden grip' },
     { name: '그을린 철검', look: 'a plain iron arming sword with a soot-blackened edge' },
@@ -179,7 +183,134 @@ export const SWORD_FORMS: Record<Element, readonly SwordForm[]> = {
   ],
 };
 
-/** Index (0..29) of the sword form for an enhancement level. */
+/**
+ * Forms 30..50 (+60..+100), added when the cap went to +100 (2026-11-26): past the cosmos — other
+ * dimensions, gods, the idea of the element itself. Same silhouette families per element as above.
+ */
+const EXTRA_FORMS: Record<Element, readonly SwordForm[]> = {
+  fire: [
+    { name: '차원 균열 화염검', look: 'a blade of fire pouring out of a glowing crack between dimensions' },
+    { name: '다중우주 용광로', look: 'a blade glowing like a furnace, many tiny universes being forged in its fuller' },
+    { name: '혼돈의 불씨', look: 'a wavy blade of chaotic flame shifting between red, violet and gold' },
+    { name: '신염', look: 'a divine white-flame blade with a golden halo ring behind the guard' },
+    { name: '염신의 왕홀검', look: 'a fire god sceptre-sword, burning crown jewels set in the hilt' },
+    { name: '영겁의 화로', look: 'a blade of eternal forge fire with an anvil-shaped guard throwing endless sparks' },
+    { name: '별의 장례식', look: 'a blade made of a dying red giant star collapsing into embers' },
+    { name: '화염 특이점', look: 'a curved blade with a blazing singularity at its tip pulling flames inward' },
+    { name: '붉은 다중성', look: 'a blade split into several overlapping fiery copies of itself from parallel worlds' },
+    { name: '불타는 시간', look: 'a blade whose flame burns backwards, ashes rising and turning back into fire' },
+    { name: '천염 십이익', look: 'a blade with twelve burning seraph wings spreading from the guard' },
+    { name: '화염의 이데아', look: 'a perfect geometric blade of idealised flame drawn in clean glowing lines' },
+    { name: '세계를 지핀 불', look: 'a blade with a tiny world catching fire inside its glowing core' },
+    { name: '진홍 무한검', look: 'a crimson blade whose wavy edge repeats into infinity like a fractal' },
+    { name: '원초의 대폭발', look: 'a blade erupting with a big-bang burst of light and matter' },
+    { name: '불의 근원', look: 'a blade holding the origin of all fire, a calm white-gold flame at its heart' },
+    { name: '신살의 업화', look: 'a black-red blade of karmic hellfire, a broken divine halo on the hilt' },
+    { name: '태양들의 왕관', look: 'a blade crowned with a ring of many small blazing suns' },
+    { name: '영원한 불꽃', look: 'a blade of a flame that never flickers, frozen in perfect eternal burning' },
+    { name: '절대 화염', look: 'an absolute flame blade so bright the fire shades into pure white' },
+    { name: '불꽃 그 자체', look: 'a sword that is fire itself, flame shaped into a blade with a whole cosmos in its glow' },
+  ],
+  earth: [
+    { name: '차원 지각검', look: 'a heavy blade of tectonic plates from different worlds grinding together' },
+    { name: '다중 대륙검', look: 'a broad blade with several small floating continents stacked along it' },
+    { name: '혼돈의 바위', look: 'a blunt blade of impossible shifting rock shapes and colours' },
+    { name: '신의 초석', look: 'a divine cornerstone blade of white marble with glowing golden runes' },
+    { name: '지신의 왕검', look: 'an earth god king sword with a crown of mountain peaks as the guard' },
+    { name: '영겁의 지층', look: 'a thick blade showing billions of years of coloured rock layers' },
+    { name: '행성 탄생검', look: 'a blade of swirling dust and rock clumping into a newborn planet' },
+    { name: '중력 특이점', look: 'a massive blade with a heavy black point at the tip bending rocks around it' },
+    { name: '평행 산맥', look: 'a jagged blade where mountain ranges from parallel worlds overlap' },
+    { name: '화석이 된 시간', look: 'a stone blade of fossilised moments, clocks and shells turned to rock' },
+    { name: '거신들의 왕좌', look: 'a huge blade shaped like a titan throne carved out of a mountain' },
+    { name: '대지의 이데아', look: 'a perfect geometric crystal-stone blade with clean faceted lines' },
+    { name: '세계의 뼈대', look: 'a blade made from the bones of a world, glowing molten marrow inside' },
+    { name: '무한 결정검', look: 'a crystal blade whose facets repeat into infinity' },
+    { name: '원초의 응결', look: 'a blade of the first matter condensing out of glowing cosmic dust' },
+    { name: '흙의 근원', look: 'a blade holding the origin of all earth, living soil with a seed of light' },
+    { name: '신살의 거암', look: 'a dark god-slaying stone greatsword, a cracked divine halo on the hilt' },
+    { name: '행성들의 왕관', look: 'a blade crowned with a ring of small orbiting planets' },
+    { name: '영원한 대지', look: 'a blade of unchanging eternal stone, perfectly still and timeless' },
+    { name: '절대 금강', look: 'an absolute diamond blade, flawless and shining pure white' },
+    { name: '대지 그 자체', look: 'a sword that is the earth itself, a whole world shaped into a blade' },
+  ],
+  lightning: [
+    { name: '차원 방전검', look: 'a thin blade arcing lightning between two different dimensions' },
+    { name: '다중우주 회로검', look: 'an angular blade covered in glowing circuits linking many tiny universes' },
+    { name: '혼돈의 번개', look: 'a jagged blade of chaotic multi-coloured lightning branching everywhere' },
+    { name: '신뢰', look: 'a divine golden lightning blade with a halo made of bolts' },
+    { name: '뇌신의 왕홀검', look: 'a thunder god sceptre-sword with a crown of crackling bolts' },
+    { name: '영겁의 폭풍', look: 'a blade wrapped in an eternal storm that never stops' },
+    { name: '별의 신경망', look: 'a blade of glowing nerve-like lightning connecting stars' },
+    { name: '전하 특이점', look: 'a needle blade with a blinding charged point at its tip pulling arcs inward' },
+    { name: '평행 섬광', look: 'a blade split into overlapping lightning copies from parallel worlds' },
+    { name: '멈춘 번개', look: 'a zigzag blade of a lightning bolt frozen in time, sparks hanging in the air' },
+    { name: '천뢰 십이익', look: 'a blade with twelve wings of lightning spreading from the guard' },
+    { name: '번개의 이데아', look: 'a perfect geometric zigzag blade of ideal light' },
+    { name: '세계를 깨운 번개', look: 'a blade with a tiny world struck awake by a bolt inside its core' },
+    { name: '무한 섬광검', look: 'a blade of lightning repeating into infinity like a fractal' },
+    { name: '원초의 방전', look: 'a blade of the first spark of creation, white-violet energy' },
+    { name: '빛의 근원', look: 'a blade holding the origin of all light, a calm bright star at its heart' },
+    { name: '신살의 낙뢰', look: 'a black-gold god-slaying bolt blade, a broken divine halo on the hilt' },
+    { name: '폭풍들의 왕관', look: 'a blade crowned with a ring of small storm clouds' },
+    { name: '영원한 섬광', look: 'a blade of an eternal flash that never fades, perfectly still light' },
+    { name: '절대 전류', look: 'an absolute current blade of pure white energy beyond colour' },
+    { name: '번개 그 자체', look: 'a sword that is lightning itself, a bolt shaped into a blade with a cosmos in its arcs' },
+  ],
+  water: [
+    { name: '차원 해류검', look: 'a flowing blade of water pouring between two dimensions through a rift' },
+    { name: '다중우주 바다검', look: 'a curved blade holding many small oceans of different worlds' },
+    { name: '혼돈의 물결', look: 'a blade of chaotic waves in shifting impossible colours' },
+    { name: '신수', look: 'a divine glowing holy-water blade with a golden halo' },
+    { name: '해신의 왕검', look: 'a sea god king sword with a coral and pearl crown guard' },
+    { name: '영겁의 조류', look: 'a blade of an eternal tide endlessly rising and falling' },
+    { name: '별의 바다', look: 'a blade of an ocean where stars swim like fish' },
+    { name: '심연 특이점', look: 'a blade with a deep dark whirlpool point at its tip pulling water inward' },
+    { name: '평행 대양', look: 'a blade where oceans from parallel worlds overlap' },
+    { name: '거꾸로 흐르는 강', look: 'a blade of a river flowing upward and backward in time' },
+    { name: '해천 십이익', look: 'a blade with twelve wings of flowing water spreading from the guard' },
+    { name: '물의 이데아', look: 'a perfect geometric blade of ideal water in clean flowing lines' },
+    { name: '세계를 적신 비', look: 'a blade with a tiny world in a rainstorm inside its core' },
+    { name: '무한 파도검', look: 'a blade of curling waves repeating into infinity like a fractal' },
+    { name: '원초의 대양', look: 'a blade of the first ocean of the universe, glowing primordial water' },
+    { name: '생명의 근원', look: 'a blade holding the origin of all life, a calm glowing water drop at its heart' },
+    { name: '신살의 해일', look: 'a dark god-slaying tidal blade, a broken divine halo on the hilt' },
+    { name: '바다들의 왕관', look: 'a blade crowned with a ring of small floating oceans' },
+    { name: '영원한 물방울', look: 'a blade of a single eternal water drop that never falls' },
+    { name: '절대 정수', look: 'an absolute pure-water blade, perfectly clear and shining white' },
+    { name: '물 그 자체', look: 'a sword that is water itself, every sea shaped into a blade with the cosmos reflected in it' },
+  ],
+  ice: [
+    { name: '차원 동결검', look: 'a faceted ice blade freezing the rift between two dimensions' },
+    { name: '다중우주 빙정검', look: 'a spiky blade holding many tiny frozen universes in its crystals' },
+    { name: '혼돈의 서리', look: 'a blade of chaotic frost crystals in shifting impossible colours' },
+    { name: '신빙', look: 'a divine glowing holy-ice blade with a golden halo' },
+    { name: '빙신의 왕홀검', look: 'an ice god sceptre-sword with a crown of ice spires' },
+    { name: '영겁의 빙하', look: 'a blade of an eternal glacier that never melts' },
+    { name: '얼어붙은 은하', look: 'a blade of a whole spiral galaxy frozen into ice' },
+    { name: '냉기 특이점', look: 'a blade with a freezing point at its tip where everything stops' },
+    { name: '평행 결정', look: 'a blade where ice crystals from parallel worlds overlap' },
+    { name: '얼어붙은 순간', look: 'a blade of one frozen moment, falling snow stopped in mid-air' },
+    { name: '빙천 십이익', look: 'a blade with twelve wings of ice spreading from the guard' },
+    { name: '얼음의 이데아', look: 'a perfect geometric blade of ideal ice with clean faceted lines' },
+    { name: '세계를 재운 겨울', look: 'a blade with a tiny sleeping winter world inside its core' },
+    { name: '무한 눈송이검', look: 'a blade of snowflake fractals repeating into infinity' },
+    { name: '원초의 냉기', look: 'a blade of the first cold of the universe, deep blue stillness' },
+    { name: '고요의 근원', look: 'a blade holding the origin of all stillness, a calm glowing ice seed at its heart' },
+    { name: '신살의 영구빙', look: 'a dark god-slaying permafrost blade, a broken divine halo on the hilt' },
+    { name: '혹성들의 왕관', look: 'a blade crowned with a ring of small frozen planets' },
+    { name: '멈춘 영원', look: 'a blade of a timeless crystal, perfectly still' },
+    { name: '절대 빙결', look: 'an absolute ice blade, flawless and shining pure white' },
+    { name: '얼음 그 자체', look: 'a sword that is ice itself, all cold shaped into a blade with the cosmos frozen in it' },
+  ],
+};
+
+/** 51 forms per element: the original 30, then the 21 added ones. */
+export const SWORD_FORMS: Record<Element, readonly SwordForm[]> = Object.fromEntries(
+  ELEMENTS.map((el) => [el, [...BASE_FORMS[el], ...EXTRA_FORMS[el]]]),
+) as unknown as Record<Element, readonly SwordForm[]>;
+
+/** Index (0..50) of the sword form for an enhancement level. */
 export function swordFormIndex(level: number): number {
   let idx = 0;
   for (let i = 0; i < SWORD_NAME_LEVELS.length; i++) if (level >= SWORD_NAME_LEVELS[i]) idx = i;

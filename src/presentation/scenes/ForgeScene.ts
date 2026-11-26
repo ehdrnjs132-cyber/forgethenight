@@ -882,7 +882,7 @@ export class ForgeScene extends Phaser.Scene {
     if (w) this.levelText.setLevel(w.level);
     if (w) {
       const next = MILESTONES.find((m) => m.level > w.level);
-      this.nextText.setText(w.level >= MAX_LEVEL ? '궁극의 무기 · 더 이상 강화할 수 없습니다' : next ? `다음 각성  +${next.level} ${next.name}  ·  ${next.level - w.level}단계 남음` : '');
+      this.nextText.setText(w.level >= MAX_LEVEL ? `${MILESTONES[MILESTONES.length - 1].name} · 더 이상 강화할 수 없습니다` : next ? `다음 각성  +${next.level} ${next.name}  ·  ${next.level - w.level}단계 남음` : '');
     } else this.nextText.setText('');
     this.damageText.setText(w ? `한 방 피해  ${formatDamage(weaponDamage(w.level, w.cls))}` : '');
   }
@@ -987,7 +987,7 @@ export class ForgeScene extends Phaser.Scene {
     const key = (k: string) => (PORTRAIT ? '' : ` · ${k}`);
     this.enhanceBtn.setLabel(
       w && w.level >= MAX_LEVEL ? '최대 단계' : '강화',
-      w && w.level >= MAX_LEVEL ? '+50 도달' : !w ? (PORTRAIT ? '' : 'Space') : cost === 0 ? `무료${key('Space')}` : `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''}${key('Space')}`,
+      w && w.level >= MAX_LEVEL ? `+${MAX_LEVEL} 도달` : !w ? (PORTRAIT ? '' : 'Space') : cost === 0 ? `무료${key('Space')}` : `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''}${key('Space')}`,
     );
     const eq = !!w && this.core.state.equippedId === w.id;
     this.equipBtn.setEnabled(!!w && !eq && !this.animating);
@@ -1276,7 +1276,7 @@ export class ForgeScene extends Phaser.Scene {
             this.tryEnhance(true);
           },
         });
-      } else if (res.reason === 'max-level') this.toast('+50에 도달한 무기는 더 강화할 수 없습니다');
+      } else if (res.reason === 'max-level') this.toast(`+${MAX_LEVEL}에 도달한 무기는 더 강화할 수 없습니다`);
       else if (res.reason === 'gold') {
         this.sfx.denied();
         this.toast(`골드가 부족합니다 (강화 ${enhanceCostFor(this.core.state, w.level).toLocaleString()}G) · 무기를 팔아 골드를 마련하세요`, C.dangerHi);

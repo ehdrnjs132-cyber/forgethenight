@@ -12,6 +12,12 @@ export interface Tier {
 
 /** Colour grade by level: grey, blue, purple, orange, red, gold. */
 export function levelTier(level: number): Tier {
+  // above +50 (cap raised to +100 on 2026-11-26)
+  if (level >= 100) return { fill: 0xf2f2f2, rim: 0xffd34d, name: '절대' };
+  if (level >= 90) return { fill: 0x2b0a3d, rim: 0xff7ad9, name: '신살' };
+  if (level >= 80) return { fill: 0x0f6b6b, rim: 0x8affe8, name: '창세' };
+  if (level >= 70) return { fill: 0x1a1a4a, rim: 0x9fa8ff, name: '차원' };
+  if (level >= 60) return { fill: 0x0d5aa0, rim: 0x9fe8ff, name: '초월' };
   if (level >= 50) return { fill: 0xb8860b, rim: 0xffe27a, name: '궁극' };
   if (level >= 40) return { fill: 0xa3122a, rim: 0xff6a7a, name: '신화' };
   if (level >= 30) return { fill: 0xb5530d, rim: 0xffb24a, name: '전설' };
