@@ -34,8 +34,8 @@ export function betFromShare(gold: number, share: number): number {
   return Math.max(1, Math.min(gold, Math.round(gold * t)));
 }
 
-// ───────────────────────── 운명의 무기 카드 (DAY 30): the stake is the weapons the player picks from the rack
-// (user 2026-11-26: "가지고있는 무기중 선택할수있게"; it first staked every weapon)
+// ───────────────────────── 운명의 무기 카드 (DAY 30): the stake is ONE weapon the player picks from the rack
+// (user 2026-11-26: first every weapon, then "가지고있는 무기중 선택", then "하나만 선택")
 export type WeaponCardBlock = 'locked' | 'played' | 'night' | 'no-weapons' | 'pick';
 
 export function weaponCardUnlocked(state: GameState): boolean {
@@ -54,9 +54,9 @@ export function checkWeaponCard(state: GameState): WeaponCardBlock | null {
   return null;
 }
 
-/** The chosen weapons must be one or more distinct weapons from the rack. */
+/** Exactly one weapon from the rack is at stake (user 2026-11-26: "하나만 선택"). */
 function validStake(state: GameState, ids: readonly string[]): boolean {
-  return ids.length > 0 && new Set(ids).size === ids.length && ids.every((id) => state.weapons.some((w) => w.id === id));
+  return ids.length === 1 && state.weapons.some((w) => w.id === ids[0]);
 }
 
 /** O: the chosen weapons +WEAPON_CARD.levels (up to the cap). X: the chosen weapons are destroyed. The rest are untouched. */

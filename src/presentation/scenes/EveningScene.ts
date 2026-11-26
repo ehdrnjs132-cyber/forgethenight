@@ -167,7 +167,7 @@ export class EveningScene extends Phaser.Scene {
     card.add(label(this, -CARD.w / 2 + pad, top + 22, '⚔ 운명의 무기 카드', 22 * big, 0xff6b6b, { weight: 900 }));
     const text = played
       ? '오늘은 이미 무기를 걸었다.\n내일 밤 다시 걸 수 있다.'
-      : `두 장 중 한 장. 걸리는 건 골드가 아니라 무기걸이에서 직접 고른 무기.\nO면 고른 무기 모두 +${WEAPON_CARD.levels} · X면 고른 무기 모두 파괴. 하루 한 번.`;
+      : `두 장 중 한 장. 걸리는 건 골드가 아니라 무기걸이에서 고른 무기 한 자루.\nO면 그 무기 +${WEAPON_CARD.levels} · X면 그 무기 파괴. 하루 한 번.`;
     card.add(label(this, -CARD.w / 2 + pad, top + 60 * big, text, 14 * big, C.text, { wrap, lineSpacing: 6 }));
     const can = !played && n > 0;
     const btn = new Button(this, 0, h / 2 - 44, CARD.w - 40, 60, played ? '오늘은 끝' : n === 0 ? '걸 무기가 없다' : '걸 무기를 고른다', {

@@ -74,24 +74,24 @@ describe('운명의 카드', () => {
     expect(checkCard({ ...r.state, day: 13 }, 100)).toBeNull();
   });
 
-  it('운명의 무기 카드 (DAY 30): only the chosen weapons are at stake — O +10, X destroyed; once a day', () => {
+  it('운명의 무기 카드 (DAY 30): one chosen weapon at stake — O +10, X destroyed; the rest safe; once a day', () => {
     expect(WEAPON_CARD).toEqual({ unlockDay: 30, levels: 10 });
-    const rack = (day: number): GameState => ({ ...runWith([{ level: 3 }, { level: 12 }, { level: 95 }]), day, equippedId: 'w2' });
+    const rack = (day: number): GameState => ({ ...runWith([{ level: 3 }, { level: 95 }, { level: 12 }]), day, equippedId: 'w2' });
     expect(checkWeaponCard(rack(29))).toBe('locked');
     expect(checkWeaponCard({ ...rack(30), weapons: [] })).toBe('no-weapons');
     let sawWin = false;
     let sawLoss = false;
     for (let seed = 1; seed <= 60; seed++) {
-      const r = playWeaponCard({ ...rack(30), rng: seed }, 0, ['w2', 'w3']);
+      const r = playWeaponCard({ ...rack(30), rng: seed }, 0, ['w2']);
       if (!r.ok) throw new Error(r.reason);
-      expect(r.count).toBe(2);
+      expect(r.count).toBe(1);
       if (r.win) {
         sawWin = true;
-        expect(r.state.weapons.map((w) => w.level)).toEqual([3, 22, 100]); // w1 untouched; w3 capped at +100
+        expect(r.state.weapons.map((w) => w.level)).toEqual([3, 100, 12]); // w2 capped at +100, the others untouched
         expect(r.state.stats.bestLevel).toBeGreaterThanOrEqual(100);
       } else {
         sawLoss = true;
-        expect(r.state.weapons.map((w) => w.id)).toEqual(['w1']); // the weapon not chosen is safe
+        expect(r.state.weapons.map((w) => w.id)).toEqual(['w1', 'w3']); // the weapons not chosen are safe
         expect(r.state.equippedId).toBeNull(); // the equipped w2 broke
       }
       expect(checkWeaponCard(r.state)).toBe('played');
@@ -99,10 +99,10 @@ describe('운명의 카드', () => {
     expect(sawWin && sawLoss).toBe(true);
   });
 
-  it('the stake must be one or more distinct weapons from the rack', () => {
+  it('exactly one weapon from the rack can be staked (user 2026-11-26)', () => {
     const s = { ...runWith([{ level: 3 }, { level: 12 }]), day: 30 };
     expect(playWeaponCard(s, 0, [])).toEqual({ ok: false, reason: 'pick' });
-    expect(playWeaponCard(s, 0, ['w1', 'w1'])).toEqual({ ok: false, reason: 'pick' });
+    expect(playWeaponCard(s, 0, ['w1', 'w2'])).toEqual({ ok: false, reason: 'pick' });
     expect(playWeaponCard(s, 0, ['nope'])).toEqual({ ok: false, reason: 'pick' });
     expect(playWeaponCard(s, 0, ['w1']).ok).toBe(true);
   });
