@@ -93,14 +93,20 @@ export class Sfx {
     if (weight >= 2) this.tone(base * 1.5, 1.1, { type: 'sine', gain: 0.05 + weight * 0.01, when: 0.02 }); // magic resonance
   }
 
+  /**
+   * 대성공: a sharper, brighter metal ring right on the blow (inharmonic partials like struck steel),
+   * then a short rising sparkle. The ring is on the impact itself so sound, sparks and number land together.
+   */
   great() {
-    [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this.tone(f, 0.7, { type: 'triangle', gain: 0.12, when: 0.05 + i * 0.07 }));
-    this.noise(0.6, { gain: 0.08, freq: 6000, type: 'highpass', when: 0.05 });
+    this.noise(0.05, { gain: 0.3, freq: 7000, type: 'highpass', q: 0.9 });
+    [1760, 2637, 3951, 5274].forEach((f, i) => this.tone(f, 0.9 - i * 0.15, { type: i === 0 ? 'triangle' : 'sine', gain: 0.13 - i * 0.025, attack: 0.001 }));
+    [1046.5, 1318.5, 1568].forEach((f, i) => this.tone(f, 0.35, { type: 'triangle', gain: 0.07, when: 0.04 + i * 0.04 }));
   }
 
+  /** 성공: one short clean ping on the blow. */
   success() {
-    this.tone(880, 0.6, { type: 'sine', gain: 0.1, when: 0.02 });
-    this.tone(1320, 0.45, { type: 'sine', gain: 0.06, when: 0.05 });
+    this.tone(1320, 0.28, { type: 'sine', gain: 0.1, attack: 0.002 });
+    this.tone(1980, 0.18, { type: 'sine', gain: 0.04, attack: 0.002 });
   }
 
   keep() {
@@ -112,17 +118,18 @@ export class Sfx {
     this.noise(0.35, { gain: 0.12, freq: 900, sweepTo: 200, q: 3 });
   }
 
+  /** 파괴: a short, dry break — crack, a scatter of shards, a low thud. */
   shatter() {
-    this.noise(0.5, { gain: 0.4, freq: 3000, type: 'highpass' });
-    for (let i = 0; i < 7; i++) this.tone(1800 + Math.random() * 2600, 0.12 + Math.random() * 0.2, { gain: 0.05, when: Math.random() * 0.25 });
-    this.tone(90, 0.5, { gain: 0.3, slideTo: 35 });
+    this.noise(0.28, { gain: 0.42, freq: 3000, type: 'highpass' });
+    for (let i = 0; i < 6; i++) this.tone(1800 + Math.random() * 2600, 0.08 + Math.random() * 0.1, { gain: 0.05, when: Math.random() * 0.14 });
+    this.tone(90, 0.32, { gain: 0.3, slideTo: 35 });
   }
 
   /** "순간적인 정적" after destruction: duck everything for a moment. */
   silence(ms: number) {
     const ctx = this.ctx;
     if (!ctx || !this.master) return;
-    const t = ctx.currentTime + 0.35;
+    const t = ctx.currentTime + 0.22;
     this.master.gain.setValueAtTime(0.55, t);
     this.master.gain.linearRampToValueAtTime(0.0001, t + 0.05);
     this.master.gain.setValueAtTime(0.0001, t + ms / 1000);

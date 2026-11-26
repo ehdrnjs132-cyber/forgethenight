@@ -129,7 +129,7 @@ export class EveningScene extends Phaser.Scene {
     card.add(label(this, -CARD.w / 2 + pad, top + 22, '💰 월세 미리 내기', 24 * big, C.goldHi, { weight: 900 }));
     const bonus = `미리 내면 왕이 올 때까지 망치질 +${Math.round(PREPAY_BONUS.speed * 100)}% · 성공 +${PREPAY_BONUS.success}%p`;
     const text = s.rentPrepaid
-      ? `다음 방문(DAY ${due}) 월세는 이미 냈다.\n${bonus.replace('미리 내면 ', '')} 적용 중`
+      ? `다음 방문(DAY ${due}) 월세는 이미 냈다${s.rentPrepaidAmount !== undefined ? ` (${s.rentPrepaidAmount.toLocaleString()}G)` : ''}.\n${bonus.replace('미리 내면 ', '')} 적용 중`
       : `다음 방문 DAY ${due} · 그날 내면 ${later.toLocaleString()}G\n오늘 내면 ${now.toLocaleString()}G · 못 내면 대장간을 잃는다\n${bonus}`;
     card.add(label(this, -CARD.w / 2 + pad, top + 64 * big, text, 14 * big, C.text, { wrap, lineSpacing: 6 }));
     const can = !s.rentPrepaid && s.gold >= now;

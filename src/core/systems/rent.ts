@@ -39,9 +39,18 @@ export function collectRent(prev: GameState): { state: GameState; notice: RentNo
   const rng = new Rng(prev.rng);
   const next = prev.day + RENT.minGap + rng.int(RENT.maxGap - RENT.minGap + 1);
   if (prev.rentPrepaid) {
-    // paid in advance: the king leaves satisfied
-    const notice: RentNotice = { day: prev.day, amount, paid: 0, lifeLost: false, prepaid: true };
-    return { state: { ...prev, rng: rng.state, rentDueDay: next, lastRent: notice, rentPrepaid: false }, notice };
+    // paid in advance: the king leaves satisfied. The notice tells what was actually paid back then
+    // (older saves did not keep it: 0 = unknown, and the notice then names no amount).
+    const notice: RentNotice = {
+      day: prev.day,
+      amount,
+      paid: prev.rentPrepaidAmount ?? 0,
+      lifeLost: false,
+      prepaid: true,
+      ...(prev.rentPrepaidDay !== undefined ? { prepaidDay: prev.rentPrepaidDay } : {}),
+    };
+    const { rentPrepaidAmount: _a, rentPrepaidDay: _d, ...rest } = prev;
+    return { state: { ...rest, rng: rng.state, rentDueDay: next, lastRent: notice, rentPrepaid: false }, notice };
   }
   if (prev.gold >= amount) {
     const notice: RentNotice = { day: prev.day, amount, paid: amount, lifeLost: false };
@@ -53,6 +62,14 @@ export function collectRent(prev: GameState): { state: GameState; notice: RentNo
   }
   const notice: RentNotice = { day: prev.day, amount, paid: 0, lifeLost: true };
   return { state: { ...prev, lives: 0, rng: rng.state, rentDueDay: next, lastRent: notice }, notice };
+}
+
+/** First line of the morning rent notice: always the amount that actually left the purse. */
+export function rentPaidLine(n: RentNotice): string {
+  if (!n.prepaid) return `DAY ${n.day} 월세 ${n.amount.toLocaleString()}G를 냈습니다.`;
+  if (n.paid <= 0) return `DAY ${n.day} 월세는 미리 내 두었습니다.`; // older save: amount not kept
+  const when = n.prepaidDay !== undefined ? `DAY ${n.prepaidDay}에 ` : '';
+  return `DAY ${n.day} 월세는 ${when}${n.paid.toLocaleString()}G로 미리 내 두었습니다.`;
 }
 
 export type PrepayBlock = 'night' | 'already' | 'gold';
@@ -68,5 +85,5 @@ export function prepayRent(prev: GameState): { ok: true; state: GameState; price
   if (prev.rentPrepaid) return { ok: false, reason: 'already' };
   const price = prepayPrice(prev);
   if (prev.gold < price) return { ok: false, reason: 'gold' };
-  return { ok: true, state: { ...prev, gold: prev.gold - price, rentPrepaid: true, rentDueDay: rentDueDay(prev) }, price };
+  return { ok: true, state: { ...prev, gold: prev.gold - price, rentPrepaid: true, rentPrepaidAmount: price, rentPrepaidDay: prev.day, rentDueDay: rentDueDay(prev) }, price };
 }

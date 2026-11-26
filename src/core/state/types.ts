@@ -63,8 +63,10 @@ export interface RentNotice {
   lifeLost: boolean;
   /** 왕의 자비 put the unpaid rent off to the next visit. */
   mercy?: boolean;
-  /** The visit was already paid in advance. */
+  /** The visit was already paid in advance. `paid` is then what was actually paid back then. */
   prepaid?: boolean;
+  /** Day the advance payment was made (absent in older saves). */
+  prepaidDay?: number;
 }
 
 /** The most recent enhancement, kept for the time-reversal stone (DECISIONS.md, H). */
@@ -113,6 +115,9 @@ export interface GameState {
   lastRent?: RentNotice | null;
   /** The next visit was paid in advance (at the cheaper rate of the day it was paid). */
   rentPrepaid?: boolean;
+  /** What the advance payment actually cost and on which day (QA 2026-11-20: the notice showed the visit-day rate). */
+  rentPrepaidAmount?: number;
+  rentPrepaidDay?: number;
   player: { level: number; xp: number; skillPoints: number };
   skills: Record<string, number>;
   totems: { owned: string[]; equipped: string[] };

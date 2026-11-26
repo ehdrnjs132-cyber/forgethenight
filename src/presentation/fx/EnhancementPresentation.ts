@@ -4,7 +4,7 @@ import Phaser from 'phaser';
 import { OUTCOME_INFO } from '../../config/enhancement';
 import { ELEMENT_INFO } from '../../config/weapons';
 import { weaponDisplayName } from '../../config/swordNames';
-import { milestoneTier } from '../../config/appearance';
+import { MILESTONES, milestoneTier } from '../../config/appearance';
 import type { EnhanceResult } from '../../core/systems/enhancement';
 import { C, DISPLAY, FONT, css } from '../theme';
 import type { Sfx } from '../audio/sfx';
@@ -78,8 +78,24 @@ export class EnhancementPresentation {
     this.scene.tweens.add({ targets: r, scale: to, alpha: 0, duration: ms, ease: 'Cubic.easeOut', onComplete: () => r.destroy() });
   }
 
-  /** Big result text. Returns when it has popped in; it fades on its own. */
-  banner(title: string, sub: string, color: number, size = 54, dy = 0) {
+  /** Result texts still on screen; the next attempt clears them so two results never overlap. */
+  private live: Phaser.GameObjects.Text[] = [];
+  /** Weapons that already had their +10 awakening pause (bouncing around +10 only pauses once). */
+  private awakened = new Set<string>();
+
+  private clearBanners() {
+    for (const o of this.live) {
+      this.scene.tweens.killTweensOf(o);
+      o.destroy();
+    }
+    this.live = [];
+  }
+
+  /**
+   * Big result text, popped in on the impact frame; it fades on its own after `hold` ms.
+   * `hold` is short for everyday results and longer for rare ones.
+   */
+  banner(title: string, sub: string, color: number, size = 54, dy = 0, hold = 950) {
     const { x } = this.p.bannerAt;
     const y = this.p.bannerAt.y + dy;
     const t = this.scene.add
@@ -91,9 +107,20 @@ export class EnhancementPresentation {
       .setOrigin(0.5)
       .setDepth(30);
     for (const o of [t, s]) {
+      this.live.push(o);
       o.setAlpha(0).setScale(0.6);
-      this.scene.tweens.add({ targets: o, alpha: 1, scale: 1, duration: 180, ease: 'Back.easeOut' });
-      this.scene.tweens.add({ targets: o, alpha: 0, y: o.y - 14, delay: 950, duration: 320, onComplete: () => o.destroy() });
+      this.scene.tweens.add({ targets: o, alpha: 1, scale: 1, duration: 140, ease: 'Back.easeOut' });
+      this.scene.tweens.add({
+        targets: o,
+        alpha: 0,
+        y: o.y - 14,
+        delay: hold,
+        duration: 260,
+        onComplete: () => {
+          this.live = this.live.filter((l) => l !== o);
+          o.destroy();
+        },
+      });
     }
   }
 
@@ -110,13 +137,15 @@ export class EnhancementPresentation {
         .setScale(Phaser.Math.FloatBetween(0.8, 2.1))
         .setRotation(Math.random() * Math.PI)
         .setDepth(21);
-      const vx = Phaser.Math.Between(-260, 260);
-      this.scene.tweens.add({ targets: shard, x: sx + vx, duration: 900, ease: 'Linear' });
-      this.scene.tweens.add({ targets: shard, y: sy + Phaser.Math.Between(140, 320), duration: 900, ease: 'Quad.easeIn' });
-      this.scene.tweens.add({ targets: shard, angle: Phaser.Math.Between(-540, 540), alpha: 0, duration: 900, onComplete: () => shard.destroy() });
+      // short and sharp: the pieces fly out fast and are gone in about half a second
+      const vx = Phaser.Math.Between(-300, 300);
+      this.scene.tweens.add({ targets: shard, x: sx + vx, duration: 560, ease: 'Cubic.easeOut' });
+      this.scene.tweens.add({ targets: shard, y: sy + Phaser.Math.Between(120, 280), duration: 560, ease: 'Quad.easeIn' });
+      this.scene.tweens.add({ targets: shard, angle: Phaser.Math.Between(-540, 540), alpha: 0, duration: 560, onComplete: () => shard.destroy() });
     }
-    const dim = this.scene.add.rectangle(640, 360, 1280, 720, 0x000000, 0).setDepth(18);
-    this.scene.tweens.add({ targets: dim, fillAlpha: 0.45, duration: 120, yoyo: true, hold: 420, onComplete: () => dim.destroy() });
+    const cam = this.scene.cameras.main;
+    const dim = this.scene.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0).setDepth(18);
+    this.scene.tweens.add({ targets: dim, fillAlpha: 0.45, duration: 90, yoyo: true, hold: 200, onComplete: () => dim.destroy() });
   }
 
   private crack() {
@@ -149,55 +178,75 @@ export class EnhancementPresentation {
     const newName = result.weaponAfter ? weaponDisplayName(result.weaponAfter) : '';
     const renamed = result.weaponAfter !== null && newName !== weaponDisplayName(result.weaponBefore) ? `  ·  「${newName}」` : '';
 
-    // 1–2: raise, then a fast drop
+    // QA 2026-11-20: the previous result's text goes the moment a new attempt starts, so results never overlap
+    this.clearBanners();
+
+    // 1–2: raise (starts on the click itself), then a fast drop
     sfx.raise();
     await swing.raise();
     await swing.strike();
 
-    // 3–5: impact, shake, metal
+    // 3–7: ONE frame — metal sound, shake, sparks, the new number and the result banner all land together
     sfx.strike(tier);
-    this.shake(140 + tier * 30, 0.004 + tier * 0.0016);
-    this.ring(0xffe2a0, 0.9, 160);
+    this.shake(120 + tier * 30, 0.004 + tier * 0.0016);
+    this.ring(0xffe2a0, 0.9, 140);
     swing.recover();
     hooks.onImpact();
 
-    // 6–7: sparks and the result itself
     const density = 1 + tier * 0.35;
+    // a +10 awakening the player has not seen on this weapon: the new look and name get a moment
+    const m = result.milestone;
+    const firstAwakening = !!m && m.level === MILESTONES[0].level && !this.awakened.has(result.weaponBefore.id);
+    if (firstAwakening) this.awakened.add(result.weaponBefore.id);
+    // how long the result stays before the next attempt may start (short for everyday results)
+    let settle = 140;
     switch (result.outcome) {
       case 'great':
+        // sharper: brighter metal, white-gold flash, a bigger number
         sfx.great();
-        this.flash(160, 0xffd34d);
-        this.shake(260, 0.012 + tier * 0.002);
-        this.ring(0xffd34d, 3.2, 480);
-        this.ring(0xffffff, 1.8, 300);
-        this.burst(Math.round(70 * density), [0xffd34d, 0xffe9a8, 0xffffff], { speed: [200, 680], life: 800 });
+        this.flash(120, 0xffd34d);
+        this.shake(200, 0.012 + tier * 0.002);
+        this.ring(0xffd34d, 3.2, 420);
+        this.ring(0xffffff, 1.8, 260);
+        this.burst(Math.round(70 * density), [0xffd34d, 0xffe9a8, 0xffffff], { speed: [220, 700], life: 700 });
         weapon.flare(0xffd34d, 1.4);
         // skill-made great successes say where they came from
-        this.banner(result.divine ? '신의 망치!' : result.miracle ? '기적의 불꽃!' : `${info.name}!`, `+${before} → +${after}${renamed}`, result.divine ? 0xffe27a : info.color, result.divine ? 72 : 64);
+        this.banner(
+          result.divine ? '신의 망치!' : result.miracle ? '기적의 불꽃!' : `${info.name}!`,
+          `+${before} → +${after}${renamed}`,
+          result.divine ? 0xffe27a : info.color,
+          result.divine ? 72 : 66,
+          0,
+          900,
+        );
+        settle = 220;
         break;
       case 'success':
+        // short: one ping, a quick burst, the number
         sfx.success();
-        this.ring(0xff9a3c, 2.2);
-        this.burst(Math.round(36 * density), [0xff9a3c, 0xffc46b, 0xff6a1f]);
-        weapon.flare(0xff9a3c, 0.8);
-        this.banner(info.name, `+${before} → +${after}${renamed}`, info.color);
+        this.ring(0xff9a3c, 2.0, 300);
+        this.burst(Math.round(30 * density), [0xff9a3c, 0xffc46b, 0xff6a1f], { life: 420 });
+        weapon.flare(0xff9a3c, 0.7);
+        this.banner(info.name, `+${before} → +${after}${renamed}`, info.color, 50, 0, 520);
         break;
       case 'keep':
         sfx.keep();
-        this.burst(Math.round(10 * density), [0x9a8d7a, 0xc9b79a], { speed: [60, 200], life: 360 });
-        this.banner(info.name, `+${before} 그대로`, info.color, 44);
+        this.burst(Math.round(10 * density), [0x9a8d7a, 0xc9b79a], { speed: [60, 200], life: 320 });
+        this.banner(info.name, `+${before} 그대로`, info.color, 42, 0, 480);
         break;
       case 'down':
         sfx.down();
         this.crack();
-        this.burst(Math.round(14 * density), [0xff4a4a, 0x8a1a1a], { speed: [80, 260] });
-        this.banner(info.name, `+${before} → +${after}${renamed}`, info.color, 50);
+        this.burst(Math.round(14 * density), [0xff4a4a, 0x8a1a1a], { speed: [80, 260], life: 420 });
+        // at +0 there is nothing lower: say so instead of "+0 → +0" (QA 2026-11-20)
+        this.banner(info.name, before === after ? `+${before} · 최저 단계로 유지` : `+${before} → +${after}${renamed}`, info.color, 48, 0, 560);
         break;
       case 'destroy':
+        // short and dry: crack, shards, a beat of silence
         sfx.shatter();
-        sfx.silence(520);
-        this.flash(220, C.danger);
-        this.shake(320, 0.016);
+        sfx.silence(260);
+        this.flash(160, C.danger);
+        this.shake(240, 0.016);
         this.shatter(result);
         this.banner(
           info.name,
@@ -206,33 +255,41 @@ export class EnhancementPresentation {
             : `${weaponDisplayName(result.weaponBefore)} +${before}이(가) 영구히 사라졌습니다`,
           C.dangerHi,
           60,
+          0,
+          900,
         );
+        settle = 420;
         if (result.phoenix !== null) {
           // the revived weapon rises from the ashes
-          this.scene.time.delayedCall(700, () => {
+          settle = 640;
+          this.scene.time.delayedCall(420, () => {
             weapon.setVisible(true).setAlpha(0);
-            this.scene.tweens.add({ targets: weapon, alpha: 1, duration: 500 });
+            this.scene.tweens.add({ targets: weapon, alpha: 1, duration: 360 });
             weapon.flare(0xff4fa0, 1.2);
-            this.ring(0xff4fa0, 2.6, 520);
+            this.ring(0xff4fa0, 2.6, 460);
           });
         }
         break;
     }
 
-    await this.wait(result.outcome === 'destroy' ? 760 : 420);
-
-    // §7.4: milestone presentation on top
-    if (result.milestone) {
-      const m = result.milestone;
+    // §7.4: milestone on top, in the same moment (no second beat)
+    if (m) {
       const glow = ELEMENT_INFO[result.weaponBefore.element].glow;
       sfx.awaken(m.tier);
       this.ring(glow, 3.6, 700);
       this.ring(0xffd34d, 2.6, 560);
       this.burst(40 + m.tier * 18, [glow, 0xffffff, 0xffd34d], { speed: [150, 520], life: 1000, gravity: 120, spread: [0, 360] });
       weapon.flare(glow, 1.6);
-      this.flash(160, 0xffffff); // neutral, not the element colour
-      this.banner(m.name, `+${m.level} 도달`, 0xffe2a0, 46, 104);
-      await this.wait(700);
+      this.flash(140, 0xffffff); // neutral, not the element colour
+      if (firstAwakening) {
+        // the first awakening: room to see the new form and its name
+        this.banner(m.name, `+${m.level} 도달${renamed}`, 0xffe2a0, 46, 104, 1500);
+        settle = Math.max(settle, 1100);
+      } else {
+        this.banner(m.name, `+${m.level} 도달`, 0xffe2a0, 40, 104, 700);
+      }
     }
+
+    await this.wait(settle);
   }
 }

@@ -7,7 +7,7 @@ import { fateSplitLeft, overheatBonus, phoenixLeft, phoenixLevel } from '../../c
 import { DIVINE_STEP } from '../../config/forgeSkills';
 import { anyNodeAffordable, cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
 import { DIRECTION_INFO, RHYTHM_SECONDS, TREE } from '../../config/skillTree';
-import { rentDueDay, rentFor } from '../../core/systems/rent';
+import { rentDueDay, rentFor, rentPaidLine } from '../../core/systems/rent';
 import { equippedWeapon, findWeapon, freeWeaponsLeft, weaponPrice } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
@@ -36,6 +36,8 @@ import { formatDamage, weaponDamage } from '../../combat/rules';
 // Portrait (720×1280, phones) stacks everything: top bar → rack strip → smith and anvil → weapon card →
 // odds row → big enhance button → equip / sell / night. Landscape keeps the original 1280×720 layout.
 const RIGHT = { x: 940, y: 84, w: 316, h: 612 };
+/** Landscape odds list: distance between outcome rows. */
+const ODDS_ROW = 36;
 /** Weapon rack: 2 × 4 planks on the left wall (landscape) or a 4 × 2 strip under the top bar (portrait). */
 // portrait: below the taller top bar (2026-11-20, bigger buttons for phones)
 const RACK = PORTRAIT ? { x: 14, y: 210, cols: 4, slotW: 165, slotH: 70, gapX: 9, gapY: 10 } : { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
@@ -143,6 +145,8 @@ export class ForgeScene extends Phaser.Scene {
   private oddsBars!: Phaser.GameObjects.Graphics;
   private stageText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
+  /** "−1" next to 하락 in the odds list; at +0 it reads "최저 유지" (landscape only). */
+  private downDelta: Phaser.GameObjects.Text | null = null;
   private enhanceBtn!: Button;
   private equipBtn!: Button;
   private sellBtn!: Button;
@@ -489,7 +493,7 @@ export class ForgeScene extends Phaser.Scene {
     this.hammer.add(hg);
     this.hammer.setAngle(HAMMER_IDLE);
     this.swing = {
-      raise: () => new Promise((r) => this.tweens.add({ targets: this.hammer, angle: 58, duration: 210, ease: 'Cubic.easeOut', onComplete: () => r() })),
+      raise: () => new Promise((r) => this.tweens.add({ targets: this.hammer, angle: 58, duration: 160, ease: 'Cubic.easeOut', onComplete: () => r() })),
       strike: () => new Promise((r) => this.tweens.add({ targets: this.hammer, angle: 0, duration: 95, ease: 'Cubic.easeIn', onComplete: () => r() })),
       recover: () => this.tweens.add({ targets: this.hammer, angle: HAMMER_IDLE, duration: 340, ease: 'Back.easeOut' }),
     };
@@ -547,7 +551,7 @@ export class ForgeScene extends Phaser.Scene {
           breathe.pause();
           back?.remove();
           sp.setScale(k).setFrame(0);
-          return play('forge-windup', 300);
+          return play('forge-windup', 200);
         },
         strike: () => play('forge-slam', 110),
         recover: () => {
@@ -564,7 +568,7 @@ export class ForgeScene extends Phaser.Scene {
     this.swing = {
       raise: () => {
         breathe.pause();
-        return new Promise((r) => this.tweens.add({ targets: s, y: STAGE.bottom - 12, scaleY: k * 1.03, scaleX: k * 0.98, duration: 220, ease: 'Cubic.easeOut', onComplete: () => r() }));
+        return new Promise((r) => this.tweens.add({ targets: s, y: STAGE.bottom - 12, scaleY: k * 1.03, scaleX: k * 0.98, duration: 160, ease: 'Cubic.easeOut', onComplete: () => r() }));
       },
       strike: () => new Promise((r) => this.tweens.add({ targets: s, y: STAGE.bottom + 4, scaleY: k * 0.95, scaleX: k * 1.03, duration: 80, ease: 'Cubic.easeIn', onComplete: () => r() })),
       recover: () => this.tweens.add({ targets: s, y: STAGE.bottom, scaleX: k, scaleY: k, duration: 360, ease: 'Back.easeOut', onComplete: () => breathe.resume() }),
@@ -583,7 +587,7 @@ export class ForgeScene extends Phaser.Scene {
         breathe.pause();
         s.setTexture('art-smith_raise').setOrigin(0.5, 1).setScale(SMITH.scale);
         return new Promise((r) =>
-          this.tweens.add({ targets: s, y: SMITH.y - 10, scaleX: SMITH.scale * 0.97, scaleY: SMITH.scale * 1.03, duration: 210, ease: 'Cubic.easeOut', onComplete: () => r() }),
+          this.tweens.add({ targets: s, y: SMITH.y - 10, scaleX: SMITH.scale * 0.97, scaleY: SMITH.scale * 1.03, duration: 160, ease: 'Cubic.easeOut', onComplete: () => r() }),
         );
       },
       strike: () => {
@@ -648,7 +652,7 @@ export class ForgeScene extends Phaser.Scene {
       label(this, cx - 22, PB.oddsY + 32, OUTCOME_INFO[o].name, 18, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [0, 0.5] });
       this.oddsTexts[o] = label(this, cx, PB.oddsY + 66, '', 25, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [0.5, 0.5] });
     });
-    this.statsText = label(this, W / 2, PB.oddsY + 108, '', 12, C.dim, { origin: [0.5, 0.5] });
+    this.statsText = label(this, W / 2, PB.oddsY + 108, '', 12, C.dim, { origin: [0.5, 0.5], wrap: W - 40, align: 'center' });
     this.stoneTitle = label(this, 20, PB.stonesY, '사용', 13, C.mute, { weight: 700, origin: [0, 0.5] });
     ENHANCE_ITEMS.forEach((item, i) => {
       const chip = new StoneChip(this, 64 + i * 100, PB.stonesY - 16, 94, 32, item, () => this.toggleStone(item));
@@ -660,7 +664,8 @@ export class ForgeScene extends Phaser.Scene {
     const unit = (W - 32 - 16) / 4;
     this.equipBtn = new Button(this, 16 + unit / 2, PB.rowY, unit, 78, '장착', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.equipSelected() });
     this.sellBtn = new Button(this, 16 + unit * 1.5 + 8, PB.rowY, unit, 78, '판매', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.trySell() });
-    this.sleepBtn = new Button(this, W - 16 - unit, PB.rowY, unit * 2, 78, '다음 날 ▶', { variant: 'gold', size: 26, sub: '하루 마치기', subSize: 14, onClick: () => this.openEvening() });    this.splitBtn = new Button(this, W - 16 - 110, PB.stonesY, 220, 36, '운명 분열', { variant: 'ghost', size: 15, onClick: () => this.toggleSplit() });
+    this.sleepBtn = new Button(this, W - 16 - unit, PB.rowY, unit * 2, 78, '다음 날 ▶', { variant: 'gold', size: 26, sub: '하루 마치기', subSize: 14, onClick: () => this.openEvening() });
+    this.splitBtn = new Button(this, W - 16 - 110, PB.stonesY, 220, 36, '운명 분열', { variant: 'ghost', size: 15, onClick: () => this.toggleSplit() });
   }
 
   private buildOdds() {
@@ -674,37 +679,41 @@ export class ForgeScene extends Phaser.Scene {
     });
     this.oddsBars = this.add.graphics();
     OUTCOMES.forEach((o, i) => {
-      const y = RIGHT.y + 62 + i * 40;
+      const y = RIGHT.y + 62 + i * ODDS_ROW;
       const dot = this.add.graphics();
       dot.fillStyle(OUTCOME_INFO[o].color, 1);
       dot.fillCircle(RIGHT.x + 28, y + 9, 6);
       label(this, RIGHT.x + 42, y, OUTCOME_INFO[o].name, 16, o === 'destroy' ? C.dangerHi : C.text, { weight: 700 });
       const delta = o === 'great' ? '+2' : o === 'success' ? '+1' : o === 'keep' ? '±0' : o === 'down' ? '−1' : '영구 소멸';
-      label(this, RIGHT.x + 100, y + 2, delta, 13, o === 'destroy' ? C.danger : C.dim, { weight: 700 });
+      const d = label(this, RIGHT.x + 100, y + 2, delta, 13, o === 'destroy' ? C.danger : C.dim, { weight: 700 });
+      if (o === 'down') this.downDelta = d;
       this.oddsTexts[o] = label(this, RIGHT.x + RIGHT.w - 20, y, '', 18, o === 'destroy' ? C.dangerHi : C.text, { weight: 900, origin: [1, 0] });
     });
-    const warnY = RIGHT.y + 262;
+    // QA 2026-11-20: the skill status used to run under the 운명 분열 button. Now each has its own line:
+    // warning → stage → skill status (wraps to two lines) → 운명 분열 → stones → enhance.
+    const warnY = RIGHT.y + 62 + OUTCOMES.length * ODDS_ROW + 2;
     label(this, RIGHT.x + 20, warnY, '파괴된 무기는 영구히 사라집니다', 13, C.danger, { weight: 700 });
-    this.stageText = label(this, RIGHT.x + 20, warnY + 22, '', 12, C.mute, { weight: 700 });
-    this.statsText = label(this, RIGHT.x + 20, warnY + 40, '', 12, C.dim);
-    if (ENHANCE_TABLE_STATUS !== 'confirmed') label(this, RIGHT.x + RIGHT.w - 20, warnY + 22, '확률표 임시안', 12, C.dim, { origin: [1, 0] });
+    this.stageText = label(this, RIGHT.x + 20, warnY + 20, '', 12, C.mute, { weight: 700 });
+    this.statsText = label(this, RIGHT.x + 20, warnY + 38, '', 12, C.dim, { wrap: RIGHT.w - 40, lineSpacing: 2 });
+    if (ENHANCE_TABLE_STATUS !== 'confirmed') label(this, RIGHT.x + RIGHT.w - 20, warnY + 20, '확률표 임시안', 12, C.dim, { origin: [1, 0] });
+    this.splitBtn = new Button(this, RIGHT.x + RIGHT.w / 2, warnY + 88, RIGHT.w - 40, 28, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
     // Stones switched on for the next attempt (§15). Hidden until the player owns any.
-    this.stoneTitle = label(this, RIGHT.x + 20, RIGHT.y + 330, '다음 강화에 사용', 12, C.mute, { weight: 700 });
+    this.stoneTitle = label(this, RIGHT.x + 20, warnY + 106, '다음 강화에 사용', 12, C.mute, { weight: 700 });
     ENHANCE_ITEMS.forEach((item, i) => {
-      const chip = new StoneChip(this, RIGHT.x + 20 + i * 94, RIGHT.y + 348, 88, 34, item, () => this.toggleStone(item));
+      const chip = new StoneChip(this, RIGHT.x + 20 + i * 94, warnY + 122, 88, 34, item, () => this.toggleStone(item));
       this.stoneChips.push(chip);
     });
 
-    this.enhanceBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 432, 276, 78, '강화', {
+    this.enhanceBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 444, 276, 72, '강화', {
       variant: 'gold',
       size: 28,
       sub: '무료 · Space',
       onClick: () => this.clickEnhance(),
     });
-    this.equipBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 518, 134, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
-    this.sellBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 518, 134, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
+    this.equipBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 522, 134, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
+    this.sellBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 522, 134, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
     // "다음 날" ends the day; the evening screen then offers the night gamble or paying rent early
-    this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 578, 276, 54, '다음 날 ▶', { variant: 'gold', size: 22, sub: '하루 마치기 · Z', onClick: () => this.openEvening() });    this.splitBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 70, RIGHT.y + 312, 140, 30, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
+    this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 580, 276, 52, '다음 날 ▶', { variant: 'gold', size: 22, sub: '하루 마치기 · Z', onClick: () => this.openEvening() });
   }
 
   private buildToast() {
@@ -749,8 +758,12 @@ export class ForgeScene extends Phaser.Scene {
     // landscape: short, so the buy button fits on the same row
     this.rackTitle.setText(`무기걸이 ${s.weapons.length} / ${s.inventoryCap}`);
     const price = weaponPrice(s);
-    this.buyBtn.setLabel(price > 0 ? `＋ 무기 구매 · ${price.toLocaleString()}G` : '＋ 새 무기 받기 (무료)');
-    const canBuy = !this.animating && !inPrologue(s) && s.weapons.length < s.inventoryCap && s.gold >= price;
+    // free supply: show how many are left today, and say so plainly once they are gone (QA 2026-11-20)
+    const left = freeWeaponsLeft(s);
+    this.buyBtn.setLabel(
+      left <= 0 ? '오늘 보급 소진 · 내일 다시' : price > 0 ? `＋ 무기 구매 · ${price.toLocaleString()}G (${left}회)` : `＋ 새 무기 받기 (무료 ${left}회)`,
+    );
+    const canBuy = !this.animating && !inPrologue(s) && left > 0 && s.weapons.length < s.inventoryCap && s.gold >= price;
     this.buyBtn.setEnabled(canBuy);
     // every weapon gone: the new-weapon button pulses and glows so the way forward is obvious
     const empty = s.weapons.length === 0 && canBuy && freeWeaponsLeft(s) > 0;
@@ -897,9 +910,16 @@ export class ForgeScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(31)
       .setScale(0.6);
-    this.tweens.add({ targets: t, scale: 1, duration: 200, ease: 'Back.easeOut' });
-    this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, delay: 1100, duration: 500, onComplete: () => t.destroy() });
+    // only one at a time: a quick next attempt replaces the old line instead of stacking on it
+    if (this.lastPop?.active) {
+      this.tweens.killTweensOf(this.lastPop);
+      this.lastPop.destroy();
+    }
+    this.lastPop = t;
+    this.tweens.add({ targets: t, scale: 1, duration: 160, ease: 'Back.easeOut' });
+    this.tweens.add({ targets: t, y: t.y - 40, alpha: 0, delay: 800, duration: 400, onComplete: () => t.destroy() });
   }
+  private lastPop: Phaser.GameObjects.Text | null = null;
 
   private renderCenter() {
     const w = this.selected();
@@ -921,7 +941,7 @@ export class ForgeScene extends Phaser.Scene {
     g.clear();
     const row = w && w.level < MAX_LEVEL ? effectiveRow(w.level, collectEnhanceMods(this.core.state, w)) : null;
     OUTCOMES.forEach((o, i) => {
-      const y = RIGHT.y + 62 + i * 40 + 26;
+      const y = RIGHT.y + 62 + i * ODDS_ROW + 24;
       const pct = row ? row[o] : 0;
       const shielded = row && (o === 'down' || o === 'destroy') && isArmed(this.core.state, 'protect');
       this.oddsTexts[o].setText(row ? `${shielded ? '→유지 ' : ''}${pct.toFixed(1)}%` : '—');
@@ -939,22 +959,27 @@ export class ForgeScene extends Phaser.Scene {
         g.fillRoundedRect(bx, by, Math.max(bh, (bw * pct) / 100), bh, bh / 2);
       }
     });
+    // at +0 a 하락 cannot go lower: the level stays (QA 2026-11-20)
+    this.downDelta?.setText(w && w.level === 0 ? '최저 유지' : '−1');
     const st = this.core.state.stats;
     this.stageText.setText(w ? `외형 단계 ${appearanceStage(w.level) + 1} / ${APPEARANCE_STAGES.length}` : '');
     // learned enhancement skills and what they do right now; otherwise the run totals
     const sk = this.core.state;
     const parts: string[] = [];
     const te = treeEffects(sk);
-    if (sk.rentPrepaid) parts.push('월세 선납 보너스');
+    if (sk.rentPrepaid) parts.push('월세 선납');
     if (te.speed > 1) parts.push(`속도 ×${te.speed.toFixed(1)}`);
     if (te.miracle) parts.push(`기적 ${te.miracle}%`);
     if (te.overheat.per && w) parts.push(`과열 +${overheatBonus(sk, w)}%p`);
     if (te.phoenix.perDay) parts.push(`불사조 ${phoenixLeft(sk)}회`);
-    if (te.fateSplit) parts.push(`분열 ${fateSplitLeft(sk)}회`);
+    // 운명 분열's uses are on its own button, right under this line
     if (te.divine) parts.push(`신의 망치 ${te.divine}%`);
     if (sk.freeEnhance) parts.push('다음 강화 무료');
     this.statsText.setText(parts.length ? parts.join(' · ') : `누적 강화 ${st.enhanceAttempts}회 · 파괴 ${st.destroyed}자루 · 최고 +${st.bestLevel}`);
     this.statsText.setColor(css(parts.length ? 0xffd27a : C.dim));
+    // never more than two lines: the 운명 분열 button sits right below (QA 2026-11-20)
+    this.statsText.setFontSize(12);
+    if (this.statsText.getWrappedText().length > 2) this.statsText.setFontSize(10.5);
     const canEnhance = !!w && w.level < MAX_LEVEL && !this.animating;
     this.enhanceBtn.setEnabled(canEnhance);
     const cost = w ? enhanceCostFor(this.core.state, w.level) : 0;
@@ -1400,7 +1425,7 @@ export class ForgeScene extends Phaser.Scene {
       title: '왕이 월세를 걷으러 왔다',
       body: n.mercy
         ? `DAY ${n.day} 월세 ${n.amount.toLocaleString()}G를 낼 골드가 없었다.\n왕의 자비로 이번 한 번만 넘어간다. 다음엔 없다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G`
-        : `DAY ${n.day} 월세 ${n.amount.toLocaleString()}G${n.prepaid ? '는 미리 내 두었습니다' : '를 냈습니다'}.\n못 내는 날엔 대장간을 잃는다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G`,
+        : `${rentPaidLine(n)}\n못 내는 날엔 대장간을 잃는다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G`,
       confirmLabel: '알겠다',
       cancelLabel: '닫기',
       onConfirm: () => undefined,

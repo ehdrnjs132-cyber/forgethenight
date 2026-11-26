@@ -4,7 +4,7 @@ import { MemoryStorage, SaveManager } from '../src/core/save/save';
 import { START_GOLD, START_LIVES } from '../src/config/rules';
 import { NIGHT_STAKE, RENT } from '../src/config/economy';
 import { GAMBLE_RIVALS, tonightsRivals } from '../src/core/systems/doppelganger';
-import { rentAmount } from '../src/core/systems/rent';
+import { rentAmount, rentPaidLine } from '../src/core/systems/rent';
 
 function readyGame(storage = new MemoryStorage()) {
   const game = new GameCore(storage, 11);
@@ -155,10 +155,18 @@ describe('the king\'s rent (user decision 2026-11-19)', () => {
       const s = game.dispatch({ type: 'SLEEP' });
       if (s.type === 'slept' && s.rent) notice = s.rent;
     }
-    expect(notice).toMatchObject({ prepaid: true, paid: 0, lifeLost: false });
+    // QA 2026-11-20: the notice reports what was actually paid in advance, not the visit-day rate
+    expect(notice).toMatchObject({ prepaid: true, paid: r.price, prepaidDay: 1, lifeLost: false });
+    expect(rentPaidLine(notice!)).toBe(`DAY ${1 + RENT.firstAfter} 월세는 DAY 1에 ${r.price.toLocaleString()}G로 미리 내 두었습니다.`);
     expect(game.state.gold).toBeGreaterThanOrEqual(gold); // nothing taken on the visit day
     expect(game.state.rentPrepaid).toBe(false);
+    expect(game.state.rentPrepaidAmount).toBeUndefined();
     expect(rentAmount(1 + RENT.firstAfter)).toBeGreaterThan(r.price);
+  });
+
+  it('an older save without the prepaid amount names no wrong figure', () => {
+    expect(rentPaidLine({ day: 4, amount: 270, paid: 0, lifeLost: false, prepaid: true })).toBe('DAY 4 월세는 미리 내 두었습니다.');
+    expect(rentPaidLine({ day: 4, amount: 270, paid: 270, lifeLost: false })).toBe('DAY 4 월세 270G를 냈습니다.');
   });
 
   it('ends the run when unpaid rent takes the last life', () => {
