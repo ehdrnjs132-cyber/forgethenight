@@ -228,25 +228,31 @@ describe('♥ stamina (2026-11-26)', () => {
     expect(staminaLeft(core.state)).toBe(staminaMax(core.state));
   });
 
-  it('체력 stars: more stamina, cheaper strikes, free strikes, a second wind', () => {
+  it('체력 stars: max stamina up to 1000, cheaper strikes, +2% free strikes each, a second wind', () => {
     const all = withNodes(sectorNodes('stamina'));
     const e = treeEffects(all);
-    expect(staminaMax(all)).toBe(STAMINA.max + 8 * 5 + 15);
+    expect(staminaMax(all)).toBe(1000);
     expect(strikeCost(all)).toBe(STAMINA.strikeCost - 5 - 3);
-    expect(e.staminaSave).toBe(10 + 2 * 3 + 10);
+    // every free-strike source gives 2% (user 2026-11-26)
+    expect(e.staminaSave).toBe(4 * 2);
     expect(e.secondWind).toBe(30);
-    expect(strikesLeft(all)).toBeGreaterThan(strikesLeft(withNodes([])) * 2);
+    expect(strikesLeft(all)).toBe(Math.floor(1000 / 12));
   });
 
-  it('두 번째 바람 gives 30 back once a day when stamina runs out', () => {
+  it('두 번째 바람 gives 30% of the maximum back once a day when stamina runs out', () => {
     let s = withNodes(pathTo('wind'));
     const cost = strikeCost(s);
-    s = { ...s, daily: { day: s.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: staminaMax(s) - cost } };
+    const max = staminaMax(s);
+    s = { ...s, daily: { day: s.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: max - cost } };
     const r = enhance(s, s.weapons[0].id);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.result.secondWind).toBe(30);
-    expect(staminaLeft(r.state)).toBe(30);
+    expect(r.result.secondWind).toBe(Math.round(max * 0.3));
+    expect(staminaLeft(r.state)).toBe(Math.round(max * 0.3));
+    // only once a day
+    const used = { ...r.state, daily: { ...r.state.daily!, staminaUsed: max - cost } };
+    const r2 = enhance(used, used.weapons[0].id);
+    expect(r2.ok && r2.result.secondWind).toBe(0);
   });
 
   it('the scripted prologue strikes cost nothing', () => {

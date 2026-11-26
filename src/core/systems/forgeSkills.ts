@@ -52,7 +52,7 @@ export function spendStrike(state: GameState, rng: Rng): { state: GameState; cos
   let used = (d.staminaUsed ?? 0) + cost;
   let wind = 0;
   if (e.secondWind > 0 && !d.secondWind && staminaMax(state) - used < strikeCost(state)) {
-    wind = e.secondWind;
+    wind = Math.round((staminaMax(state) * e.secondWind) / 100);
     used = Math.max(0, used - wind);
   }
   return { state: withDaily(state, { staminaUsed: used, ...(wind ? { secondWind: 1 } : {}) }), cost, saved, secondWind: wind };

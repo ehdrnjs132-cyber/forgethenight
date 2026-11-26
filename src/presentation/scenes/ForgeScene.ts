@@ -743,9 +743,9 @@ export class ForgeScene extends Phaser.Scene {
     g.clear();
     g.fillStyle(0x000000, 0.6).fillRoundedRect(b.x - b.w / 2 - 3, b.y - b.h / 2 - 3, b.w + 6, b.h + 6, (b.h + 6) / 2);
     if (t > 0) g.fillStyle(col, 1).fillRoundedRect(b.x - b.w / 2, b.y - b.h / 2, Math.max(b.h, b.w * t), b.h, b.h / 2);
-    // one notch per strike, so "five strikes a day" is visible at a glance
+    // one notch per strike, so "five strikes a day" is visible at a glance (left out once there are too many)
     g.lineStyle(2, 0x000000, 0.55);
-    for (let v = cost; v < max; v += cost) {
+    for (let v = cost; max / cost <= 24 && v < max; v += cost) {
       const x = b.x - b.w / 2 + (b.w * v) / max;
       g.lineBetween(x, b.y - b.h / 2, x, b.y + b.h / 2);
     }

@@ -58,7 +58,7 @@ export interface TreeEffects {
   strikeCut: number;
   /** % chance a strike costs no stamina (굳은 살). */
   staminaSave: number;
-  /** 두 번째 바람: once a day, stamina that runs out comes back by this much. */
+  /** 두 번째 바람: once a day, stamina that runs out comes back by this % of the maximum. */
   secondWind: number;
 }
 
@@ -128,9 +128,11 @@ const THRIFT: Minor = ['강화비 −5%', '강화 비용 −5%', (e) => void (e.
 const RENT: Minor = ['월세 −5%', '월세 −5%', (e) => void (e.rentCut += 0.05)];
 const GOLDEN: Minor = ['황금 +5%', '새 무기가 황금 무기일 확률 +5%', (e) => void (e.golden += 5)];
 const REFUND: Minor = ['파편 +5%', '무기가 파괴되면 판매가의 5%를 더 돌려받는다', (e) => void (e.destroyRefund += 5)];
-const VIGOR: Minor = ['체력 +5', '최대 체력 +5', (e) => void (e.staminaMax += 5)];
+/** 최대 체력 stars grow outward (+10 at the anvil … +80 at the edge) so the sector reaches 1000 (user 2026-11-26). */
+const vigor = (n: number): Minor => [`체력 +${n}`, `최대 체력 +${n}`, (e) => void (e.staminaMax += n)];
 const EASE: Minor = ['소모 −1', '망치질 한 번의 체력 소모 −1', (e) => void (e.strikeCut += 1)];
-const CALLUS: Minor = ['아끼기 +3%', '3% 확률로 망치질에 체력이 들지 않는다', (e) => void (e.staminaSave += 3)];
+/** Free-strike chance: +2% per star, every source the same (user 2026-11-26). */
+const CALLUS: Minor = ['아끼기 +2%', '망치질에 체력이 들지 않을 확률 +2%', (e) => void (e.staminaSave += 2)];
 
 /** [id, from, ring, angle within the sector (deg), small star | big star [name, desc, effect]]. */
 type Spec = readonly [string, string, number, number, Minor | { name: string; desc: string; apply: Fx }];
@@ -200,27 +202,37 @@ export const TREE: readonly TreeNode[] = [
     ['sp19', 'sp16', 11, 21, SPEED],
   ]),
 
-  // ♥ 체력 — max stamina +5, strike cost −1, free strikes +3%; 굳은 살, 든든한 아침, 두 번째 바람, 불굴
+  // ♥ 체력 — max stamina +10…+80 (100 → 1000 with the whole sector), strike cost −1, free strikes +2%;
+  // 굳은 살 (small), 든든한 아침, 두 번째 바람, 불굴, 거인의 심장
   ...sector('stamina', [
-    ['st1', 'root', 1, 0, VIGOR],
+    ['st1', 'root', 1, 0, vigor(10)],
     ['st2', 'st1', 2, -6, EASE],
-    ['st3', 'st2', 3, 0, VIGOR],
-    ['callus', 'st3', 4, -10, BIG('굳은 살', '10% 확률로 망치질에 체력이 들지 않는다', (e) => void (e.staminaSave += 10))],
-    ['st5', 'st3', 4, 10, VIGOR],
+    ['st3', 'st2', 3, 0, vigor(20)],
+    ['callus', 'st3', 4, -10, ['굳은 살', '망치질에 체력이 들지 않을 확률 +2%', (e) => void (e.staminaSave += 2)]],
+    ['st5', 'st3', 4, 10, vigor(30)],
     ['st6', 'st5', 5, 15, EASE],
-    ['breakfast', 'st6', 6, 8, BIG('든든한 아침', '최대 체력 +15', (e) => void (e.staminaMax += 15))],
+    ['breakfast', 'st6', 6, 8, BIG('든든한 아침', '최대 체력 +50', (e) => void (e.staminaMax += 50))],
     ['st8', 'callus', 5, -18, CALLUS],
-    ['st9', 'st8', 6, -21, VIGOR],
+    ['st9', 'st8', 6, -21, vigor(40)],
     ['st10', 'st9', 7, -18, EASE],
-    ['st11', 'breakfast', 7, 11, VIGOR],
+    ['st11', 'breakfast', 7, 11, vigor(50)],
     ['st12', 'st11', 8, 6, EASE],
-    ['wind', 'st12', 9, 0, BIG('두 번째 바람', '하루 한 번, 체력이 바닥나면 30을 되찾는다', (e) => void (e.secondWind = Math.max(e.secondWind, 30)))],
+    ['wind', 'st12', 9, 0, BIG('두 번째 바람', '하루 한 번, 체력이 바닥나면 최대 체력의 30%를 되찾는다', (e) => void (e.secondWind = Math.max(e.secondWind, 30)))],
     ['st14', 'st10', 8, -16, CALLUS],
-    ['st15', 'st14', 9, -11, VIGOR],
-    ['st16', 'wind', 10, 5, VIGOR],
+    ['st15', 'st14', 9, -11, vigor(60)],
+    ['st16', 'wind', 10, 5, vigor(70)],
     ['st17', 'st15', 10, -8, EASE],
-    ['iron', 'st16', 11, 1, BIG('불굴', '망치질 체력 소모 −3 · 10% 확률로 체력이 들지 않는다', (e) => void ((e.strikeCut += 3), (e.staminaSave += 10)))],
-    ['st19', 'st17', 11, -13, VIGOR],
+    ['iron', 'st16', 11, 1, BIG('불굴', '망치질 체력 소모 −3 · 체력이 들지 않을 확률 +2%', (e) => void ((e.strikeCut += 3), (e.staminaSave += 2)))],
+    ['st19', 'st17', 11, -13, vigor(80)],
+    // the outer arc of pure stamina, out to the biggest heart
+    ['st20', 'st5', 5, 28, vigor(30)],
+    ['st21', 'st20', 6, 28, vigor(40)],
+    ['st22', 'st21', 7, 26, vigor(50)],
+    ['st23', 'st22', 8, 22, vigor(60)],
+    ['st24', 'st23', 9, 18, vigor(60)],
+    ['st25', 'st24', 10, 20, vigor(70)],
+    ['st26', 'st25', 11, 18, vigor(80)],
+    ['giant', 'st26', 12, 10, BIG('거인의 심장', '최대 체력 +100', (e) => void (e.staminaMax += 100))],
   ]),
 
   // ◆ 골드 — sale +5%, cost −5%, rent −5%, golden +5%; 추가 배달, 황금 무기, 큰 배달, 연금술
