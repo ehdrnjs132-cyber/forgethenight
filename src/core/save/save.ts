@@ -4,6 +4,7 @@ import { createRecords, createStats, STATE_VERSION } from '../state/initial';
 import type { GameState, Records } from '../state/types';
 import { INVENTORY_CAP, INVENTORY_START } from '../../config/weapons';
 import { legacyRefund } from '../../config/forgeSkills';
+import { LEGACY_TREE_COSTS, TREE_BY_ID } from '../../config/skillTree';
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -84,6 +85,17 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
   };
   s = legacy(s);
   if (s.nightSnapshot) s = { ...s, nightSnapshot: legacy(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
+  // 2026-11-26: the four-direction tree became the star disc of small steps. Nodes of the old tree
+  // are dropped and the gold paid for them comes back, so the player can rebuy on the new disc.
+  const oldTree = (x: GameState): GameState => {
+    const nodes = x.treeNodes ?? [];
+    const gone = nodes.filter((id) => !TREE_BY_ID[id]);
+    if (!gone.length) return x;
+    const refund = gone.reduce((sum, id) => sum + (LEGACY_TREE_COSTS[id] ?? 0), 0);
+    return { ...x, gold: x.gold + refund, treeNodes: nodes.filter((id) => TREE_BY_ID[id]) };
+  };
+  s = oldTree(s);
+  if (s.nightSnapshot) s = { ...s, nightSnapshot: oldTree(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
   const toSwords = (x: GameState): GameState =>
     x.weapons.some((w) => w.cls !== 'sword') ? { ...x, weapons: x.weapons.map((w) => (w.cls === 'sword' ? w : { ...w, cls: 'sword' })) } : x;
   s = toSwords(s);

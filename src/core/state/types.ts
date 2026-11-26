@@ -52,6 +52,10 @@ export interface DailyCounters {
   phoenix: number;
   fateSplit: number;
   freeWeapons: number;
+  /** Stamina spent on hammer strikes today (absent in older saves = 0). */
+  staminaUsed?: number;
+  /** 두 번째 바람 already used today. */
+  secondWind?: number;
 }
 
 /** The king's last rent visit, for the morning notice. */
