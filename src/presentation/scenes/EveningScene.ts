@@ -197,6 +197,16 @@ export class EveningScene extends Phaser.Scene {
     this.tweens.add({ targets: [moon, txt], alpha: 1, duration: 600, delay: 300 });
     this.tweens.add({ targets: moon, x: W * 0.8, y: H * 0.18, duration: 1500, delay: 300, ease: 'Sine.easeInOut' });
     this.time.delayedCall(1900, () => {
+      // the run ended (unpaid rent): no sunrise and no "DAY 1 · 아침" — straight from the dark to the king
+      if (r.gameOver) {
+        this.tweens.add({ targets: [moon, txt], alpha: 0, duration: 300 });
+        this.time.delayedCall(350, () => {
+          this.scene.stop('Forge');
+          if (r.rent?.lifeLost) this.scene.start('KingWrath', { summary: r.gameOver!, rent: r.rent });
+          else this.scene.start('GameOver', { summary: r.gameOver!, reason: 'died' });
+        });
+        return;
+      }
       // sunrise
       const dawn = this.add.graphics().setAlpha(0);
       dawn.fillGradientStyle(0x2a3a6a, 0x2a3a6a, 0xffb36a, 0xffb36a, 1, 1, 1, 1).fillRect(0, 0, W, H);
@@ -206,13 +216,6 @@ export class EveningScene extends Phaser.Scene {
       this.tweens.add({ targets: dawn, alpha: 1, duration: 700 });
       this.tweens.add({ targets: t2, alpha: 1, duration: 500, delay: 300 });
       this.time.delayedCall(1700, () => {
-        if (r.gameOver) {
-          this.scene.stop('Forge');
-          // unpaid rent: the king himself comes first (2026-11-26)
-          if (r.rent?.lifeLost) this.scene.start('KingWrath', { summary: r.gameOver, rent: r.rent });
-          else this.scene.start('GameOver', { summary: r.gameOver, reason: 'died' });
-          return;
-        }
         this.cameras.main.fadeOut(300, 0, 0, 0);
         this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
           this.scene.stop('Forge');

@@ -419,6 +419,23 @@ describe('rent (2026-11-20): unpaid rent ends the run', () => {
     expect(core.lastRentNotice).toBeNull();
     void RENT;
   });
+
+  it('the run-ending visit is still reported, so the king wrath scene can play (bug 2026-11-26)', () => {
+    const core = new GameCore(new MemoryStorage(), 9);
+    core.state = { ...core.state, gold: 0, rentDueDay: core.state.day + 1 };
+    const r = core.dispatch({ type: 'SLEEP' });
+    if (r.type !== 'slept') throw new Error(r.type);
+    expect(r.gameOver).toBeTruthy();
+    expect(r.rent).toMatchObject({ lifeLost: true, day: 2 });
+    expect(r.rent!.amount).toBeGreaterThan(0);
+    expect(core.gameOverRent).toEqual(r.rent);
+    // a normal paid morning reports no run-ending visit
+    const ok = new GameCore(new MemoryStorage(), 9);
+    ok.state = { ...ok.state, gold: 1_000_000, rentDueDay: ok.state.day + 1 };
+    const r2 = ok.dispatch({ type: 'SLEEP' });
+    expect(r2.type === 'slept' && r2.gameOver).toBeFalsy();
+    expect(ok.gameOverRent).toBeNull();
+  });
 });
 
 describe('legacy skills are refunded', () => {

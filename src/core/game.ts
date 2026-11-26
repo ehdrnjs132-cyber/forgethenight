@@ -135,6 +135,11 @@ export class GameCore {
 
   /** The king's visit this morning, if he came (for the forge to announce once). */
   lastRentNotice: RentNotice | null = null;
+  /**
+   * The unpaid visit that just ended the run (for the king's wrath scene), else null. Kept apart from
+   * lastRentNotice, which is cleared so the new run starts clean (bug 2026-11-26: the wrath never played).
+   */
+  gameOverRent: RentNotice | null = null;
 
   /**
    * Start a morning and save it. Unpaid rent can take the last life: then the run ends here and a fresh
@@ -145,7 +150,9 @@ export class GameCore {
     this.lastGrant = g.granted;
     this.lastOverflow = { count: g.overflow, gold: g.overflowGold };
     this.lastRentNotice = g.rent;
+    this.gameOverRent = null;
     if (g.state.lives <= 0) {
+      this.gameOverRent = g.rent?.lifeLost ? g.rent : null;
       const s = g.state.stats;
       const summary: GameOverSummary = { day: g.state.day, bestLevel: s.bestLevel, kills: s.kills, bossesKilled: s.bossesKilled, nightSeconds: s.nightSeconds };
       this.save.clearRun();
@@ -283,7 +290,8 @@ export class GameCore {
         if (inPrologue(this.state)) return { type: 'sleepBlocked' };
         const over = this.morning(sleep(this.state));
         this.emit('changed', this.state);
-        return { type: 'slept', day: this.state.day, rent: this.lastRentNotice, gameOver: over };
+        // a run ended by unpaid rent reports that visit (the wrath scene shows it)
+        return { type: 'slept', day: this.state.day, rent: over ? this.gameOverRent : this.lastRentNotice, gameOver: over };
       }
       case 'DUEL_GOLD': {
         const delta = Math.trunc(action.delta);

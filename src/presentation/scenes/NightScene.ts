@@ -1397,7 +1397,11 @@ export class NightScene extends Phaser.Scene {
 
   private goGameOver(summary: GameOverSummary) {
     this.cameras.main.fadeOut(900, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('GameOver', { summary, reason: 'died' }));
+    // the run ended at the next morning's rent visit: the king comes first (2026-11-26)
+    const rent = this.core.gameOverRent;
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () =>
+      rent ? this.scene.start('KingWrath', { summary, rent }) : this.scene.start('GameOver', { summary, reason: 'died' }),
+    );
   }
 
   private dawn() {
