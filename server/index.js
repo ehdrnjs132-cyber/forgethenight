@@ -28,9 +28,10 @@ const RANK_SIZE = 50;
 /**
  * Ranking season. Raising it wipes every best record once at start-up (accounts and names stay), and
  * records sent by clients built for an older season are ignored, so old bests cannot come back.
- * Season 2 = reset of 2026-11-19 (user request). The game's RANK_SEASON (src/online/account.ts) must match.
+ * Season 2 = reset of 2026-11-19, season 3 = reset of 2026-11-26 (user requests).
+ * The game's RANK_SEASON (src/online/account.ts) must match.
  */
-const SEASON = 2;
+const SEASON = 3;
 
 const app = express();
 app.disable('x-powered-by');

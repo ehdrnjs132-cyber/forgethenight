@@ -34,8 +34,9 @@ export function betFromShare(gold: number, share: number): number {
   return Math.max(1, Math.min(gold, Math.round(gold * t)));
 }
 
-// ───────────────────────── 운명의 무기 카드 (DAY 30): the stake is every weapon on the rack
-export type WeaponCardBlock = 'locked' | 'played' | 'night' | 'no-weapons';
+// ───────────────────────── 운명의 무기 카드 (DAY 30): the stake is the weapons the player picks from the rack
+// (user 2026-11-26: "가지고있는 무기중 선택할수있게"; it first staked every weapon)
+export type WeaponCardBlock = 'locked' | 'played' | 'night' | 'no-weapons' | 'pick';
 
 export function weaponCardUnlocked(state: GameState): boolean {
   return state.day >= WEAPON_CARD.unlockDay;
@@ -53,25 +54,35 @@ export function checkWeaponCard(state: GameState): WeaponCardBlock | null {
   return null;
 }
 
-/** O: every weapon +WEAPON_CARD.levels (up to the cap). X: every weapon is destroyed. */
+/** The chosen weapons must be one or more distinct weapons from the rack. */
+function validStake(state: GameState, ids: readonly string[]): boolean {
+  return ids.length > 0 && new Set(ids).size === ids.length && ids.every((id) => state.weapons.some((w) => w.id === id));
+}
+
+/** O: the chosen weapons +WEAPON_CARD.levels (up to the cap). X: the chosen weapons are destroyed. The rest are untouched. */
 export function playWeaponCard(
   prev: GameState,
   pick: 0 | 1,
+  weaponIds: readonly string[],
 ): { ok: true; state: GameState; win: boolean; faces: [CardFace, CardFace]; count: number } | { ok: false; reason: WeaponCardBlock } {
   const block = checkWeaponCard(prev);
   if (block) return { ok: false, reason: block };
+  if (!validStake(prev, weaponIds)) return { ok: false, reason: 'pick' };
   const rng = new Rng(prev.rng);
   const oAt = rng.int(2) as 0 | 1;
   const faces: [CardFace, CardFace] = oAt === 0 ? ['O', 'X'] : ['X', 'O'];
   const win = pick === oAt;
-  const count = prev.weapons.length;
+  const staked = new Set(weaponIds);
+  const count = staked.size;
   let state: GameState = { ...prev, rng: rng.state, weaponCardDay: prev.day, lastEnhance: null };
   if (win) {
-    const weapons = prev.weapons.map((w) => ({ ...w, level: Math.min(MAX_LEVEL, w.level + WEAPON_CARD.levels) }));
+    const weapons = prev.weapons.map((w) => (staked.has(w.id) ? { ...w, level: Math.min(MAX_LEVEL, w.level + WEAPON_CARD.levels) } : w));
     const best = Math.max(prev.stats.bestLevel, ...weapons.map((w) => w.level));
     state = { ...state, weapons, stats: { ...state.stats, bestLevel: best } };
   } else {
-    state = { ...state, weapons: [], equippedId: null, stats: { ...state.stats, destroyed: state.stats.destroyed + count } };
+    const weapons = prev.weapons.filter((w) => !staked.has(w.id));
+    const equippedId = prev.equippedId && staked.has(prev.equippedId) ? null : prev.equippedId;
+    state = { ...state, weapons, equippedId, stats: { ...state.stats, destroyed: state.stats.destroyed + count } };
   }
   return { ok: true, state, win, faces, count };
 }

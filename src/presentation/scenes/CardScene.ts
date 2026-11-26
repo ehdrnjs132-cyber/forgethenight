@@ -7,6 +7,7 @@ import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { betFromShare } from '../../core/systems/cards';
 import { CARD_GAME, WEAPON_CARD } from '../../config/economy';
+import { weaponDisplayName } from '../../config/swordNames';
 import { C, DISPLAY, FONT, H, W, css, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
@@ -57,6 +58,8 @@ export class CardScene extends Phaser.Scene {
     this.core = this.registry.get('core') as GameCore;
     this.onClose = data?.onClose ?? (() => {});
     this.mode = data?.mode ?? 'gold';
+    this.staked = new Set();
+    this.stakeChips = [];
     this.cards = [];
     this.pick = null;
     this.share = 0;
@@ -81,13 +84,13 @@ export class CardScene extends Phaser.Scene {
       this,
       W / 2,
       PORTRAIT ? 118 : 94,
-      weapons ? `카드 한 장을 고르세요 · O면 모든 무기 +${WEAPON_CARD.levels}, X면 모든 무기가 부서진다` : '카드 한 장을 고르세요 · O면 베팅의 2배를 받고, X면 베팅을 잃는다',
+      weapons ? `카드 한 장과 걸 무기를 고르세요 · O면 고른 무기 +${WEAPON_CARD.levels}, X면 고른 무기가 부서진다` :'카드 한 장을 고르세요 · O면 베팅의 2배를 받고, X면 베팅을 잃는다',
       15 * big,
       C.text,
       { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 },
     );
     const best = Math.max(0, ...s0.weapons.map((w) => w.level));
-    label(this, W / 2, PORTRAIT ? 152 : 120, weapons ? `걸린 무기 ${s0.weapons.length}자루 · 최고 +${best} · 하루 한 번` : `가진 골드 ${s0.gold.toLocaleString()}G · 하루 한 번`, 13 * big, C.mute, {
+    label(this, W / 2, PORTRAIT ? 152 : 120, weapons ? `무기걸이 ${s0.weapons.length}자루 · 최고 +${best} · 하루 한 번` : `가진 골드 ${s0.gold.toLocaleString()}G · 하루 한 번`, 13 * big, C.mute, {
       weight: 700,
       origin: [0.5, 0.5],
     });
@@ -144,7 +147,7 @@ export class CardScene extends Phaser.Scene {
       this.tweens.add({ targets: v.c, y: on ? CARD_Y - 14 : CARD_Y, alpha: on ? 1 : 0.55, scale: on ? 1.05 : 0.96, duration: 180, ease: 'Back.easeOut' });
       this.tweens.add({ targets: v.ring, alpha: on ? 1 : 0, duration: 150 });
     });
-    this.hint.setText(this.mode === 'weapons' ? '정말 무기 전부를 걸겠습니까? 아래 버튼을 누르면 카드가 뒤집힌다' : '이제 아래 막대를 왼쪽에서 오른쪽으로 끌어 베팅하세요');
+    this.hint.setText(this.mode === 'weapons' ? '아래에서 걸 무기를 고르세요 · 고르지 않은 무기는 안전하다' :'이제 아래 막대를 왼쪽에서 오른쪽으로 끌어 베팅하세요');
     if (!this.betUi.visible) {
       this.betUi.setVisible(true).setAlpha(0);
       this.tweens.add({ targets: this.betUi, alpha: 1, duration: 250 });
@@ -157,16 +160,38 @@ export class CardScene extends Phaser.Scene {
     const x0 = W / 2 - BAR.w / 2;
     const ui = (this.betUi = this.add.container(0, 0).setVisible(false));
     if (this.mode === 'weapons') {
-      // no bar: the stake is every weapon on the rack
-      const n = this.core.state.weapons.length;
-      ui.add(label(this, W / 2, BAR.y - 40 * big, `걸린 것: 무기 ${n}자루 전부`, 30 * big, 0xff6b6b, { weight: 900, origin: [0.5, 0.5] }).setStroke('#140a05', 6));
-      ui.add(label(this, W / 2, BAR.y + 4, `O면 모두 +${WEAPON_CARD.levels} · X면 모두 부서진다 · 되돌릴 수 없다`, 15 * big, C.text, { weight: 700, origin: [0.5, 0.5] }));
-      this.confirmBtn = new Button(this, W / 2, BAR.y + (PORTRAIT ? 120 : 92), PORTRAIT ? 380 : 320, PORTRAIT ? 70 : 58, `무기 ${n}자루를 건다`, {
+      // no bar: pick which weapons from the rack go on the line (user 2026-11-26)
+      const weapons = this.core.state.weapons;
+      const cols = 4;
+      const rows = Math.ceil(weapons.length / cols);
+      const cw = PORTRAIT ? (W - 48 - (cols - 1) * 8) / cols : 168;
+      const ch = PORTRAIT ? 58 : 50;
+      const y0 = BAR.y - (PORTRAIT ? 60 : 70) - Math.max(0, rows - 2) * (ch / 2 + 4);
+      const gridW = cols * cw + (cols - 1) * 8;
+      ui.add(label(this, W / 2 - gridW / 2, y0 - ch / 2 - 22, '걸 무기를 고르세요 · 여러 자루 가능', 15 * big, C.text, { weight: 900, origin: [0, 0.5] }));
+      const all = new Button(this, W / 2 + gridW / 2 - 50, y0 - ch / 2 - 22, 100, 32, '전부', { variant: 'ghost', size: 14, onClick: () => this.toggleAllStakes() });
+      ui.add(all);
+      this.stakeChips = weapons.map((w, i) => {
+        const x = W / 2 - gridW / 2 + (i % cols) * (cw + 8) + cw / 2;
+        const y = y0 + Math.floor(i / cols) * (ch + 8);
+        const c = this.add.container(x, y);
+        const g = this.add.graphics();
+        const name = weaponDisplayName(w);
+        const short = name.length > 7 ? `${name.slice(0, 6)}…` : name;
+        const t = label(this, 0, 0, `${short} +${w.level}`, (PORTRAIT ? 15 : 13) * (w.level >= 10 ? 1 : 1), C.text, { weight: 900, origin: [0.5, 0.5] });
+        c.add([g, t]);
+        c.setSize(cw, ch).setInteractive({ useHandCursor: true });
+        c.on('pointerup', () => this.toggleStake(w.id));
+        ui.add(c);
+        return { id: w.id, g, t, w: cw, h: ch };
+      });
+      this.confirmBtn = new Button(this, W / 2, BAR.y + (PORTRAIT ? 120 : 92), PORTRAIT ? 380 : 340, PORTRAIT ? 70 : 58, '', {
         variant: 'danger',
         size: 22 * big,
         onClick: () => this.confirm(),
       });
       ui.add(this.confirmBtn);
+      this.renderStakes();
       return;
     }
     ui.add(label(this, x0, BAR.y - 62 * big, '베팅', 16 * big, C.mute, { weight: 900, origin: [0, 0.5] }));
@@ -220,9 +245,44 @@ export class CardScene extends Phaser.Scene {
     return betFromShare(this.core.state.gold, this.share);
   }
 
+  // ───────────────────────── weapon mode: the weapons at stake
+  private stakeChips: { id: string; g: Phaser.GameObjects.Graphics; t: Phaser.GameObjects.Text; w: number; h: number }[] = [];
+  private staked = new Set<string>();
+
+  private toggleStake(id: string) {
+    if (this.done) return;
+    if (this.staked.has(id)) this.staked.delete(id);
+    else this.staked.add(id);
+    this.sfx.click();
+    this.renderStakes();
+  }
+
+  private toggleAllStakes() {
+    if (this.done) return;
+    const ids = this.core.state.weapons.map((w) => w.id);
+    const allOn = ids.every((id) => this.staked.has(id));
+    this.staked = new Set(allOn ? [] : ids);
+    this.sfx.click();
+    this.renderStakes();
+  }
+
+  private renderStakes() {
+    for (const c of this.stakeChips) {
+      const on = this.staked.has(c.id);
+      c.g.clear();
+      c.g.fillStyle(on ? 0x4a1014 : 0x1a1420, 1).fillRoundedRect(-c.w / 2, -c.h / 2, c.w, c.h, 10);
+      c.g.lineStyle(on ? 3 : 1.5, on ? 0xff4a4a : 0x6a5a7a, 1).strokeRoundedRect(-c.w / 2, -c.h / 2, c.w, c.h, 10);
+      c.t.setColor(css(on ? 0xffd0d0 : C.mute));
+    }
+    const n = this.staked.size;
+    const ready = this.pick !== null && n > 0 && !this.done;
+    this.confirmBtn.setEnabled(ready);
+    this.confirmBtn.setLabel(this.pick === null ? '먼저 카드를 고르세요' : n === 0 ? '걸 무기를 고르세요' : `고른 무기 ${n}자루를 건다`);
+  }
+
   private renderBet() {
     if (this.mode === 'weapons') {
-      this.confirmBtn.setEnabled(this.pick !== null && !this.done);
+      this.renderStakes();
       return;
     }
     const x0 = W / 2 - BAR.w / 2;
@@ -255,7 +315,7 @@ export class CardScene extends Phaser.Scene {
     let faces: ['O' | 'X', 'O' | 'X'];
     let show: () => void;
     if (this.mode === 'weapons') {
-      const r = this.core.dispatch({ type: 'WEAPON_CARD', pick });
+      const r = this.core.dispatch({ type: 'WEAPON_CARD', pick, weaponIds: [...this.staked] });
       if (r.type !== 'weaponCardPlayed') {
         this.sfx.denied();
         return;
@@ -430,7 +490,7 @@ export class CardScene extends Phaser.Scene {
     const big = PORTRAIT ? 1.15 : 1;
     const y = PORTRAIT ? H * 0.58 : H * 0.63;
     const head = this.add
-      .text(W / 2, y, win ? `O!  모든 무기 +${WEAPON_CARD.levels}` : `X…  무기 ${count}자루가 부서졌다`, {
+      .text(W / 2, y, win ? `O!  고른 무기 ${count}자루 +${WEAPON_CARD.levels}` : `X…  무기 ${count}자루가 부서졌다`, {
         fontFamily: FONT,
         fontSize: `${Math.round(42 * big)}px`,
         fontStyle: '900',
@@ -445,7 +505,11 @@ export class CardScene extends Phaser.Scene {
       .setDepth(10);
     this.tweens.add({ targets: head, scale: 1, alpha: 1, duration: 260, ease: 'Back.easeOut' });
     const after = this.core.state.weapons;
-    const sub = win ? `무기 ${count}자루가 한꺼번에 +${WEAPON_CARD.levels} · 이제 최고 +${Math.max(0, ...after.map((w) => w.level))}` : '무기걸이가 텅 비었다 · 내일 아침 새 무기가 도착한다';
+    const sub = win
+      ? `무기 ${count}자루가 한꺼번에 +${WEAPON_CARD.levels} · 이제 최고 +${Math.max(0, ...after.map((w) => w.level))}`
+      : after.length > 0
+        ? `고르지 않은 무기 ${after.length}자루는 무사하다`
+        : '무기걸이가 텅 비었다 · 내일 아침 새 무기가 도착한다';
     this.tweens.add({ targets: label(this, W / 2, y + 48 * big, sub, 16 * big, C.text, { weight: 700, origin: [0.5, 0.5] }).setStroke('#000000', 5).setAlpha(0).setDepth(10), alpha: 1, duration: 300, delay: 200 });
     if (win) this.time.delayedCall(250, () => this.sfx.awaken(3));
     this.hint.setText(win ? '운명이 웃었다' : '운명이 등을 돌렸다');

@@ -40,8 +40,8 @@ export type Action =
   | { type: 'BUY_NODE'; id: string }
   /** 운명의 카드: the chosen card and the bet (2026-11-26; replaces paying the rent early). */
   | { type: 'CARD_BET'; pick: 0 | 1; bet: number }
-  /** 운명의 무기 카드 (DAY 30+): every weapon at stake. */
-  | { type: 'WEAPON_CARD'; pick: 0 | 1 }
+  /** 운명의 무기 카드 (DAY 30+): the chosen weapons at stake. */
+  | { type: 'WEAPON_CARD'; pick: 0 | 1; weaponIds: string[] }
   /** Work time passed at the forge: stamina drains (sent about once a second while the forge is open). */
   | { type: 'DRAIN_STAMINA'; seconds: number }
   /** Online duel settled by the server: the bet won (+) or lost (−). */
@@ -323,7 +323,7 @@ export class GameCore {
       }
       case 'WEAPON_CARD': {
         if (this.state.pendingSplit) return { type: 'weaponCardBlocked', reason: 'night' };
-        const r = playWeaponCard(this.state, action.pick);
+        const r = playWeaponCard(this.state, action.pick, action.weaponIds);
         if (!r.ok) return { type: 'weaponCardBlocked', reason: r.reason };
         this.commit(r.state); // saved before the card turns
         this.emit('changed', this.state);

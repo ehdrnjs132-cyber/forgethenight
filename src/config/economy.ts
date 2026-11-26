@@ -75,7 +75,7 @@ export const CARD_GAME = { unlockDay: 10, payoutMul: 2 };
 
 /**
  * 운명의 무기 카드 (user request 2026-11-26): from DAY unlockDay, once a day. Same two cards, but the
- * stake is every weapon on the rack: O → all of them +levels, X → all of them destroyed.
+ * stake is the weapons the player picks from the rack: O → those +levels, X → those destroyed.
  */
 export const WEAPON_CARD = { unlockDay: 30, levels: 10 };
 

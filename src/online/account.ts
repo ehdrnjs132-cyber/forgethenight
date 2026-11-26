@@ -19,10 +19,10 @@ export interface RankRow {
 }
 
 /**
- * Ranking season; must match SEASON in server/index.js. Season 2 started with the reset of 2026-11-19:
- * only enhancements made from then on count (see seasonBest).
+ * Ranking season; must match SEASON in server/index.js. Season 2 started with the reset of 2026-11-19,
+ * season 3 with the reset of 2026-11-26: only enhancements made from then on count (see seasonBest).
  */
-export const RANK_SEASON = 2;
+export const RANK_SEASON = 3;
 const SEASON_KEY = 'ftn.seasonBest';
 
 /** This device's best of the current season (the lifetime best in records may be from an old season). */
