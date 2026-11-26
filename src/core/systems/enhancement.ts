@@ -4,7 +4,7 @@ import { MAX_LEVEL } from '../../config/weapons';
 import { appearanceStage, milestoneCrossed, type Milestone } from '../../config/appearance';
 import { Rng } from '../rng';
 import type { EnhanceCandidate, GameState, Weapon } from '../state/types';
-import { candidateScore, daily, fateSplitLeft, phoenixLeft, phoenixLevel, rollCandidate, spendStrike, staminaLeft, strikeCost, withDaily } from './forgeSkills';
+import { candidateScore, daily, fateSplitLeft, phoenixLeft, phoenixLevel, rollCandidate, staminaLeft, strike, withDaily } from './forgeSkills';
 import { treeEffects } from './skillTree';
 import { findWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
@@ -100,8 +100,8 @@ export function checkEnhance(state: GameState, weaponId: string, opts: EnhanceOp
   if (weapon.level >= MAX_LEVEL) return 'max-level';
   if (!isTutorialDone(state, 'firstEnhance')) return 'tutorial';
   if (state.gold < enhanceCostFor(state, weapon.level)) return 'gold';
-  // every strike costs stamina (2026-11-26); the scripted prologue strikes are free
-  if (!opts.force && staminaLeft(state) < strikeCost(state)) return 'stamina';
+  // stamina drains while working (2026-11-26); at 0 the hammer stops. The scripted prologue ignores it.
+  if (!opts.force && staminaLeft(state) <= 0) return 'stamina';
   // (2026-11-19: no "last weapon" warning any more; weapons are free and the forge always gives more)
   return null;
 }
@@ -133,10 +133,8 @@ export interface EnhanceResult {
   free: boolean;
   /** 몰아치기 made the NEXT attempt free. */
   nextFree: boolean;
-  /** Stamina the strike cost (0 when 굳은 살 saved it), and 두 번째 바람 given back, if any. */
-  staminaCost: number;
-  staminaSaved: boolean;
-  secondWind: number;
+  /** Stamina won back by a lucky strike (굳은 살 / 아끼기 / 불굴), 0 otherwise. */
+  staminaRefund: number;
 }
 
 export type EnhanceAttempt =
@@ -153,7 +151,7 @@ interface Prepared {
   used: EnhanceItem[];
   free: boolean;
   doubled?: boolean;
-  stamina: { cost: number; saved: boolean; secondWind: number };
+  staminaRefund: number;
 }
 
 function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): Prepared {
@@ -171,14 +169,14 @@ function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): 
   };
   for (const item of used) state = consume(state, item);
   const rng = new Rng(prev.rng);
-  // stamina for the strike (the scripted prologue strikes are free)
-  let stamina = { cost: 0, saved: false, secondWind: 0 };
+  // the strike starts the day's stamina drain (the scripted prologue strikes do not)
+  let staminaRefund = 0;
   if (!opts.force) {
-    const s = spendStrike(state, rng);
+    const s = strike(state, rng);
     state = s.state;
-    stamina = { cost: s.cost, saved: s.saved, secondWind: s.secondWind };
+    staminaRefund = s.refund;
   }
-  return { state, before, row, rng, used, free: prev.freeEnhance === true, stamina };
+  return { state, before, row, rng, used, free: prev.freeEnhance === true, staminaRefund };
 }
 
 /**
@@ -258,9 +256,7 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
       refund,
       free: prepared.free,
       nextFree,
-      staminaCost: prepared.stamina.cost,
-      staminaSaved: prepared.stamina.saved,
-      secondWind: prepared.stamina.secondWind,
+      staminaRefund: prepared.staminaRefund,
     },
   };
 }
@@ -309,8 +305,8 @@ export function beginSplit(prev: GameState, weaponId: string, opts: EnhanceOptio
 export function chooseSplit(prev: GameState, index: 0 | 1): EnhanceAttempt {
   const pending = prev.pendingSplit;
   if (!pending || !findWeapon(prev, pending.weaponId)) return { ok: false, state: prev, blocked: 'no-weapon' };
-  const p: Prepared = { state: { ...prev, pendingSplit: null }, before: { ...pending.before }, row: effectiveRow(pending.before.level), rng: new Rng(prev.rng), used: [], free: false, stamina: { cost: 0, saved: false, secondWind: 0 } };
-  // (the stamina for this strike was paid when the split was rolled)
+  const p: Prepared = { state: { ...prev, pendingSplit: null }, before: { ...pending.before }, row: effectiveRow(pending.before.level), rng: new Rng(prev.rng), used: [], free: false, staminaRefund: 0 };
+  // (the strike itself happened when the split was rolled)
   const r = apply(p, pending.candidates[index]);
   return { ok: true, state: r.state, result: r.result };
 }

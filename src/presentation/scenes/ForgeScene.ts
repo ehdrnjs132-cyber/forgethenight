@@ -3,7 +3,7 @@ import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import type { Weapon } from '../../core/state/types';
 import { collectEnhanceMods, effectiveRow, type EnhanceResult } from '../../core/systems/enhancement';
-import { fateSplitLeft, overheatBonus, phoenixLeft, phoenixLevel, staminaLeft, staminaMax, strikeCost } from '../../core/systems/forgeSkills';
+import { drainRate, fateSplitLeft, overheatBonus, phoenixLeft, phoenixLevel, staminaLeft, staminaMax, staminaStarted } from '../../core/systems/forgeSkills';
 import { DIVINE_STEP } from '../../config/forgeSkills';
 import { anyNodeAffordable, cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
 import { DIRECTION_INFO, RHYTHM_SECONDS, TREE } from '../../config/skillTree';
@@ -717,53 +717,97 @@ export class ForgeScene extends Phaser.Scene {
     this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 580, 276, 52, '다음 날 ▶', { variant: 'gold', size: 22, sub: '하루 마치기 · Z', onClick: () => this.openEvening() });
   }
 
-  // ───────────────────────── stamina (2026-11-26): every strike costs some, refilled each morning
+  // ───────────────────────── stamina (2026-11-26): drains slowly from the first strike of the day
   private staminaBar!: Phaser.GameObjects.Graphics;
   private staminaText!: Phaser.GameObjects.Text;
-  /** Stamina shown on the bar; it only drops when the hammer lands, not when the core decides. */
-  private staminaShown = -1;
-  private static readonly SB = PORTRAIT ? { x: W / 2, y: 384, w: 440, h: 18 } : { x: 600, y: 96, w: 340, h: 16 };
+  /** Work seconds not yet handed to the core (it saves once a second; the bar moves every frame). */
+  private drainPending = 0;
+  /** "체력이 바닥났다" already shown for today. */
+  private emptyShown = false;
+  /** The strike being played is the first one today (the drain starts with it). */
+  private firstStrikeToday = false;
+  // landscape: right of the rack's buy button, left of the odds panel
+  private static readonly SB = PORTRAIT ? { x: W / 2, y: 384, w: 440, h: 18 } : { x: 712, y: 96, w: 360, h: 16 };
 
   private buildStamina() {
     const b = ForgeScene.SB;
     this.staminaBar = this.add.graphics().setDepth(12);
     this.staminaText = label(this, b.x, b.y, '', PORTRAIT ? 15 : 13, 0xffffff, { weight: 900, origin: [0.5, 0.5] }).setStroke('#0b0705', 4).setDepth(13);
-    this.staminaShown = -1;
+    this.drainPending = 0;
+    this.emptyShown = staminaLeft(this.core.state) <= 0;
+    // hand the last fraction of a second to the core whenever the forge stops (menus, evening, lobby)
+    this.events.on(Phaser.Scenes.Events.PAUSE, () => this.flushDrain());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.flushDrain());
   }
 
-  /** Draw the bar at `value` (defaults to the real stamina). Low stamina turns it red. */
-  private drawStamina(value = staminaLeft(this.core.state)) {
+  update(_t: number, dt: number) {
+    this.tickStamina(dt / 1000);
+  }
+
+  /** Stamina on screen right now: the saved value minus the work since the last save. */
+  private staminaNow(): number {
+    return Math.max(0, staminaLeft(this.core.state) - drainRate(this.core.state) * this.drainPending);
+  }
+
+  /** Every frame: let work time pass, move the bar, and save about once a second. */
+  private tickStamina(sec: number) {
+    const s = this.core.state;
+    if (s.phase !== 'day' || !staminaStarted(s) || staminaLeft(s) <= 0) {
+      this.drawStamina();
+      return;
+    }
+    // real time, not the forge's sped-up animation clock
+    this.drainPending += Math.min(sec, 0.25);
+    if (this.drainPending >= 1 || this.staminaNow() <= 0) this.flushDrain();
+    this.drawStamina(this.staminaNow());
+  }
+
+  private flushDrain() {
+    if (this.drainPending <= 0) return;
+    const r = this.core.dispatch({ type: 'DRAIN_STAMINA', seconds: this.drainPending });
+    this.drainPending = 0;
+    if (r.type !== 'drained') return;
     const b = ForgeScene.SB;
-    const max = staminaMax(this.core.state);
-    const cost = strikeCost(this.core.state);
-    this.staminaShown = value;
+    if (r.secondWind > 0) this.floatText(b.x, b.y - 26, `두 번째 바람 · 체력 +${r.secondWind}`, 0x7dff8a);
+    if (r.left <= 0 && !this.emptyShown && this.sys.isActive()) {
+      this.emptyShown = true;
+      this.staminaEmpty();
+      this.toast('체력이 바닥났습니다 · 「다음 날」로 쉬면 아침에 회복됩니다', C.dangerHi);
+    }
+  }
+
+  /**
+   * The bar: the fill shrinks smoothly; behind it a dark-red trail shows what drained since the last
+   * second, so the loss reads as "slowly going". Low stamina turns it orange, then red.
+   */
+  private drawStamina(value = this.staminaNow()) {
+    const b = ForgeScene.SB;
+    const s = this.core.state;
+    const max = staminaMax(s);
+    const saved = staminaLeft(s);
     const t = Math.max(0, Math.min(1, value / max));
-    const col = value < cost ? 0xd11f2a : t < 0.4 ? 0xff9a3c : 0x5fd86a;
+    const col = t < 0.2 ? 0xd11f2a : t < 0.4 ? 0xff9a3c : 0x5fd86a;
     const g = this.staminaBar;
     g.clear();
     g.fillStyle(0x000000, 0.6).fillRoundedRect(b.x - b.w / 2 - 3, b.y - b.h / 2 - 3, b.w + 6, b.h + 6, (b.h + 6) / 2);
+    const ts = Math.max(0, Math.min(1, saved / max));
+    if (ts > t) g.fillStyle(0x8a1a1a, 1).fillRoundedRect(b.x - b.w / 2, b.y - b.h / 2, Math.max(b.h, b.w * ts), b.h, b.h / 2);
     if (t > 0) g.fillStyle(col, 1).fillRoundedRect(b.x - b.w / 2, b.y - b.h / 2, Math.max(b.h, b.w * t), b.h, b.h / 2);
-    // one notch per strike, so "five strikes a day" is visible at a glance (left out once there are too many)
-    g.lineStyle(2, 0x000000, 0.55);
-    for (let v = cost; max / cost <= 24 && v < max; v += cost) {
-      const x = b.x - b.w / 2 + (b.w * v) / max;
-      g.lineBetween(x, b.y - b.h / 2, x, b.y + b.h / 2);
-    }
-    this.staminaText.setText(`♥ 체력 ${Math.round(value)} / ${max}  ·  망치질 −${cost}`);
+    if (t > 0) g.fillStyle(0xffffff, 0.18).fillRoundedRect(b.x - b.w / 2 + 2, b.y - b.h / 2 + 2, Math.max(b.h - 4, b.w * t - 4), b.h * 0.4, b.h * 0.2);
+    const rate = drainRate(s);
+    const tail = !staminaStarted(s) ? '첫 망치질부터 줄어듭니다' : value <= 0 ? '오늘은 끝 · 내일 아침 회복' : `초당 −${rate % 1 ? rate.toFixed(1) : rate} · ${Math.ceil(value / rate)}초 남음`;
+    this.staminaText.setText(`♥ 체력 ${Math.ceil(value)} / ${max}  ·  ${tail}`);
   }
 
-  /** The hammer landed: the bar drops by what the strike cost (or flashes for a free one). */
-  private staminaHit(r: EnhanceResult) {
-    const to = staminaLeft(this.core.state);
-    const from = this.staminaShown < 0 ? to : this.staminaShown;
+  /** The hammer landed: a lucky strike wins some stamina back; the first strike starts the clock. */
+  private staminaHit(r: EnhanceResult, firstToday: boolean) {
     const b = ForgeScene.SB;
-    if (r.staminaSaved) this.floatText(b.x + b.w / 2 + 8, b.y, '굳은 살 · 체력 그대로', 0x7dff8a);
-    else if (r.staminaCost > 0) this.floatText(b.x + b.w / 2 + 8, b.y, `−${r.staminaCost}`, 0xff6b6b);
-    if (r.secondWind > 0) this.time.delayedCall(250, () => this.floatText(b.x, b.y - 26, `두 번째 바람 · 체력 +${r.secondWind}`, 0x7dff8a));
-    const o = { v: from };
-    this.tweens.add({ targets: o, v: to, duration: 260, ease: 'Cubic.easeOut', onUpdate: () => this.drawStamina(o.v), onComplete: () => this.drawStamina(to) });
-    this.staminaText.setScale(1.15);
-    this.tweens.add({ targets: this.staminaText, scale: 1, duration: 240 });
+    if (firstToday) this.floatText(b.x, b.y + 24, '체력이 서서히 줄어들기 시작한다', 0xffb08a);
+    if (r.staminaRefund > 0) {
+      this.floatText(b.x + b.w / 2 + 8, b.y, `+${Math.round(r.staminaRefund)} 되찾음`, 0x7dff8a);
+      this.staminaText.setScale(1.15);
+      this.tweens.add({ targets: this.staminaText, scale: 1, duration: 240 });
+    }
   }
 
   /** Out of stamina: shake and redden the bar so the reason is impossible to miss. */
@@ -1316,6 +1360,9 @@ export class ForgeScene extends Phaser.Scene {
     if (!w) return;
     // Lock the screen before dispatching: the core announces the new state synchronously,
     // and the inventory and odds must not reveal the result before the hammer lands.
+    // the strike is judged on the stamina left right now
+    this.flushDrain();
+    this.firstStrikeToday = !staminaStarted(this.core.state);
     this.animating = true;
     const rhythm = treeEffects(this.core.state).rhythm > 0 && Date.now() - this.lastEnhanceAt < RHYTHM_SECONDS * 1000;
     const res = this.core.dispatch({ type: 'ENHANCE', weaponId: w.id, rhythm, confirmLast: confirmLast || this.lastConfirmedId === w.id });
@@ -1345,7 +1392,7 @@ export class ForgeScene extends Phaser.Scene {
       } else if (res.reason === 'stamina') {
         this.sfx.denied();
         this.staminaEmpty();
-        this.toast(`체력이 부족합니다 (망치질 −${strikeCost(this.core.state)}) · 「다음 날」로 쉬면 아침에 회복됩니다`, C.dangerHi);
+        this.toast('체력이 바닥났습니다 · 「다음 날」로 쉬면 아침에 회복됩니다', C.dangerHi);
       } else if (res.reason === 'max-level') this.toast(`+${MAX_LEVEL}에 도달한 무기는 더 강화할 수 없습니다`);
       else if (res.reason === 'gold') {
         this.sfx.denied();
@@ -1383,7 +1430,8 @@ export class ForgeScene extends Phaser.Scene {
     void this.fx
       .play(r, {
         onImpact: () => {
-          this.staminaHit(r);
+          this.staminaHit(r, this.firstStrikeToday);
+          this.firstStrikeToday = false;
           this.renderHeader(r.weaponAfter);
           if (r.weaponAfter) {
             this.weaponView.setLook({ cls: r.weaponAfter.cls, element: r.weaponAfter.element, level: r.weaponAfter.level });

@@ -56,6 +56,8 @@ export interface DailyCounters {
   staminaUsed?: number;
   /** 두 번째 바람 already used today. */
   secondWind?: number;
+  /** The first strike of the day was made, so stamina is draining (2026-11-26). */
+  staminaStarted?: boolean;
 }
 
 /** The king's last rent visit, for the morning notice. */

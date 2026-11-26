@@ -10,7 +10,20 @@ import { MemoryStorage, SaveManager, migrate } from '../src/core/save/save';
 import { Rng } from '../src/core/rng';
 import type { GameState, Weapon } from '../src/core/state/types';
 import { beginSplit, chooseSplit, collectEnhanceMods, effectiveRow, enhance } from '../src/core/systems/enhancement';
-import { fateSplitLeft, greatConversionChance, phoenixLeft, phoenixLevel, rollCandidate, staminaLeft, staminaMax, strikeCost, strikesLeft } from '../src/core/systems/forgeSkills';
+import {
+  drainRate,
+  drainStamina,
+  fateSplitLeft,
+  greatConversionChance,
+  phoenixLeft,
+  phoenixLevel,
+  rollCandidate,
+  staminaLeft,
+  staminaMax,
+  staminaStarted,
+  strike,
+  workSecondsLeft,
+} from '../src/core/systems/forgeSkills';
 import { buyNode, checkBuyNode, nodeVisible, treeEffects } from '../src/core/systems/skillTree';
 import { enhanceCost, enhanceCostFor, sellPrice } from '../src/core/systems/economy';
 import { collectRent, rentAmount, rentFor } from '../src/core/systems/rent';
@@ -40,6 +53,12 @@ function seedWhere(test: (divine: number, great: number, fourth: number) => bool
     const f = r.next() * 100;
     if (test(d, g, f)) return s;
   }
+  throw new Error('no seed');
+}
+
+/** An RNG seed whose first number (×100) satisfies a test. */
+function seedWhereFirst(test: (x: number) => boolean): number {
+  for (let s = 1; s < 200_000; s++) if (test(new Rng(s).next() * 100)) return s;
   throw new Error('no seed');
 }
 
@@ -201,64 +220,93 @@ describe('⚡ speed', () => {
   });
 });
 
-describe('♥ stamina (2026-11-26)', () => {
-  it('every strike takes 20%: five strikes on a fresh morning, then blocked', () => {
+describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => {
+  it('nothing drains before the first strike; the strike starts the clock but costs nothing itself', () => {
     let s = withNodes([]);
     expect(staminaMax(s)).toBe(100);
-    expect(strikeCost(s)).toBe(20);
-    expect(strikesLeft(s)).toBe(5);
-    for (let i = 0; i < 5; i++) {
-      const r = enhance(s, s.weapons[0].id);
-      expect(r.ok, `strike ${i + 1}`).toBe(true);
-      if (!r.ok) return;
-      expect(r.result.staminaCost).toBe(20);
-      s = r.result.weaponAfter ? r.state : { ...r.state, weapons: withNodes([]).weapons };
-    }
+    expect(drainStamina(s, 5).state).toBe(s);
+    const r = enhance(s, s.weapons[0].id);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    s = r.state;
+    expect(staminaStarted(s)).toBe(true);
+    expect(staminaLeft(s)).toBe(100);
+  });
+
+  it('then 10 a second: ten seconds of work on a fresh morning, then the hammer stops', () => {
+    let s = withNodes([]);
+    const r = enhance(s, s.weapons[0].id);
+    if (!r.ok) throw new Error('blocked');
+    s = r.state;
+    expect(drainRate(s)).toBe(STAMINA.drainPerSec);
+    expect(workSecondsLeft(s)).toBeCloseTo(10, 6);
+    s = drainStamina(s, 4).state;
+    expect(staminaLeft(s)).toBeCloseTo(60, 6);
+    s = drainStamina(s, 100).state;
     expect(staminaLeft(s)).toBe(0);
     const blocked = enhance(s, s.weapons[0].id);
     expect(blocked.ok).toBe(false);
     if (!blocked.ok) expect(blocked.blocked).toBe('stamina');
   });
 
-  it('refills the next morning', () => {
-    const core = new GameCore(new MemoryStorage(), 4);
-    core.state = { ...core.state, daily: { day: core.state.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: 100 } };
+  it('faster hammering fits more strikes into the same stamina (why the speed stars matter)', () => {
+    expect(workSecondsLeft(withNodes([]))).toBe(workSecondsLeft(withNodes(sectorNodes('speed'))));
+    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeGreaterThan(treeEffects(withNodes([])).speed * 2);
+  });
+
+  it('the core drains through DRAIN_STAMINA, saves it, and refills the next morning', () => {
+    const storage = new MemoryStorage();
+    const core = new GameCore(storage, 4);
+    core.state = { ...core.state, daily: { day: core.state.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: 0, staminaStarted: true } };
+    const r = core.dispatch({ type: 'DRAIN_STAMINA', seconds: 3 });
+    expect(r).toMatchObject({ type: 'drained', left: 70 });
+    expect(staminaLeft(new SaveManager(storage).loadRun().state!)).toBe(70);
+    core.dispatch({ type: 'DRAIN_STAMINA', seconds: 60 });
     expect(staminaLeft(core.state)).toBe(0);
     core.dispatch({ type: 'SLEEP' });
     expect(staminaLeft(core.state)).toBe(staminaMax(core.state));
+    expect(staminaStarted(core.state)).toBe(false);
   });
 
-  it('체력 stars: max stamina up to 1000, cheaper strikes, +2% free strikes each, a second wind', () => {
+  it('체력 stars: max stamina up to 1000, drain −5% each (−40% in all), lucky strikes +2% each, a second wind', () => {
     const all = withNodes(sectorNodes('stamina'));
     const e = treeEffects(all);
     expect(staminaMax(all)).toBe(1000);
-    expect(strikeCost(all)).toBe(STAMINA.strikeCost - 5 - 3);
-    // every free-strike source gives 2% (user 2026-11-26)
+    expect(e.drainCut).toBeCloseTo(5 * 0.05 + 0.15, 6);
+    expect(drainRate(all)).toBeCloseTo(STAMINA.drainPerSec * 0.6, 6);
+    // every lucky-strike source gives 2% (user 2026-11-26)
     expect(e.staminaSave).toBe(4 * 2);
     expect(e.secondWind).toBe(30);
-    expect(strikesLeft(all)).toBe(Math.floor(1000 / 12));
+    expect(workSecondsLeft(all)).toBeGreaterThan(workSecondsLeft(withNodes([])) * 15);
+  });
+
+  it('a lucky strike wins back one second of stamina', () => {
+    let s = withNodes(pathTo('callus'));
+    s = { ...s, daily: { day: s.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: 50, staminaStarted: true } };
+    const lucky = strike(s, new Rng(seedWhereFirst((x) => x < 2)));
+    expect(lucky.refund).toBeCloseTo(drainRate(s) * STAMINA.refundSec, 6);
+    expect(staminaLeft(lucky.state)).toBeCloseTo(staminaLeft(s) + lucky.refund, 6);
+    const plain = strike(s, new Rng(seedWhereFirst((x) => x >= 2)));
+    expect(plain.refund).toBe(0);
   });
 
   it('두 번째 바람 gives 30% of the maximum back once a day when stamina runs out', () => {
     let s = withNodes(pathTo('wind'));
-    const cost = strikeCost(s);
     const max = staminaMax(s);
-    s = { ...s, daily: { day: s.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: max - cost } };
-    const r = enhance(s, s.weapons[0].id);
-    expect(r.ok).toBe(true);
-    if (!r.ok) return;
-    expect(r.result.secondWind).toBe(Math.round(max * 0.3));
-    expect(staminaLeft(r.state)).toBe(Math.round(max * 0.3));
+    s = { ...s, daily: { day: s.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: max - 5, staminaStarted: true } };
+    const d = drainStamina(s, 60);
+    expect(d.secondWind).toBe(Math.round(max * 0.3));
+    expect(staminaLeft(d.state)).toBe(Math.round(max * 0.3));
     // only once a day
-    const used = { ...r.state, daily: { ...r.state.daily!, staminaUsed: max - cost } };
-    const r2 = enhance(used, used.weapons[0].id);
-    expect(r2.ok && r2.result.secondWind).toBe(0);
+    const again = drainStamina(d.state, 600);
+    expect(again.secondWind).toBe(0);
+    expect(staminaLeft(again.state)).toBe(0);
   });
 
-  it('the scripted prologue strikes cost nothing', () => {
+  it('the scripted prologue strikes do not start the drain', () => {
     const s = withNodes([]);
     const r = enhance(s, s.weapons[0].id, { force: 'keep' });
-    expect(r.ok && staminaLeft(r.state)).toBe(100);
+    expect(r.ok && staminaStarted(r.state)).toBe(false);
   });
 });
 
@@ -303,17 +351,17 @@ describe('✚ insurance', () => {
     expect(r.state.gold).toBe(s.gold - enhanceCostFor(s, 12) + refund);
   });
 
-  it('운명 분열 gives two candidates, costs one strike, and the pick is applied once', () => {
+  it('운명 분열 gives two candidates, counts as a strike, and the pick is applied once', () => {
     const s = { ...withNodes(pathTo('split')), splitArmed: true };
     expect(fateSplitLeft(s)).toBe(2);
     const b = beginSplit(s, s.weapons[0].id);
     expect(b.ok).toBe(true);
     if (!b.ok) return;
     expect(fateSplitLeft(b.state)).toBe(1);
-    expect(staminaLeft(b.state)).toBe(100 - 20);
+    expect(staminaStarted(b.state)).toBe(true);
     const c = chooseSplit(b.state, 0);
     expect(c.ok).toBe(true);
-    expect(c.ok && staminaLeft(c.state)).toBe(80);
+    expect(c.ok && staminaLeft(c.state)).toBe(100);
   });
 
   it('아침 보호석 gives a stone every new morning', () => {

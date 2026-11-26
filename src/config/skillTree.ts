@@ -54,9 +54,9 @@ export interface TreeEffects {
   mercy: boolean;
   /** 체력: added to STAMINA.max. */
   staminaMax: number;
-  /** 체력: taken off STAMINA.strikeCost (never below STAMINA.minCost). */
-  strikeCut: number;
-  /** % chance a strike costs no stamina (굳은 살). */
+  /** 체력: share taken off the drain per second (0.05 = −5%, capped at STAMINA.maxCut). */
+  drainCut: number;
+  /** % chance a strike wins back STAMINA.refundSec seconds of stamina (굳은 살). */
   staminaSave: number;
   /** 두 번째 바람: once a day, stamina that runs out comes back by this % of the maximum. */
   secondWind: number;
@@ -69,11 +69,13 @@ export const PREPAY_BONUS = { speed: 0.25, success: 1 };
 /** Hammer speed before any skill: 50% slower than the old normal (user decision 2026-11-26). */
 export const BASE_SPEED = 0.5;
 /**
- * The blacksmith's stamina (user decision 2026-11-26): every strike costs stamina, refilled each morning.
- * At first a strike takes 20% — only five strikes a day, on purpose ("유저를 화나게") — and the 체력 stars
- * slowly make that bearable.
+ * The blacksmith's stamina (user decisions 2026-11-26). It used to cost 20 per strike; the user then asked
+ * for a slow drain instead, because a per-strike cost made the speed stars pointless: from the first strike
+ * of the day stamina drains `drainPerSec` every second while the forge is open, refilled each morning.
+ * At first that is only ten seconds of work a day — harsh on purpose ("유저를 화나게") — and the 체력 stars
+ * make it bearable: more stamina, a slower drain (up to −maxCut), stamina won back on lucky strikes.
  */
-export const STAMINA = { max: 100, strikeCost: 20, minCost: 5 } as const;
+export const STAMINA = { max: 100, drainPerSec: 10, maxCut: 0.6, refundSec: 1 } as const;
 
 export interface TreeNode {
   id: string;
@@ -130,9 +132,9 @@ const GOLDEN: Minor = ['황금 +5%', '새 무기가 황금 무기일 확률 +5%'
 const REFUND: Minor = ['파편 +5%', '무기가 파괴되면 판매가의 5%를 더 돌려받는다', (e) => void (e.destroyRefund += 5)];
 /** 최대 체력 stars grow outward (+10 at the anvil … +80 at the edge) so the sector reaches 1000 (user 2026-11-26). */
 const vigor = (n: number): Minor => [`체력 +${n}`, `최대 체력 +${n}`, (e) => void (e.staminaMax += n)];
-const EASE: Minor = ['소모 −1', '망치질 한 번의 체력 소모 −1', (e) => void (e.strikeCut += 1)];
-/** Free-strike chance: +2% per star, every source the same (user 2026-11-26). */
-const CALLUS: Minor = ['아끼기 +2%', '망치질에 체력이 들지 않을 확률 +2%', (e) => void (e.staminaSave += 2)];
+const EASE: Minor = ['감소 −5%', '체력이 줄어드는 속도 −5%', (e) => void (e.drainCut += 0.05)];
+/** Lucky-strike chance: +2% per star, every source the same (user 2026-11-26). */
+const CALLUS: Minor = ['아끼기 +2%', `망치질할 때 2% 확률로 체력 ${STAMINA.refundSec}초분을 되찾는다`, (e) => void (e.staminaSave += 2)];
 
 /** [id, from, ring, angle within the sector (deg), small star | big star [name, desc, effect]]. */
 type Spec = readonly [string, string, number, number, Minor | { name: string; desc: string; apply: Fx }];
@@ -202,13 +204,13 @@ export const TREE: readonly TreeNode[] = [
     ['sp19', 'sp16', 11, 21, SPEED],
   ]),
 
-  // ♥ 체력 — max stamina +10…+80 (100 → 1000 with the whole sector), strike cost −1, free strikes +2%;
+  // ♥ 체력 — max stamina +10…+80 (100 → 1000 with the whole sector), drain −5%, lucky strikes +2%;
   // 굳은 살 (small), 든든한 아침, 두 번째 바람, 불굴, 거인의 심장
   ...sector('stamina', [
     ['st1', 'root', 1, 0, vigor(10)],
     ['st2', 'st1', 2, -6, EASE],
     ['st3', 'st2', 3, 0, vigor(20)],
-    ['callus', 'st3', 4, -10, ['굳은 살', '망치질에 체력이 들지 않을 확률 +2%', (e) => void (e.staminaSave += 2)]],
+    ['callus', 'st3', 4, -10, ['굳은 살', `망치질할 때 2% 확률로 체력 ${STAMINA.refundSec}초분을 되찾는다`, (e) => void (e.staminaSave += 2)]],
     ['st5', 'st3', 4, 10, vigor(30)],
     ['st6', 'st5', 5, 15, EASE],
     ['breakfast', 'st6', 6, 8, BIG('든든한 아침', '최대 체력 +50', (e) => void (e.staminaMax += 50))],
@@ -222,7 +224,7 @@ export const TREE: readonly TreeNode[] = [
     ['st15', 'st14', 9, -11, vigor(60)],
     ['st16', 'wind', 10, 5, vigor(70)],
     ['st17', 'st15', 10, -8, EASE],
-    ['iron', 'st16', 11, 1, BIG('불굴', '망치질 체력 소모 −3 · 체력이 들지 않을 확률 +2%', (e) => void ((e.strikeCut += 3), (e.staminaSave += 2)))],
+    ['iron', 'st16', 11, 1, BIG('불굴', '체력이 줄어드는 속도 −15% · 되찾기 확률 +2%', (e) => void ((e.drainCut += 0.15), (e.staminaSave += 2)))],
     ['st19', 'st17', 11, -13, vigor(80)],
     // the outer arc of pure stamina, out to the biggest heart
     ['st20', 'st5', 5, 28, vigor(30)],
@@ -316,7 +318,7 @@ export function baseEffects(): TreeEffects {
     morningStones: 0,
     mercy: false,
     staminaMax: 0,
-    strikeCut: 0,
+    drainCut: 0,
     staminaSave: 0,
     secondWind: 0,
   };

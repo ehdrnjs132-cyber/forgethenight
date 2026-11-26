@@ -5,7 +5,7 @@ import type { EnhanceCandidate, GameOverSummary, GameState, Records, RentNotice,
 import { SaveManager, type LoadSource, type StorageLike } from './save/save';
 import { beginSplit, chooseSplit, enhance, type EnhanceOptions, type EnhanceResult, type SplitBlock } from './systems/enhancement';
 import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
-import { fateSplitLeft } from './systems/forgeSkills';
+import { drainStamina, fateSplitLeft, staminaLeft } from './systems/forgeSkills';
 import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
 import { collectRent, prepayRent, type PrepayBlock } from './systems/rent';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
@@ -38,6 +38,8 @@ export type Action =
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
   | { type: 'BUY_NODE'; id: string }
   | { type: 'PREPAY_RENT' }
+  /** Work time passed at the forge: stamina drains (sent about once a second while the forge is open). */
+  | { type: 'DRAIN_STAMINA'; seconds: number }
   /** Online duel settled by the server: the bet won (+) or lost (−). */
   | { type: 'DUEL_GOLD'; delta: number };
 
@@ -54,6 +56,7 @@ export type ActionResult =
   | { type: 'nodeBought'; id: string; cost: number }
   | { type: 'nodeBlocked'; reason: NodeBuyBlock }
   | { type: 'rentPrepaid'; price: number }
+  | { type: 'drained'; left: number; secondWind: number }
   | { type: 'prepayBlocked'; reason: PrepayBlock }
   | { type: 'sold'; price: number }
   | { type: 'sellBlocked'; reason: SellBlock | 'prologue' }
@@ -288,6 +291,13 @@ export class GameCore {
         this.commit({ ...this.state, gold: Math.max(0, this.state.gold + delta) });
         this.emit('changed', this.state);
         return { type: 'ok' };
+      }
+      case 'DRAIN_STAMINA': {
+        if (this.state.phase !== 'day') return { type: 'drained', left: staminaLeft(this.state), secondWind: 0 };
+        const d = drainStamina(this.state, action.seconds);
+        // saved, but no 'changed': the forge animates the bar itself and must not rebuild every second
+        if (d.drained !== 0) this.commit(d.state);
+        return { type: 'drained', left: staminaLeft(this.state), secondWind: d.secondWind };
       }
       case 'PREPAY_RENT': {
         const r = prepayRent(this.state);
