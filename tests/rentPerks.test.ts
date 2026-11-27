@@ -72,8 +72,8 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
 
   it('perks add onto the skill-tree effects', () => {
     const e = treeEffects(withPerks({ b_grip: 3, g_master: 2, r_bless: 1 }));
-    expect(e.success).toBeCloseTo(1.5 + 4 + 4, 6);
-    expect(e.destroy).toBeCloseTo(2, 6);
+    expect(e.success).toBeCloseTo(2.4 + 6 + 6, 6);
+    expect(e.destroy).toBeCloseTo(3, 6);
   });
 
   it('rent perks: cheaper rent, kickback and stones with every paid visit', () => {
@@ -82,9 +82,9 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
     expect(rentFor(s, 10)).toBeLessThan(rentFor(base, 10));
     const r = collectRent(due(s));
     const paid = r.notice!.amount;
-    expect(r.state.gold).toBe(100_000 - paid + Math.round(paid * 0.1));
-    expect(r.state.items.protect).toBe((s.items.protect ?? 0) + 1);
-    expect(r.state.items.luck).toBe((s.items.luck ?? 0) + 2);
+    expect(r.state.gold).toBe(100_000 - paid + Math.round(paid * 0.16));
+    expect(r.state.items.protect).toBe((s.items.protect ?? 0) + 2);
+    expect(r.state.items.luck).toBe((s.items.luck ?? 0) + 4);
   });
 
   it('왕의 총애 puts every next visit a day later', () => {
@@ -109,7 +109,7 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
   });
 
   it('견습생: the day\'s first strikes are free, then the normal price', () => {
-    const s = withPerks({ b_appr: 2 });
+    const s = withPerks({ b_appr: 1 }); // Lv 1: two free strikes a day
     expect(enhanceCostFor(s, 10)).toBe(0);
     const a = enhance(s, 'w1');
     expect(a.ok).toBe(true);
@@ -117,6 +117,7 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
     expect(a.state.gold).toBe(s.gold);
     const b = enhance(a.state, a.state.weapons[0].id);
     if (!b.ok) return;
+    expect(b.state.gold).toBe(s.gold);
     const c = b.state;
     expect(enhanceCostFor(c, c.weapons[0].level)).toBe(enhanceCost(c.weapons[0].level));
   });
@@ -146,7 +147,7 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
   });
 
   it('피의 거래 takes stamina; 꺼지지 않는 화로 refills it once a day', () => {
-    expect(staminaMax(withPerks({ g_blood: 1 }))).toBe(70);
+    expect(staminaMax(withPerks({ g_blood: 1 }))).toBe(75);
     let s = withPerks({ r_furnace: 1 });
     s = strike(s, new Rng(1)).state;
     const d = drainStamina(s, 1000);
@@ -156,7 +157,7 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
   });
 
   it('새벽 기상: the first seconds of the day do not drain', () => {
-    let s = withPerks({ b_dawn: 3 });
+    let s = withPerks({ b_dawn: 1 }); // Lv 1: two seconds
     s = strike(s, new Rng(1)).state;
     const a = drainStamina(s, 2);
     expect(a.state.daily?.staminaUsed ?? 0).toBe(0);
@@ -182,7 +183,7 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
     const a = playCard(s, 0, 100);
     expect(a.ok).toBe(true);
     if (!a.ok) return;
-    if (!a.win) expect(a.state.gold).toBe(1000 - 100 + 30);
+    if (!a.win) expect(a.state.gold).toBe(1000 - 100 + 60);
     const b = playCard(a.state, 0, 10);
     expect(b.ok).toBe(true);
     if (!b.ok) return;
