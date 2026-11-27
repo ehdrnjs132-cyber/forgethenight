@@ -249,6 +249,7 @@ const NOTABLES: Record<Direction, Notable[]> = {
     BIG('단련된 몸', '망치질할 때 3% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 3)),
     BIG('강철 심장', '체력이 줄어드는 속도 −6%', (e) => void (e.drainCut += 0.06)),
     BIG('굳은 손바닥', '망치질할 때 2% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 2)),
+    BIG('굳센 의지', '체력이 줄어드는 속도 −5%', (e) => void (e.drainCut += 0.05)),
   ],
   gold: [
     BIG('흥정꾼', '무기 판매가 +12%', (e) => void (e.sell += 0.12)),
@@ -263,6 +264,54 @@ const NOTABLES: Record<Direction, Notable[]> = {
 };
 /** Old rings whose incoming link gets a notable instead of a small star. */
 const NOTABLE_RINGS: ReadonlySet<number> = new Set([4, 8]);
+
+/**
+ * Early named stars (user 2026-11-27: "스킬트리 중간에 큰별을 좀만 더 넣어주자 초반에 너무 없어서"): the 2nd and
+ * 6th old rings get a named star too, a little weaker than the ones further out.
+ */
+const EARLY_RINGS: ReadonlySet<number> = new Set([2, 6]);
+const EARLY: Record<Direction, Notable[]> = {
+  odds: [
+    BIG('첫 불꽃', '성공 확률 +1%p', (e) => void (e.success += 1)),
+    BIG('단단한 받침', '파괴 확률 −1%p', (e) => void (e.destroy += 1)),
+    BIG('반짝이는 날', '대성공 확률 +1%p', (e) => void (e.great += 1)),
+    BIG('쇠 다루기', '하락의 8%가 유지로 바뀐다', (e) => void (e.downKeep += 8)),
+    BIG('예리한 감각', '성공 확률 +1%p', (e) => void (e.success += 1)),
+    BIG('차분한 손', '파괴 확률 −1%p', (e) => void (e.destroy += 1)),
+  ],
+  speed: [
+    BIG('가벼운 손목', '망치질 속도 +8%', (e) => void (e.speed += 0.08)),
+    BIG('리듬 타기', '리듬 성공 보너스 +1%p', (e) => void (e.rhythm += 1)),
+    BIG('빠른 팔', '망치질 속도 +8%', (e) => void (e.speed += 0.08)),
+    BIG('기세', '망치질 속도 +8%', (e) => void (e.speed += 0.08)),
+    BIG('손에 붙은 망치', '망치질 속도 +8%', (e) => void (e.speed += 0.08)),
+    BIG('쉼 없는 박자', '리듬 성공 보너스 +1%p', (e) => void (e.rhythm += 1)),
+  ],
+  stamina: [
+    BIG('튼튼한 몸', '최대 체력 +30', (e) => void (e.staminaMax += 30)),
+    BIG('고른 숨', '체력이 줄어드는 속도 −6%', (e) => void (e.drainCut += 0.06)),
+    BIG('버티는 힘', '최대 체력 +40', (e) => void (e.staminaMax += 40)),
+    BIG('숨 돌리기', '망치질할 때 2% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 2)),
+    BIG('질긴 근육', '최대 체력 +40', (e) => void (e.staminaMax += 40)),
+    BIG('느긋한 호흡', '체력이 줄어드는 속도 −6%', (e) => void (e.drainCut += 0.06)),
+  ],
+  gold: [
+    BIG('단골 손님', '무기 판매가 +8%', (e) => void (e.sell += 0.08)),
+    BIG('절약 습관', '강화 비용 −6%', (e) => void (e.costCut += 0.06)),
+    BIG('왕실 장부', '월세 −5%', (e) => void (e.rentCut += 0.05)),
+    BIG('금 냄새', '새 무기가 황금 무기일 확률 +5%', (e) => void (e.golden += 5)),
+    BIG('입담', '무기 판매가 +8%', (e) => void (e.sell += 0.08)),
+    BIG('검소한 대장간', '강화 비용 −6%', (e) => void (e.costCut += 0.06)),
+  ],
+  insure: [
+    BIG('파편 줍기', '무기가 파괴되면 판매가의 3%를 더 돌려받는다', (e) => void (e.destroyRefund += 3)),
+    BIG('조심성', '하락의 8%가 유지로 바뀐다', (e) => void (e.downKeep += 8)),
+    BIG('여분의 쇠', '하락의 6%가 유지로 바뀐다', (e) => void (e.downKeep += 6)),
+    BIG('보험 상담', '무기가 파괴되면 판매가의 3%를 더 돌려받는다', (e) => void (e.destroyRefund += 3)),
+    BIG('안전 장갑', '하락의 6%가 유지로 바뀐다', (e) => void (e.downKeep += 6)),
+    BIG('든든한 보증', '무기가 파괴되면 판매가의 3%를 더 돌려받는다', (e) => void (e.destroyRefund += 3)),
+  ],
+};
 
 /**
  * A sector's stars. Each spec is laid out on ring 2r, and a new star (`<id>m`) is put on the link from its
@@ -280,6 +329,7 @@ function sector(dir: Direction, specs: readonly Spec[]): TreeNode[] {
   const nodes: TreeNode[] = [];
   let mid = 0;
   let notable = 0;
+  let early = 0;
   const bigIds = new Set<string>(['root']);
   for (const [id, from, oldRing, ang, s] of specs) {
     const ring = oldRing * RING_SCALE;
@@ -287,7 +337,12 @@ function sector(dir: Direction, specs: readonly Spec[]): TreeNode[] {
     const pAng = from === 'root' ? ang : p.ang;
     const step = (k: number) => Math.max(k, Math.round(p.ring + ((ring - p.ring) * k) / 3));
     // the star next to the spec may be a notable, but never right beside a big star (they would touch)
-    const between: Minor | Notable = NOTABLE_RINGS.has(oldRing) && Array.isArray(s) ? NOTABLES[dir][notable++ % NOTABLES[dir].length] : MID[dir][mid++ % MID[dir].length];
+    const between: Minor | Notable =
+      NOTABLE_RINGS.has(oldRing) && Array.isArray(s)
+        ? NOTABLES[dir][notable++ % NOTABLES[dir].length]
+        : EARLY_RINGS.has(oldRing) && Array.isArray(s)
+          ? EARLY[dir][early++ % EARLY[dir].length]
+          : MID[dir][mid++ % MID[dir].length];
     const near: Minor = MID[dir][mid++ % MID[dir].length];
     if (!Array.isArray(s)) bigIds.add(id);
     // 2026-11-27 ("스킬들 1.5배"): a second new star on every link, next to the parent (`<id>n`)

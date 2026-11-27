@@ -163,20 +163,20 @@ describe('star disc shape', () => {
 
 describe('✦ odds', () => {
   it('small stars shift the row by 0.5%p, the new ones between them by 0.25%p, notables by 1.5%p', () => {
-    // twelve stars to od5: success 0.25 + 0.5 + 0.25 + 0.5 + 1.5 (정밀한 손) + 0.5, destroy 0.25 + 0.5 + 0.25
+    // twelve stars to od5, with 첫 불꽃 (+1, 2026-11-27) and 정밀한 손 (+1.5) among them
     const s = withNodes(pathTo('od5'));
     const w = s.weapons[0];
     const base = effectiveRow(w.level);
     const row = effectiveRow(w.level, collectEnhanceMods(s, w));
-    expect(row.success).toBeCloseTo(base.success + 3.5, 6);
-    expect(row.destroy).toBeCloseTo(base.destroy - 1, 1);
+    expect(row.success).toBeCloseTo(base.success + 4.5, 6);
+    expect(row.destroy).toBeCloseTo(base.destroy - 1.25, 1);
   });
 
-  it('the whole sector adds up to +14%p success, −11%p destroy, +8.75%p great (대장장이 신의 손 included)', () => {
+  it('the whole sector adds up to +14.75%p success, −11.5%p destroy, +9.5%p great (대장장이 신의 손 included)', () => {
     const e = treeEffects(withNodes(sectorNodes('odds')));
-    expect(e.success).toBeCloseTo(14, 6);
-    expect(e.destroy).toBeCloseTo(11, 6);
-    expect(e.great).toBeCloseTo(8.75, 6);
+    expect(e.success).toBeCloseTo(14.75, 6);
+    expect(e.destroy).toBeCloseTo(11.5, 6);
+    expect(e.great).toBeCloseTo(9.5, 6);
     const hand = treeEffects(withNodes(['divine']));
     expect(hand).toMatchObject({ success: 5, great: 2, destroy: 3, godHammerCap: 1 });
   });
@@ -215,12 +215,12 @@ describe('⚡ speed', () => {
     expect(treeEffects(withNodes([])).speed).toBe(0.5);
     expect(treeEffects(withNodes(['sp1'])).speed).toBeCloseTo(0.55, 6);
     expect(treeEffects(withNodes(['sp1n'])).speed).toBeCloseTo(0.53, 6); // the new stars between: +3%
-    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(1.19, 6); // crosses 단련된 팔 and 숙련된 손목
+    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(1.24, 6); // crosses 가벼운 손목, 단련된 팔 and 숙련된 손목
     expect(treeEffects({ ...withNodes([]), rentPrepaid: true }).speed).toBeCloseTo(0.5, 6);
     // 단련된 팔 (was 연속 강화 until 2026-11-27: holding the button is built in now) adds +10%
-    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.88, 6);
+    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.93, 6);
     expect(treeEffects(withNodes(pathTo('hold'))).holdRepeat).toBe(false);
-    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(2.7, 6);
+    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(2.77, 6);
   });
 
   it('리듬 adds success only when the attempt is quick', () => {
@@ -305,13 +305,13 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
     expect(staminaStarted(core.state)).toBe(false);
   });
 
-  it('체력 stars: max stamina still 1000; the new stars slow the drain (capped at −60%) and win stamina back', () => {
+  it('체력 stars: max stamina 1070 (the early named stars add 70); the drain is capped at −60%; stamina is won back', () => {
     const all = withNodes(sectorNodes('stamina'));
     const e = treeEffects(all);
-    expect(staminaMax(all)).toBe(1000);
-    expect(e.drainCut).toBeCloseTo(1.37, 6);
+    expect(staminaMax(all)).toBe(1070);
+    expect(e.drainCut).toBeCloseTo(1.34, 6);
     expect(drainRate(all)).toBeCloseTo(STAMINA.drainPerSec * (1 - STAMINA.maxCut), 6);
-    expect(e.staminaSave).toBe(37);
+    expect(e.staminaSave).toBe(36);
     expect(e.secondWind).toBe(30);
     expect(workSecondsLeft(all)).toBeGreaterThan(workSecondsLeft(withNodes([])) * 15);
   });
@@ -348,11 +348,11 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
 
 describe('◆ gold', () => {
   it('sale bonus and cost cuts in 5% steps', () => {
-    // nine stars to gd3: sale 3 + 5 + 3 + 3 + 5 = +19%, cost 3 + 3 + 5 + 3 = −14%
+    // nine stars to gd3 with 단골 손님 (+8%): sale 3 + 5 + 3 + 8 + 3 + 5 = +27%, cost 3 + 5 + 3 = −11%
     const s = withNodes(pathTo('gd3'));
     expect(sellPrice(s, 10)).toBeGreaterThan(sellPrice(withNodes([]), 10));
-    expect(treeEffects(s).sell).toBeCloseTo(0.19, 6);
-    expect(enhanceCostFor(s, 10)).toBe(Math.max(1, Math.round(enhanceCost(10) * 0.86)));
+    expect(treeEffects(s).sell).toBeCloseTo(0.27, 6);
+    expect(enhanceCostFor(s, 10)).toBe(Math.max(1, Math.round(enhanceCost(10) * 0.89)));
     expect(sellPrice(s, 0)).toBe(0);
   });
 
