@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { atNightDay, runWith, seedFor } from './helpers';
-import { SALE_MULTIPLIER } from '../src/config/economy';
+import { SALE_AWAKEN, SALE_MULTIPLIER } from '../src/config/economy';
 import { keyPrice, buy, enhanceCost, isMerchantDay, openMerchant, salePrice, sell, sellPrice, toggleArmed, undoEnhance } from '../src/core/systems/economy';
 import { effectiveRow, enhance } from '../src/core/systems/enhancement';
 import { ENHANCE_TABLE } from '../src/config/enhancement';
@@ -24,10 +24,20 @@ describe('selling (QA 6, 7)', () => {
     const r = sell(s, 'w1');
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    expect(r.state.gold).toBe(s.gold + 150 * SALE_MULTIPLIER);
+    expect(r.state.gold).toBe(s.gold + Math.round((150 * SALE_MULTIPLIER * SALE_AWAKEN.mul) / 50) * 50);
     expect(r.state.weapons.map((w) => w.id)).toEqual(['w2']);
     expect(r.state.equippedId).toBeNull();
     expect(r.state.stats.sold).toBe(1);
+  });
+
+  it('awakened weapons (+10 and up) sell for ×2.5: the jump is right at +10 (2026-11-27)', () => {
+    const s = runWith([]);
+    expect(SALE_AWAKEN).toEqual({ level: 10, mul: 2.5 });
+    expect(sellPrice(s, 9)).toBe(345);
+    expect(sellPrice(s, 10)).toBe(1_150); // 1,125 rounded to 50 G
+    expect(sellPrice(s, 15)).toBe(3_750);
+    // a strike on the way to +10 pays clearly better than stopping at +8 (≈ 22 strikes per +10 made vs ≈ 15 per +8)
+    expect(sellPrice(s, 10) / 22).toBeGreaterThan((sellPrice(s, 8) / 15.3) * 2.5);
   });
 
   it('cannot sell the same weapon twice', () => {

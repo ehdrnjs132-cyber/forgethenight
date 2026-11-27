@@ -1,5 +1,5 @@
 // Selling (§14), the merchant Morr (§15) and the consumables he sells. Pure functions over GameState.
-import { KEY_BASE_PRICE, ENHANCE_COST_MIN, ENHANCE_COST_RATE, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_MULTIPLIER, SALE_PRICES, SHOP_ORDER, type EnhanceItem, type ItemId } from '../../config/economy';
+import { SALE_AWAKEN, KEY_BASE_PRICE, ENHANCE_COST_MIN, ENHANCE_COST_RATE, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_MULTIPLIER, SALE_PRICES, SHOP_ORDER, type EnhanceItem, type ItemId } from '../../config/economy';
 import { INVENTORY_CAP, INVENTORY_START, INVENTORY_STEP } from '../../config/weapons';
 import { Rng } from '../rng';
 import type { GameState, StockEntry } from '../state/types';
@@ -61,7 +61,8 @@ export function sellPrice(state: GameState, level: number, golden = false): numb
   // fresh weapons are free at the forge, so an untouched +0 one is worth nothing (no free-gold loop)
   if (level <= 0) return 0;
   const bonus = skillTotals(state, null).sellBonus + treeEffects(state).sell;
-  return roundPrice(salePrice(level) * SALE_MULTIPLIER * (1 + bonus) * (golden ? GOLDEN_SELL_MUL : 1));
+  const awakened = level >= SALE_AWAKEN.level ? SALE_AWAKEN.mul : 1;
+  return roundPrice(salePrice(level) * SALE_MULTIPLIER * awakened * (1 + bonus) * (golden ? GOLDEN_SELL_MUL : 1));
 }
 
 /** What Morr asks today, after 단골 discounts. */

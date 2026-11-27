@@ -33,6 +33,15 @@ export const SALE_PRICES: readonly [number, number][] = [
  */
 export const SALE_MULTIPLIER = 3;
 
+/**
+ * Awakened weapons (+10 and up: a new form and name) sell for `mul` times more (2026-11-27: players went
+ * broke at the third rent; pushing to +10 paid no better per strike than selling at +8). An object so the
+ * balance simulations can try other values; the game never changes it.
+ */
+// ×2.5 (docs/sim/rent-report.md): selling at +8..+12 pays the third rent in ~90% of runs (was ~22%), the
+// fourth rent stays a real hurdle (37–75%), and selling only at +3 still cannot carry the third.
+export const SALE_AWAKEN = { level: 10, mul: 2.5 };
+
 /** Selling a weapon at or above this level asks for confirmation. */
 export const SALE_CONFIRM_LEVEL = 10;
 
