@@ -1,7 +1,29 @@
 import { describe, expect, it } from 'vitest';
 import { GameCore } from '../src/core/game';
-import { KEYS, MemoryStorage, SaveManager, checksum } from '../src/core/save/save';
+import { KEYS, MemoryStorage, SaveManager, checksum, fitRack } from '../src/core/save/save';
 import { createRun } from '../src/core/state/initial';
+import { sellPrice } from '../src/core/systems/economy';
+import { runWith } from './helpers';
+
+describe('the rack shrank to 4 slots (user 2026-11-27)', () => {
+  it('an old save with 8 weapons keeps the equipped one and the highest, and sells the rest', () => {
+    const levels = [5, 40, 2, 30, 0, 12, 50, 8];
+    const s = { ...runWith(levels.map((level) => ({ level }))), inventoryCap: 8, equippedId: 'w1', gold: 100 };
+    const r = fitRack(s);
+    expect(r.inventoryCap).toBe(4);
+    expect(r.weapons.map((w) => w.id)).toEqual(['w1', 'w2', 'w4', 'w7']); // equipped +5, then +50, +40, +30
+    const soldValue = [2, 0, 12, 8].reduce((sum, lv) => sum + sellPrice(s, lv), 0);
+    expect(r.gold).toBe(100 + soldValue);
+  });
+
+  it('a save that already fits is only capped', () => {
+    const s = { ...runWith([{ level: 3 }, { level: 4 }]), inventoryCap: 6 };
+    const r = fitRack(s);
+    expect(r.weapons).toHaveLength(2);
+    expect(r.inventoryCap).toBe(4);
+    expect(r.gold).toBe(s.gold);
+  });
+});
 
 describe('save and load (QA 17)', () => {
   it('round-trips the run', () => {

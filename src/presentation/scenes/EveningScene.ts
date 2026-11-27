@@ -106,6 +106,7 @@ export class EveningScene extends Phaser.Scene {
     );
     root.add(skills);
     if (canLearn) this.tweens.add({ targets: skills, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    this.buildRentDday(root);
     this.tweens.add({ targets: root, alpha: 1, duration: 300 });
   }
 
@@ -204,6 +205,42 @@ export class EveningScene extends Phaser.Scene {
       onClose: () => this.scene.resume(), // the resume handler rebuilds the choices
     });
     this.scene.pause();
+  }
+
+  /**
+   * The king's next visit, big and impossible to miss (user 2026-11-27: "수금하는 D-DAY가 밤에 잘보이게 크게").
+   * The rent is collected on the morning of the due day, so D-1 means "after tonight".
+   */
+  private buildRentDday(root: Phaser.GameObjects.Container) {
+    const s = this.core.state;
+    const due = rentDueDay(s);
+    const left = Math.max(0, due - s.day);
+    const need = rentFor(s, due);
+    const enough = s.gold >= need;
+    const urgent = left <= 1;
+    const x = PORTRAIT ? 116 : 136;
+    const y = PORTRAIT ? 90 : 62;
+    const w = PORTRAIT ? 210 : 250;
+    const h = PORTRAIT ? 108 : 104;
+    const box = this.add.container(x, y);
+    const g = this.add.graphics();
+    const edge = urgent ? 0xff3a2a : 0xe9b65c;
+    g.fillStyle(urgent ? 0x2a0808 : 0x1a120a, 0.96).fillRoundedRect(-w / 2, -h / 2, w, h, 14);
+    g.lineStyle(3, edge, 1).strokeRoundedRect(-w / 2, -h / 2, w, h, 14);
+    box.add(g);
+    box.add(label(this, 0, -h / 2 + 16, '👑 왕의 수금까지', PORTRAIT ? 14 : 13, urgent ? 0xffb0a0 : C.mute, { weight: 900, origin: [0.5, 0.5] }));
+    const dday = this.add
+      .text(0, -8, left <= 0 ? 'D-DAY' : `D-${left}`, { fontFamily: DISPLAY, fontSize: PORTRAIT ? '42px' : '42px', fontStyle: '900', color: css(urgent ? 0xff3a2a : C.goldHi), stroke: '#000000', strokeThickness: 7, resolution: 2 })
+      .setOrigin(0.5);
+    box.add(dday);
+    const sub = urgent ? `내일 아침 ${need.toLocaleString()}G` : `DAY ${due} 아침 · ${need.toLocaleString()}G`;
+    box.add(label(this, 0, h / 2 - 28, sub, PORTRAIT ? 13 : 13, C.text, { weight: 700, origin: [0.5, 0.5] }));
+    box.add(
+      label(this, 0, h / 2 - 12, enough ? '✔ 낼 돈이 있다' : `✖ ${(need - s.gold).toLocaleString()}G 부족`, 12, enough ? 0x7dff8a : 0xff6b6b, { weight: 900, origin: [0.5, 0.5] }),
+    );
+    root.add(box);
+    // the last night before the visit: the number throbs
+    if (urgent) this.tweens.add({ targets: dday, scale: 1.12, duration: 460, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
   }
 
   private openSkills() {

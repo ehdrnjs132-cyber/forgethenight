@@ -49,7 +49,10 @@ export const DROP_CLASSES: readonly WeaponClass[] = ['sword'];
 /** Three weapons a day, element random (was one per class, decision #3). */
 export const DAILY_GRANT: readonly WeaponClass[] = ['sword', 'sword', 'sword'];
 
-/** Weapon rack: 8 slots, 3 open at the start; each merchant key opens one more (user decision 2026-11-18). */
+/**
+ * Weapon rack: 4 slots, 3 open at the start; the merchant's key opens the fourth
+ * (user decision 2026-11-18; cut from 8 to 4 slots on 2026-11-27: "무기보관함 아래 4개 삭제").
+ */
 export const INVENTORY_START = 3;
-export const INVENTORY_CAP = 8;
+export const INVENTORY_CAP = 4;
 export const INVENTORY_STEP = 1;

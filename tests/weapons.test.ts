@@ -21,7 +21,7 @@ describe('daily weapon grant (QA 8)', () => {
   });
 
   it('gives three more on the next day with unique ids', () => {
-    const day1 = grantDaily({ ...createRun(7), inventoryCap: INVENTORY_CAP }).state;
+    const day1 = grantDaily({ ...createRun(7), inventoryCap: 8 }).state; // room for two days of deliveries
     const day2 = grantDaily({ ...day1, day: 2 }).state;
     expect(day2.weapons).toHaveLength(6);
     expect(new Set(day2.weapons.map((w) => w.id)).size).toBe(6);

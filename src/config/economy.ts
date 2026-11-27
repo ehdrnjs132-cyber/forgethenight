@@ -108,7 +108,7 @@ export const ITEMS: Record<ItemId, ItemDef> = {
   luck: { name: '행운 강화석', desc: '켜 두면 다음 강화 대성공 +3%p, 성공 +5%p', price: 800, perVisit: 2, chance: 0.8, fromDay: 1, color: 0x8fe07a },
   master: { name: '장인의 강화석', desc: '켜 두면 다음 강화의 파괴 확률 절반', price: 2_000, perVisit: 1, chance: 0.5, fromDay: 1, color: 0xc89bff },
   timeStone: { name: '시간 역행석', desc: '직전 강화 1회를 되돌림 · 파괴된 무기도 복원', price: 3_000, perVisit: 1, chance: 0.15, fromDay: 15, color: 0x7fe9e0 },
-  key: { name: '무기보관함 열쇠', desc: '무기걸이의 잠긴 칸 하나를 엽니다 (최대 8칸)', price: KEY_BASE_PRICE, perVisit: 1, chance: 1, fromDay: 1, color: 0xc8a06a },
+  key: { name: '무기보관함 열쇠', desc: '무기걸이의 잠긴 칸 하나를 엽니다 (최대 4칸)', price: KEY_BASE_PRICE, perVisit: 1, chance: 1, fromDay: 1, color: 0xc8a06a },
   resetBook: { name: '스킬 초기화 서적', desc: '스킬 포인트를 모두 돌려받아 다시 찍는다', price: 1_000, perVisit: 1, chance: 0.4, fromDay: 1, color: 0xd9c7a0 },
 };
 

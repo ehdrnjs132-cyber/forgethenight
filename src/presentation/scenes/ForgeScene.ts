@@ -42,7 +42,9 @@ const ODDS_ROW = 36;
 // portrait: below the taller top bar (2026-11-20, bigger buttons for phones)
 const RACK = PORTRAIT ? { x: 14, y: 210, cols: 4, slotW: 165, slotH: 70, gapX: 9, gapY: 10 } : { x: 24, y: 96, cols: 2, slotW: 236, slotH: 74, gapX: 12, gapY: 8 };
 /** Selected-weapon card (name, level badge, next milestone, damage). */
-const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 24, y: 490, w: 500, h: 226 };
+// landscape: the rack has only its top two painted rows now (4 slots, 2026-11-27), so the card sits on a
+// plaque over the two lower painted shelves
+const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 48, y: 300, w: 500, h: 226 };
 /**
  * The blacksmith behind the anvil (one Higgsfield image or sprite sheet). `fx/fy` locate the anvil face
  * inside each texture (fractions of its width/height), so the weapon lies exactly where the hammer lands.
@@ -404,11 +406,25 @@ export class ForgeScene extends Phaser.Scene {
     const bw = PORTRAIT ? 330 : 190;
     this.buyBtn = new Button(this, end.x + end.w / 2 - bw / 2, titleY, bw, PORTRAIT ? 46 : 34, '＋ 무기 구매', { variant: 'gold', size: PORTRAIT ? 21 : 13, onClick: () => this.buyWeapon() });
     this.rack = this.add.container(0, 0);
-    // soft shadow behind the selected-weapon readout instead of a panel
-    const shade = this.add.graphics();
-    for (let i = 0; i < 8; i++) {
-      shade.fillStyle(0x000000, 0.07);
-      shade.fillRoundedRect(CARD.x - 10 + i * 6, CARD.y + 8 + i * 4, CARD.w + 20 - i * 12, CARD.h - 16 - i * 8, 30);
+    if (this.painted) {
+      // a dark timber plaque hides the two lower painted shelves (the rack has 4 slots now) and carries the readout
+      const g = this.add.graphics();
+      const px = 90;
+      const py = 298;
+      const pw = 418;
+      const ph = 186;
+      g.fillStyle(0x000000, 0.35).fillRoundedRect(px + 4, py + 6, pw, ph, 14);
+      g.fillGradientStyle(0x2a1a10, 0x2a1a10, 0x170e08, 0x170e08, 1).fillRoundedRect(px, py, pw, ph, 14);
+      g.lineStyle(3, 0x6a4526, 1).strokeRoundedRect(px, py, pw, ph, 14);
+      g.lineStyle(1, 0xe9b65c, 0.25).strokeRoundedRect(px + 6, py + 6, pw - 12, ph - 12, 10);
+      for (const [rx, ry] of [[px + 14, py + 14], [px + pw - 14, py + 14], [px + 14, py + ph - 14], [px + pw - 14, py + ph - 14]]) g.fillStyle(0x8a6a3a, 1).fillCircle(rx, ry, 4);
+    } else {
+      // soft shadow behind the selected-weapon readout instead of a panel
+      const shade = this.add.graphics();
+      for (let i = 0; i < 8; i++) {
+        shade.fillStyle(0x000000, 0.07);
+        shade.fillRoundedRect(CARD.x - 10 + i * 6, CARD.y + 8 + i * 4, CARD.w + 20 - i * 12, CARD.h - 16 - i * 8, 30);
+      }
     }
   }
 
@@ -727,12 +743,13 @@ export class ForgeScene extends Phaser.Scene {
   /** The strike being played is the first one today (the drain starts with it). */
   private firstStrikeToday = false;
   // landscape: right of the rack's buy button, left of the odds panel
-  private static readonly SB = PORTRAIT ? { x: W / 2, y: 384, w: 440, h: 18 } : { x: 712, y: 96, w: 360, h: 16 };
+  // a little bigger on 2026-11-27 ("HP 칸 좀만 더 크게")
+  private static readonly SB = PORTRAIT ? { x: W / 2, y: 384, w: 520, h: 28 } : { x: 722, y: 100, w: 400, h: 26 };
 
   private buildStamina() {
     const b = ForgeScene.SB;
     this.staminaBar = this.add.graphics().setDepth(12);
-    this.staminaText = label(this, b.x, b.y, '', PORTRAIT ? 15 : 13, 0xffffff, { weight: 900, origin: [0.5, 0.5] }).setStroke('#0b0705', 4).setDepth(13);
+    this.staminaText = label(this, b.x, b.y, '', PORTRAIT ? 17 : 15, 0xffffff, { weight: 900, origin: [0.5, 0.5] }).setStroke('#0b0705', 4).setDepth(13);
     this.drainPending = 0;
     this.emptyShown = staminaLeft(this.core.state) <= 0;
     // hand the last fraction of a second to the core whenever the forge stops (menus, evening, lobby)

@@ -6,14 +6,12 @@ import Phaser from 'phaser';
 import type { GameOverSummary, RentNotice } from '../../core/state/types';
 import { FONT, H, W, label } from '../theme';
 import { Sfx } from '../audio/sfx';
+import { drawKing } from '../fx/kingArt';
 
 export interface KingWrathData {
   summary: GameOverSummary;
   rent: RentNotice | null;
 }
-
-type P = [number, number];
-const pts = (list: P[]) => list.map(([x, y]) => new Phaser.Math.Vector2(x, y));
 
 export class KingWrathScene extends Phaser.Scene {
   private data0!: KingWrathData;
@@ -38,64 +36,9 @@ export class KingWrathScene extends Phaser.Scene {
     for (let i = 24; i >= 1; i--) glow.fillStyle(0x7a0808, 0.022).fillEllipse(cx, kingY - 160 * k, 240 * k + i * 48 * k, 200 * k + i * 36 * k);
     glow.setPosition(0, 0);
 
-    // ── the king
-    const king = this.add.container(cx, kingY).setScale(k * 0.85).setAlpha(0);
-    const body = this.add.graphics();
-    // cloak and shoulders
-    body.fillStyle(0x070405, 1).fillPoints(pts([[-640, 520], [-470, 90], [-230, 0], [-95, -40], [95, -40], [230, 0], [470, 90], [640, 520]]), true);
-    // fur collar: a row of ragged spikes along the shoulders
-    body.fillStyle(0x1a0e12, 1);
-    for (let i = -7; i <= 7; i++) {
-      const x = i * 52;
-      const y = Math.abs(i) * 13 - 30;
-      body.fillTriangle(x - 34, y + 40, x + 34, y + 40, x + (i % 2 ? 10 : -10), y - 34);
-    }
-    // head, long and narrow
-    body.fillStyle(0x050304, 1).fillEllipse(0, -165, 210, 270);
-    // crown: a band and five spikes, dull gold with red gems
-    body.fillStyle(0x4a3008, 1).fillRect(-120, -300, 240, 40);
-    const spikes: P[] = [[-120, -300], [-110, -400], [-75, -300], [-50, -430], [-20, -300], [0, -470], [20, -300], [50, -430], [75, -300], [110, -400], [120, -300]];
-    body.fillStyle(0x4a3008, 1).fillPoints(pts(spikes), true);
-    body.lineStyle(4, 0xb8862b, 0.55).strokePoints(pts(spikes), false);
-    body.lineStyle(3, 0xb8862b, 0.5).strokeRect(-120, -300, 240, 40);
-    for (const gx of [-80, 0, 80]) body.fillStyle(0xd11f2a, 1).fillCircle(gx, -280, 9);
-    king.add(body);
-
-    // red rim light on the outline (flickers like firelight)
-    const rim = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD);
-    rim.lineStyle(6, 0xff2a1a, 0.35).strokeEllipse(0, -165, 214, 274);
-    rim.lineStyle(5, 0xff2a1a, 0.25).strokePoints(pts([[-640, 520], [-470, 90], [-230, 0], [-95, -40]]), false);
-    rim.lineStyle(5, 0xff2a1a, 0.25).strokePoints(pts([[95, -40], [230, 0], [470, 90], [640, 520]]), false);
-    king.add(rim);
-
-    // eyes: two slits that open, with a burning glow
-    const eyes = this.add.container(0, -180);
-    const eyeGlow = this.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setAlpha(0);
-    for (const ex of [-48, 48]) for (let i = 4; i >= 1; i--) eyeGlow.fillStyle(0xff3a1a, 0.12 * i).fillEllipse(ex, 0, 50 + i * 26, 18 + i * 14);
-    const eyeCore = this.add.graphics();
-    for (const ex of [-48, 48]) {
-      eyeCore.fillStyle(0xff2a1a, 1).fillEllipse(ex, 0, 58, 20);
-      eyeCore.fillStyle(0xffe08a, 1).fillEllipse(ex, 0, 12, 16);
-    }
-    eyes.add([eyeGlow, eyeCore]);
-    eyes.setScale(1, 0.05);
-    king.add(eyes);
-
-    // a wide jagged grin, hidden until he speaks: a dark red maw with long fangs top and bottom
-    const mouth = this.add.graphics().setAlpha(0);
-    const top = (x: number) => -112 + (x / 90) ** 2 * -22; // upper lip curves up at the corners
-    const bot = (x: number) => -52 - (x / 90) ** 2 * 10;
-    const maw: P[] = [];
-    for (let x = -90; x <= 90; x += 15) maw.push([x, top(x)]);
-    for (let x = 90; x >= -90; x -= 15) maw.push([x, bot(x)]);
-    mouth.fillStyle(0x4a0606, 1).fillPoints(pts(maw), true);
-    mouth.fillStyle(0xe6ddd0, 1);
-    for (let x = -78; x <= 78; x += 19.5) {
-      mouth.fillTriangle(x - 9, top(x) + 2, x + 9, top(x) + 2, x, top(x) + 30); // fangs down
-      mouth.fillTriangle(x - 8 + 9, bot(x) - 2, x + 8 + 9, bot(x) - 2, x + 9, bot(x) - 24); // fangs up
-    }
-    mouth.lineStyle(3, 0xff2a1a, 0.5).strokePoints(pts(maw), true);
-    king.add(mouth);
+    // ── the king (drawn in fx/kingArt, shared with the first-time story)
+    const { king, rim, eyes, eyeGlow, mouth } = drawKing(this, cx, kingY);
+    king.setScale(k * 0.85).setAlpha(0);
 
     // vignette over everything
     const vig = this.add.graphics();

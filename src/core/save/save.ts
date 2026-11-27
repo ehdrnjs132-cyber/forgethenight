@@ -5,6 +5,25 @@ import type { GameState, Records } from '../state/types';
 import { INVENTORY_CAP, INVENTORY_START } from '../../config/weapons';
 import { legacyRefund } from '../../config/forgeSkills';
 import { LEGACY_TREE_COSTS, TREE_BY_ID } from '../../config/skillTree';
+import { sellPrice } from '../systems/economy';
+
+/**
+ * 2026-11-27: the rack shrank from 8 slots to 4. A save holding more keeps the equipped weapon and
+ * the highest ones; the rest are sold at the usual price, so nothing is lost for nothing.
+ */
+export function fitRack(x: GameState): GameState {
+  const cap = Math.min(INVENTORY_CAP, x.inventoryCap);
+  if (x.weapons.length <= cap) return cap === x.inventoryCap ? x : { ...x, inventoryCap: cap };
+  const keep = new Set(
+    [...x.weapons]
+      .sort((a, b) => Number(b.id === x.equippedId) - Number(a.id === x.equippedId) || b.level - a.level)
+      .slice(0, cap)
+      .map((w) => w.id),
+  );
+  const sold = x.weapons.filter((w) => !keep.has(w.id));
+  const gold = sold.reduce((sum, w) => sum + sellPrice(x, w.level, w.golden), 0);
+  return { ...x, inventoryCap: cap, weapons: x.weapons.filter((w) => keep.has(w.id)), gold: x.gold + gold };
+}
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -100,6 +119,8 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
     x.weapons.some((w) => w.cls !== 'sword') ? { ...x, weapons: x.weapons.map((w) => (w.cls === 'sword' ? w : { ...w, cls: 'sword' })) } : x;
   s = toSwords(s);
   if (s.nightSnapshot) s = { ...s, nightSnapshot: toSwords(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
+  s = fitRack(s);
+  if (s.nightSnapshot) s = { ...s, nightSnapshot: fitRack(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
   return s;
 }
 
