@@ -8,6 +8,7 @@ import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } f
 import { drainStamina, fateSplitLeft, staminaLeft } from './systems/forgeSkills';
 import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
 import { collectRent } from './systems/rent';
+import { markMerchantTalk, merchantTalkDue } from './systems/merchantTalk';
 import { playCard, playWeaponCard, type CardBlock, type CardFace, type WeaponCardBlock } from './systems/cards';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
@@ -37,6 +38,8 @@ export type Action =
   | { type: 'SLEEP' }
   | { type: 'TOGGLE_SPLIT' }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
+  /** The merchant's visit dialogue has played today (it plays once a visit). */
+  | { type: 'MERCHANT_TALKED' }
   /** `evening`: bought from the evening screen. Stars cannot be learned in the forge (user 2026-11-27). */
   | { type: 'BUY_NODE'; id: string; evening?: boolean }
   /** 운명의 카드: the chosen card and the bet (2026-11-26; replaces paying the rent early). */
@@ -344,6 +347,11 @@ export class GameCore {
         this.emit('enhanced', r.result);
         this.emit('changed', this.state);
         return { type: 'enhanced', result: r.result };
+      }
+      case 'MERCHANT_TALKED': {
+        if (!merchantTalkDue(this.state)) return { type: 'ok' };
+        this.commit(markMerchantTalk(this.state));
+        return { type: 'ok' };
       }
       case 'BUY_NODE': {
         const r = buyNode(this.state, action.id, action.evening === true);

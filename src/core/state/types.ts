@@ -125,6 +125,10 @@ export interface GameState {
   cardDay?: number;
   /** Day the 운명의 무기 카드 (DAY 30+, weapons at stake) was last played. */
   weaponCardDay?: number;
+  /** Day the merchant Morr last talked (his visit's dialogue plays once a visit). */
+  merchantTalkDay?: number;
+  /** Weapons destroyed in the run when he last talked (a later visit notices new breakage). */
+  merchantTalkDestroyed?: number;
   /** What the advance payment actually cost and on which day (QA 2026-11-20: the notice showed the visit-day rate). */
   rentPrepaidAmount?: number;
   rentPrepaidDay?: number;

@@ -32,6 +32,9 @@ import { isTutorialDone } from '../../core/systems/tutorial';
 import { DAILY_WEAPON_LIMIT, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL, type EnhanceItem } from '../../config/economy';
 import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
+import { merchantGreeting, merchantTalkDue } from '../../core/systems/merchantTalk';
+import { MERCHANT_FIRST, MERCHANT_FIRST_SEEN_ID, MERCHANT_GREETINGS } from '../../config/story';
+import type { StoryData } from './StoryScene';
 
 // Portrait (720×1280, phones) stacks everything: top bar → rack strip → smith and anvil → weapon card →
 // odds row → big enhance button → equip / sell / night. Landscape keeps the original 1280×720 layout.
@@ -233,6 +236,11 @@ export class ForgeScene extends Phaser.Scene {
     }
     // §8.5 첫 스킬 포인트: a short hint once, after the day's own message.
     // the king's rent this morning, and a 운명 분열 pick left waiting (it survives a reload)
+    // the merchant's visit talk (2026-11-27): after the rent notice when there is one
+    if (merchantTalkDue(this.core.state) && !this.core.state.pendingSplit) {
+      if (this.core.lastRentNotice) this.events.once(Phaser.Scenes.Events.RESUME, () => this.time.delayedCall(200, () => this.merchantTalk()));
+      else this.time.delayedCall(450, () => this.merchantTalk());
+    }
     this.time.delayedCall(400, () => this.announceRent());
     if (this.core.state.pendingSplit) this.time.delayedCall(300, () => this.showSplitChoice());
     this.core.notice = null;
@@ -1550,6 +1558,33 @@ export class ForgeScene extends Phaser.Scene {
   }
 
   /** The king's visit this morning, announced once. */
+  /**
+   * 상인 모르의 방문 대화 (user 2026-11-27): the shop introduction on his first visit ever, a short
+   * greeting on every visit after that. Plays over the paused forge; the shop button glows afterwards.
+   */
+  private merchantTalk() {
+    const s = this.core.state;
+    if (this.leaving || !merchantTalkDue(s)) return;
+    const first = !this.core.hasSeen(MERCHANT_FIRST_SEEN_ID);
+    const lines = first ? MERCHANT_FIRST : MERCHANT_GREETINGS[merchantGreeting(s)];
+    this.core.dispatch({ type: 'MERCHANT_TALKED' }); // once a visit, even if the page is closed mid-talk
+    const data: StoryData = {
+      next: 'Forge',
+      lines,
+      overlay: true,
+      morning: true,
+      seenId: first ? MERCHANT_FIRST_SEEN_ID : undefined,
+      onDone: () =>
+        this.time.delayedCall(350, () => {
+          if (!this.shopBtn.visible) return;
+          this.tweens.add({ targets: this.shopBtn, scale: 1.12, duration: 300, yoyo: true, repeat: 3, ease: 'Sine.easeInOut', onComplete: () => this.shopBtn.setScale(1) });
+        }),
+    };
+    this.scene.launch('Story', data);
+    this.scene.bringToTop('Story');
+    this.scene.pause();
+  }
+
   private announceRent() {
     const n = this.core.lastRentNotice;
     if (!n) return;

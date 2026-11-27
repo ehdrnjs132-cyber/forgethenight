@@ -1,4 +1,5 @@
-// First-time dialogue cutscene (user request 2026-11-27; lines in config/story.ts).
+// Dialogue cutscenes (user requests 2026-11-27; lines in config/story.ts). The first-time story by
+// default; the merchant's visits pass their own lines and play over the paused forge (`overlay`).
 // Scene 1 at night: the king (the same code-drawn king as the wrath scene) says why he collects rent.
 // Scene 2 in the morning: the merchant Morr explains enhancing, selling, the skill tree at night and
 // the rent D-day. One sentence at a time in a dialogue box; click / Space / Enter: it fades and the next one comes.
@@ -13,8 +14,18 @@ import { PORTRAIT } from '../layout';
 import { drawKing, type KingParts } from '../fx/kingArt';
 
 export interface StoryData {
-  /** Scene to start afterwards. */
+  /** Scene to start afterwards (or, with `overlay`, the paused scene to resume). */
   next: string;
+  /** Lines to play; the first-time story when absent. */
+  lines?: readonly StoryLine[];
+  /** Record id marked as watched at the end (the first-time story uses STORY_SEEN_ID). */
+  seenId?: string;
+  /** Played over a paused scene (the merchant's visit): no "DAY 1", resume `next` at the end. */
+  overlay?: boolean;
+  /** Start in daylight (no night opening). */
+  morning?: boolean;
+  /** Called once when it ends (played to the end or skipped). */
+  onDone?: () => void;
 }
 
 const BOX = PORTRAIT ? { x: 24, w: W - 48, h: 250, y: H - 280 } : { x: 120, w: W - 240, h: 170, y: H - 196 };
@@ -22,6 +33,8 @@ const NAME_COLOR: Record<string, number> = { king: 0xff5a4a, me: 0x9ad0ff, morr:
 
 export class StoryScene extends Phaser.Scene {
   private next = 'Forge';
+  private lines: readonly StoryLine[] = STORY;
+  private opts: StoryData = { next: 'Forge' };
   private index = -1;
   private done = false;
   private sfx = new Sfx();
@@ -44,7 +57,9 @@ export class StoryScene extends Phaser.Scene {
   }
 
   create(data: StoryData) {
-    this.next = data?.next ?? 'Forge';
+    this.opts = data ?? { next: 'Forge' };
+    this.next = this.opts.next ?? 'Forge';
+    this.lines = this.opts.lines ?? STORY;
     this.index = -1;
     this.done = false;
     this.morr = null;
@@ -58,7 +73,8 @@ export class StoryScene extends Phaser.Scene {
       bg.setScale(Math.max(W / bg.width, H / bg.height));
     }
     this.morningTint = this.add.rectangle(W / 2, H / 2, W, H, 0xffb36a, 0).setBlendMode(Phaser.BlendModes.ADD);
-    this.night = this.add.rectangle(W / 2, H / 2, W, H, 0x05030a, 0.86);
+    this.night = this.add.rectangle(W / 2, H / 2, W, H, 0x05030a, this.opts.morning ? 0.25 : 0.86);
+    if (this.opts.morning) this.morningTint.setAlpha(0.12);
     this.add.rectangle(W / 2, H / 2, W, H, 0, 0).setInteractive().on('pointerdown', () => this.advance());
 
     // the king, hidden until the door bursts open
@@ -117,7 +133,7 @@ export class StoryScene extends Phaser.Scene {
   private advance() {
     if (this.done || this.switching) return;
     this.index++;
-    const line = STORY[this.index];
+    const line = this.lines[this.index];
     if (!line) {
       this.finish();
       return;
@@ -228,7 +244,7 @@ export class StoryScene extends Phaser.Scene {
       case 'morning': {
         this.tweens.add({ targets: this.night, alpha: 0.25, duration: 1200 });
         this.tweens.add({ targets: this.morningTint, alpha: 0.12, duration: 1200 });
-        if (this.textures.exists('art-morr')) {
+        if (!this.morr && this.textures.exists('art-morr')) {
           const x = PORTRAIT ? W / 2 : W * 0.24;
           this.morr = this.add.image(x - 80, BOX.y + 12, 'art-morr').setOrigin(0.5, 1).setDepth(10).setAlpha(0);
           this.morr.setScale(PORTRAIT ? 0.8 : 0.82);
@@ -273,7 +289,19 @@ export class StoryScene extends Phaser.Scene {
   private finish() {
     if (this.done) return;
     this.done = true;
-    (this.registry.get('core') as GameCore).markSeen(STORY_SEEN_ID);
+    const seen = this.opts.seenId ?? (this.opts.lines ? undefined : STORY_SEEN_ID);
+    if (seen) (this.registry.get('core') as GameCore).markSeen(seen);
+    this.opts.onDone?.();
+    if (this.opts.overlay) {
+      // back to the paused forge
+      this.tweens.killAll();
+      this.cameras.main.fadeOut(250, 0, 0, 0);
+      this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
+        this.scene.resume(this.next);
+        this.scene.stop();
+      });
+      return;
+    }
     // "DAY 1", then the forge
     const black = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(60);
     const day = label(this, W / 2, H / 2, 'DAY 1', PORTRAIT ? 64 : 60, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setDepth(61).setAlpha(0);
