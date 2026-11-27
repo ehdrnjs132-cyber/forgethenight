@@ -77,6 +77,8 @@ export class SkillScene extends Phaser.Scene {
   private from: 'Forge' | 'Evening' = 'Forge';
   private zoom = FIT;
   private drag: { x: number; y: number; mx: number; my: number; moved: boolean } | null = null;
+  /** Two fingers down: the distance and zoom when the pinch began, and the disc point between them. */
+  private pinch: { dist: number; zoom: number; wx: number; wy: number } | null = null;
   private pulse = 0;
 
   constructor() {
@@ -103,7 +105,10 @@ export class SkillScene extends Phaser.Scene {
       bg.fillCircle(rnd.between(0, W), rnd.between(0, H), rnd.realInRange(0.5, 1.4));
     }
 
-    this.map = this.add.container(MAP_CX, MAP_CY).setScale(this.zoom);
+    // open close enough to read the stars (the disc doubled on 2026-11-27), on the star to buy next
+    this.zoom = Math.max(FIT, PORTRAIT ? 0.72 : 0.6);
+    const focus = TREE_BY_ID[this.selected];
+    this.map = this.add.container(MAP_CX - focus.x * this.zoom, MAP_CY - focus.y * this.zoom).setScale(this.zoom);
     this.drawDisc();
     this.links = this.add.graphics();
     this.map.add(this.links);
@@ -116,21 +121,57 @@ export class SkillScene extends Phaser.Scene {
       this.views.push({ node, g, name });
     }
 
-    // input: drag to pan, tap to select, wheel to zoom
+    // input: one finger drags, two fingers pinch to zoom (user 2026-11-27: "사진 확대하듯이"), a tap selects,
+    // a double tap shows the whole disc, the mouse wheel zooms on PC
+    this.input.addPointer(1); // a second touch point for the pinch
+    this.pinch = null;
+    let lastTap = 0;
     const area = this.add.zone(MAP_CX, MAP_CY, MAP_W, MAP_BOTTOM - MAP_TOP).setInteractive();
-    area.on('pointerdown', (p: Phaser.Input.Pointer) => (this.drag = { x: p.x, y: p.y, mx: this.map.x, my: this.map.y, moved: false }));
+    area.on('pointerdown', (p: Phaser.Input.Pointer) => {
+      if (this.pinch) return;
+      this.drag = { x: p.x, y: p.y, mx: this.map.x, my: this.map.y, moved: false };
+    });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
+      const a = this.input.pointer1;
+      const b = this.input.pointer2;
+      if (a.isDown && b.isDown) {
+        // pinch: scale around the point between the fingers, which also pans with them
+        const dist = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
+        const mx = (a.x + b.x) / 2;
+        const my = (a.y + b.y) / 2;
+        if (!this.pinch) {
+          this.tweens.killTweensOf(this.map);
+          this.pinch = { dist, zoom: this.zoom, wx: (mx - this.map.x) / this.zoom, wy: (my - this.map.y) / this.zoom };
+          this.drag = null;
+        }
+        const z = Phaser.Math.Clamp((this.pinch.zoom * dist) / this.pinch.dist, ZOOM.min, ZOOM.max);
+        this.zoom = z;
+        this.map.setScale(z).setPosition(mx - this.pinch.wx * z, my - this.pinch.wy * z);
+        return;
+      }
       const d = this.drag;
       if (!d || !p.isDown) return;
       if (Math.hypot(p.x - d.x, p.y - d.y) > 10) d.moved = true;
       if (d.moved) this.map.setPosition(d.mx + p.x - d.x, d.my + p.y - d.y);
     });
     this.input.on('pointerup', (p: Phaser.Input.Pointer) => {
+      if (this.pinch) {
+        // the pinch ends when either finger lifts; the other one does not start a drag or a tap
+        if (!this.input.pointer1.isDown || !this.input.pointer2.isDown) {
+          this.pinch = null;
+          this.drag = null;
+          this.refresh();
+        }
+        return;
+      }
       const d = this.drag;
       this.drag = null;
       if (!d || d.moved) return;
+      const now = this.time.now;
       const hit = this.starAt(p.x, p.y);
       if (hit) this.select(hit.id);
+      else if (now - lastTap < 320) this.zoomTo(FIT, undefined, undefined, true);
+      lastTap = hit ? 0 : now;
     });
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
       if (p.x < MAP_W && p.y > MAP_TOP) this.zoomTo(this.zoom * (dy > 0 ? 0.88 : 1.14), p.x, p.y);
@@ -142,17 +183,12 @@ export class SkillScene extends Phaser.Scene {
     label(this, 20, PORTRAIT ? 30 : 26, '스킬트리', PORTRAIT ? 28 : 24, C.gold, { display: true, weight: 900, origin: [0, 0.5] });
     this.countText = label(this, 20, TOP_H - (PORTRAIT ? 22 : 14), '', PORTRAIT ? 14 : 12, C.mute, { weight: 700, origin: [0, 0.5] });
     this.goldText = label(this, MAP_W - 20, PORTRAIT ? 30 : 26, '', PORTRAIT ? 24 : 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
-    label(this, MAP_W - 20, TOP_H - (PORTRAIT ? 22 : 14), '드래그로 둘러보기 · 휠로 확대', PORTRAIT ? 13 : 11, C.dim, { weight: 700, origin: [1, 0.5] });
+    label(this, MAP_W - 20, TOP_H - (PORTRAIT ? 22 : 14), PORTRAIT ? '드래그로 둘러보기 · 두 손가락으로 확대 · 두 번 탭: 전체' : '드래그로 둘러보기 · 휠로 확대 · 더블클릭: 전체', PORTRAIT ? 13 : 11, C.dim, { weight: 700, origin: [1, 0.5] });
     // in the forge the tree is only a preview: stars are learned after sunset
     if (this.from === 'Forge') {
       label(this, MAP_W / 2, PORTRAIT ? 30 : 26, '🌙 보기 전용 · 해가 진 뒤에 배울 수 있다', PORTRAIT ? 15 : 14, 0xc9b8ff, { weight: 900, origin: [0.5, 0.5] });
     }
-    // zoom buttons (phones have no wheel)
-    const zx = MAP_W - 34;
-    const zy = MAP_BOTTOM - (PORTRAIT ? 150 : 130);
-    new Button(this, zx, zy, 44, 40, '＋', { variant: 'dark', size: 22, onClick: () => this.zoomTo(this.zoom * 1.3) });
-    new Button(this, zx, zy + 48, 44, 40, '−', { variant: 'dark', size: 22, onClick: () => this.zoomTo(this.zoom / 1.3) });
-    new Button(this, zx, zy + 96, 44, 40, '◎', { variant: 'dark', size: 18, onClick: () => this.zoomTo(FIT, undefined, undefined, true) });
+    // (the ＋ − ◎ zoom buttons were removed on 2026-11-27: phones pinch, PC uses the wheel)
 
     // detail panel
     const pg = this.add.graphics();

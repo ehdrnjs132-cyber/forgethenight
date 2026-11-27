@@ -105,15 +105,25 @@ export const DIRECTION_INFO: Record<Direction, { name: string; color: number; ar
 
 /** Sector centres on the disc (degrees, 0 = right, clockwise because y points down). */
 export const SECTOR_DEG: Record<Direction, number> = { odds: -90, speed: -18, stamina: 54, gold: 126, insure: 198 };
-/** Distance of ring 1 from the anvil, and between rings, in px. */
-export const RING_PX = { first: 120, step: 50 } as const;
-/** Price of a star: grows with the ring; big stars cost three small ones. */
-export const COST = { base: 150, growth: 1.62, majorMul: 3 } as const;
+/**
+ * Distance of ring 1 from the anvil, and between rings, in px. Twice as many rings since 2026-11-27 (a star
+ * was added between every two), so the step is tighter.
+ */
+export const RING_PX = { first: 110, step: 46 } as const;
+/**
+ * Price of a star: grows with the ring; big stars cost three small ones; the final star of each sector
+ * three times more again (2026-11-27: "마지막 단계는 더욱 비싸지겠지"). The growth per ring is √1.62, so a
+ * star that moved from ring r to ring 2r keeps the price it had.
+ */
+export const COST = { base: 150, growth: Math.sqrt(1.62), majorMul: 3, finalMul: 3 } as const;
 
 const nice = (v: number) => (v < 1_000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100);
-export function starCost(ring: number, major: boolean): number {
-  return nice(COST.base * Math.pow(COST.growth, ring - 1) * (major ? COST.majorMul : 1));
+export function starCost(ring: number, major: boolean, final = false): number {
+  return nice(COST.base * Math.pow(COST.growth, ring - 2) * (major ? COST.majorMul : 1) * (final ? COST.finalMul : 1));
 }
+
+/** The last star of each sector: the goal at the edge of the disc. */
+export const FINAL_STARS: ReadonlySet<string> = new Set(['divine', 'double', 'giant', 'alchemy', 'immortal']);
 
 type Fx = (e: TreeEffects) => void;
 /** A small star: [short name, description, effect]. */
@@ -140,14 +150,87 @@ const CALLUS: Minor = ['아끼기 +2%', `망치질할 때 2% 확률로 체력 ${
 type Spec = readonly [string, string, number, number, Minor | { name: string; desc: string; apply: Fx }];
 const BIG = (name: string, desc: string, apply: Fx) => ({ name, desc, apply });
 
+// ── the stars added between the old ones (2026-11-27: "스킬트리 두 배로, 중간 스킬들을 많이")
+// After skill-tree games (Path of Exile's small passives → notables → keystones, Grim Dawn's constellations):
+// a half-step small star on every link, and on the 4th and 8th rings a named mid-tier star (a "notable").
+const half = (name: string, desc: string, fx: Fx): Minor => [name, desc, fx];
+const MID: Record<Direction, Minor[]> = {
+  odds: [
+    half('성공 +0.25%p', '성공 확률 +0.25%p', (e) => void (e.success += 0.25)),
+    half('파괴 −0.25%p', '파괴 확률 −0.25%p', (e) => void (e.destroy += 0.25)),
+    half('대성공 +0.25%p', '대성공 확률 +0.25%p', (e) => void (e.great += 0.25)),
+  ],
+  speed: [half('속도 +3%', '망치질 속도 +3%', (e) => void (e.speed += 0.03))],
+  // the stamina sector keeps its 1000 maximum: its new stars slow the drain or win stamina back instead
+  stamina: [half('감소 −3%', '체력이 줄어드는 속도 −3%', (e) => void (e.drainCut += 0.03)), half('아끼기 +1%', '망치질할 때 1% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 1))],
+  gold: [half('판매가 +3%', '무기 판매가 +3%', (e) => void (e.sell += 0.03)), half('강화비 −3%', '강화 비용 −3%', (e) => void (e.costCut += 0.03))],
+  insure: [half('파편 +3%', '무기가 파괴되면 판매가의 3%를 더 돌려받는다', (e) => void (e.destroyRefund += 3))],
+};
+type Notable = { name: string; desc: string; apply: Fx };
+const NOTABLES: Record<Direction, Notable[]> = {
+  odds: [
+    BIG('정밀한 손', '성공 확률 +1.5%p', (e) => void (e.success += 1.5)),
+    BIG('담금질', '하락의 10%가 유지로 바뀐다', (e) => void (e.downKeep += 10)),
+    BIG('번뜩이는 눈', '대성공 확률 +1.5%p', (e) => void (e.great += 1.5)),
+    BIG('단단한 쇠심', '파괴 확률 −1.5%p', (e) => void (e.destroy += 1.5)),
+    BIG('불씨 읽기', '기적의 불꽃 +3% (성공이 대성공으로)', (e) => void (e.miracle += 3)),
+  ],
+  speed: [
+    BIG('숙련된 손목', '망치질 속도 +12%', (e) => void (e.speed += 0.12)),
+    BIG('박자 감각', '리듬 성공 보너스 +1.5%p', (e) => void (e.rhythm += 1.5)),
+    BIG('쉬지 않는 팔', '망치질 속도 +12%', (e) => void (e.speed += 0.12)),
+  ],
+  stamina: [
+    BIG('깊은 숨', '체력이 줄어드는 속도 −8%', (e) => void (e.drainCut += 0.08)),
+    BIG('단련된 몸', '망치질할 때 3% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 3)),
+    BIG('강철 심장', '체력이 줄어드는 속도 −6%', (e) => void (e.drainCut += 0.06)),
+    BIG('굳은 손바닥', '망치질할 때 2% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 2)),
+  ],
+  gold: [
+    BIG('흥정꾼', '무기 판매가 +12%', (e) => void (e.sell += 0.12)),
+    BIG('알뜰한 대장장이', '강화 비용 −10%', (e) => void (e.costCut += 0.1)),
+    BIG('왕실 연줄', '월세 −8%', (e) => void (e.rentCut += 0.08)),
+    BIG('금빛 눈', '새 무기가 황금 무기일 확률 +8%', (e) => void (e.golden += 8)),
+  ],
+  insure: [
+    BIG('파편 수집가', '무기가 파괴되면 판매가의 12%를 더 돌려받는다', (e) => void (e.destroyRefund += 12)),
+    BIG('보험 증서', '하락의 10%가 유지로 바뀐다', (e) => void (e.downKeep += 10)),
+  ],
+};
+/** Old rings whose incoming link gets a notable instead of a small star. */
+const NOTABLE_RINGS: ReadonlySet<number> = new Set([4, 8]);
+
+/**
+ * A sector's stars. Each spec is laid out on ring 2r, and a new star (`<id>m`) is put on the link from its
+ * parent, halfway in ring and angle; the spec now grows from that new star.
+ */
 function sector(dir: Direction, specs: readonly Spec[]): TreeNode[] {
-  return specs.map(([id, from, ring, ang, s]) => {
+  const place = (id: string, ring: number, ang: number, s: Minor | Notable, from: string, final = false): TreeNode => {
     const major = !Array.isArray(s);
     const rad = ((SECTOR_DEG[dir] + ang) * Math.PI) / 180;
     const r = RING_PX.first + (ring - 1) * RING_PX.step;
-    const [name, desc, apply] = major ? [(s as { name: string }).name, (s as { desc: string }).desc, (s as { apply: Fx }).apply] : (s as Minor);
-    return { id, dir, x: Math.round(Math.cos(rad) * r), y: Math.round(Math.sin(rad) * r), ring, major, name, desc, apply, from, cost: starCost(ring, major) };
-  });
+    const [name, desc, apply] = major ? [(s as Notable).name, (s as Notable).desc, (s as Notable).apply] : (s as Minor);
+    return { id, dir, x: Math.round(Math.cos(rad) * r), y: Math.round(Math.sin(rad) * r), ring, major, name, desc, apply, from, cost: starCost(ring, major, final) };
+  };
+  const at = new Map<string, { ring: number; ang: number }>([['root', { ring: 0, ang: 0 }]]);
+  const nodes: TreeNode[] = [];
+  let mid = 0;
+  let notable = 0;
+  const bigIds = new Set<string>(['root']);
+  for (const [id, from, oldRing, ang, s] of specs) {
+    const ring = oldRing * 2;
+    const p = at.get(from) ?? { ring: ring - 2, ang };
+    const pAng = from === 'root' ? ang : p.ang;
+    const midRing = Math.max(1, Math.round((p.ring + ring) / 2));
+    // a notable never sits right next to a big star, on either end of its link (they would touch)
+    const bigEnd = !Array.isArray(s) || bigIds.has(from);
+    const between: Minor | Notable = NOTABLE_RINGS.has(oldRing) && !bigEnd ? NOTABLES[dir][notable++ % NOTABLES[dir].length] : MID[dir][mid++ % MID[dir].length];
+    if (!Array.isArray(s)) bigIds.add(id);
+    nodes.push(place(`${id}m`, midRing, (pAng + ang) / 2, between, from));
+    nodes.push(place(id, ring, ang, s, `${id}m`, FINAL_STARS.has(id)));
+    at.set(id, { ring, ang });
+  }
+  return nodes;
 }
 
 export const TREE: readonly TreeNode[] = [
@@ -177,9 +260,20 @@ export const TREE: readonly TreeNode[] = [
     ['od20', 'od16', 9, -16, GREAT],
     ['od21', 'master', 10, 8, SUCCESS],
     ['od22', 'od20', 10, -19, SAFE],
-    // 2026-11-27 (QA): 신의 망치 is now a chosen one-shot unlocked by the second rent (systems/godHammer);
-    // this star lets the hammer hold a second charge
-    ['divine', 'od21', 11, 0, BIG('신의 손길', '신의 망치를 2회까지 충전해 둘 수 있다', (e) => void (e.godHammerCap += 1))],
+    // the sector's final star (2026-11-27: "신의 손길은 너무 약하다, 더 좋은 걸로"): a big step on every
+    // strike, and the chosen 신의 망치 can hold a second charge
+    [
+      'divine',
+      'od21',
+      11,
+      0,
+      BIG('대장장이 신의 손', '성공 +5%p · 대성공 +2%p · 파괴 −3%p · 신의 망치 2회까지 충전', (e) => {
+        e.success += 5;
+        e.great += 2;
+        e.destroy += 3;
+        e.godHammerCap += 1;
+      }),
+    ],
   ]),
 
   // ⚡ 속도 — hammer speed in 5% steps; 연속 강화, 리듬, 몰아치기, 두 번 내려치기

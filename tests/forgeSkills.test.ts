@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENHANCE_TABLE, OUTCOMES, type EnhanceRow, type Outcome } from '../src/config/enhancement';
 import { DIVINE_STEP, legacyRefund } from '../src/config/forgeSkills';
-import { BASE_SPEED, LEGACY_TREE_COSTS, STAMINA, TREE, TREE_BY_ID, starCost } from '../src/config/skillTree';
+import { BASE_SPEED, FINAL_STARS, LEGACY_TREE_COSTS, STAMINA, TREE, TREE_BY_ID, starCost } from '../src/config/skillTree';
 import { DAILY_WEAPON_LIMIT, RENT } from '../src/config/economy';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager, migrate } from '../src/core/save/save';
@@ -88,19 +88,32 @@ describe('star disc shape', () => {
     expect(new Set(TREE.map((n) => n.id)).size).toBe(TREE.length);
   });
 
-  it('no two stars overlap on the disc', () => {
+  it('no two stars touch on the disc (radius 40 anvil · 24 big · 13 small, 6 px apart at least)', () => {
+    const rad = (n: (typeof TREE)[number]) => (n.id === 'root' ? 40 : n.major ? 24 : 13);
     for (let i = 0; i < TREE.length; i++)
       for (let j = i + 1; j < TREE.length; j++) {
         const [a, b] = [TREE[i], TREE[j]];
-        expect(Math.hypot(a.x - b.x, a.y - b.y), `${a.id} / ${b.id}`).toBeGreaterThan(44);
+        expect(Math.hypot(a.x - b.x, a.y - b.y), `${a.id} / ${b.id}`).toBeGreaterThan(rad(a) + rad(b) + 6);
       }
+  });
+
+  it('twice the stars of the 2026-11-26 disc: a new star on every link, named mid-tier stars, the same finals (2026-11-27)', () => {
+    expect(TREE.length).toBe(2 * 108 + 1);
+    for (const n of TREE) if (n.id !== 'root' && !TREE_BY_ID[n.id.slice(0, -1)]) expect(TREE_BY_ID[`${n.id}m`], n.id).toBeDefined();
+    expect(TREE.filter((n) => n.major && n.id.endsWith('m') && TREE_BY_ID[n.id.slice(0, -1)]).length).toBeGreaterThanOrEqual(10);
+    // the finals are still the end of their lines, and the priciest stars of the disc
+    for (const id of FINAL_STARS) {
+      expect(TREE.some((n) => n.from === id), id).toBe(false);
+      expect(TREE_BY_ID[id].cost).toBe(starCost(TREE_BY_ID[id].ring, true, true));
+    }
+    expect(Math.max(...TREE.filter((n) => !FINAL_STARS.has(n.id)).map((n) => n.cost))).toBeLessThan(Math.min(...[...FINAL_STARS].map((id) => TREE_BY_ID[id].cost)));
   });
 
   it('stars cost more further out, big stars three small ones, and far more than the old tree', () => {
     expect(starCost(2, false)).toBeGreaterThan(starCost(1, false));
     expect(starCost(5, true) / starCost(5, false)).toBeGreaterThan(2.8);
     expect(starCost(5, true) / starCost(5, false)).toBeLessThan(3.2);
-    for (const n of TREE) if (n.id !== 'root') expect(n.cost).toBe(starCost(n.ring, n.major));
+    for (const n of TREE) if (n.id !== 'root') expect(n.cost).toBe(starCost(n.ring, n.major, FINAL_STARS.has(n.id)));
     const total = TREE.reduce((a, n) => a + n.cost, 0);
     const oldTotal = Object.values(LEGACY_TREE_COSTS).reduce((a, v) => a + v, 0);
     expect(total).toBeGreaterThan(oldTotal * 5);
@@ -109,29 +122,29 @@ describe('star disc shape', () => {
   it('buyable stars are the ones next to an owned star', () => {
     const s = withNodes([]);
     const visible = TREE.filter((n) => nodeVisible(s, n)).map((n) => n.id).sort();
-    expect(visible).toEqual(['gd1', 'in1', 'od1', 'root', 'sp1', 'st1']);
+    expect(visible).toEqual(['gd1m', 'in1m', 'od1m', 'root', 'sp1m', 'st1m']);
   });
 
   it('a star is bought once, only after the one it grows from, with gold', () => {
     const s = { ...withNodes([]), gold: 200 };
-    expect(checkBuyNode(s, 'od2')).toBe('locked');
-    const a = buyNode(s, 'od1');
+    expect(checkBuyNode(s, 'od1')).toBe('locked'); // grows from od1m now
+    const a = buyNode(s, 'od1m');
     expect(a.ok).toBe(true);
     if (!a.ok) return;
-    expect(a.state.gold).toBe(200 - TREE_BY_ID.od1.cost);
-    expect(checkBuyNode(a.state, 'od1')).toBe('owned');
-    expect(checkBuyNode(a.state, 'od2')).toBe('gold');
+    expect(a.state.gold).toBe(200 - TREE_BY_ID.od1m.cost);
+    expect(checkBuyNode(a.state, 'od1m')).toBe('owned');
+    expect(checkBuyNode({ ...a.state, gold: 0 }, 'od1')).toBe('gold');
     expect(checkBuyNode({ ...a.state, phase: 'night' }, 'sp1')).toBe('night');
   });
 
   it('stars are learned only after sunset: from the forge the tree is view-only (user 2026-11-27)', () => {
     const s = { ...withNodes([]), gold: 10_000 };
-    expect(checkBuyNode(s, 'od1', false)).toBe('day');
-    expect(buyNode(s, 'od1', false)).toEqual({ ok: false, reason: 'day' });
-    expect(checkBuyNode(s, 'od1', true)).toBeNull();
+    expect(checkBuyNode(s, 'od1m', false)).toBe('day');
+    expect(buyNode(s, 'od1m', false)).toEqual({ ok: false, reason: 'day' });
+    expect(checkBuyNode(s, 'od1m', true)).toBeNull();
     const core = new GameCore(new MemoryStorage(), 3);
     core.state = { ...core.state, gold: 500 };
-    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1' })).toEqual({ type: 'nodeBlocked', reason: 'day' });
+    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1m' })).toEqual({ type: 'nodeBlocked', reason: 'day' });
     expect(core.state.gold).toBe(500);
   });
 
@@ -139,26 +152,29 @@ describe('star disc shape', () => {
     const storage = new MemoryStorage();
     const core = new GameCore(storage, 3);
     core.state = { ...core.state, gold: 500 };
-    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1', evening: true }).type).toBe('nodeBought');
-    expect(new SaveManager(storage).loadRun().state!.treeNodes).toEqual(['gd1']);
+    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1m', evening: true }).type).toBe('nodeBought');
+    expect(new SaveManager(storage).loadRun().state!.treeNodes).toEqual(['gd1m']);
   });
 });
 
 describe('✦ odds', () => {
-  it('small stars shift the row by 0.5%p each', () => {
-    const s = withNodes(pathTo('od5')); // od1 success, od2 destroy, od3 success, od5 success
+  it('small stars shift the row by 0.5%p, the new ones between them by 0.25%p, notables by 1.5%p', () => {
+    // od1m +0.25 · od1 +0.5 · od2m −0.25 destroy · od2 −0.5 destroy · od3m +0.25 great · od3 +0.5 · 정밀한 손 +1.5 · od5 +0.5
+    const s = withNodes(pathTo('od5'));
     const w = s.weapons[0];
     const base = effectiveRow(w.level);
     const row = effectiveRow(w.level, collectEnhanceMods(s, w));
-    expect(row.success).toBeCloseTo(base.success + 1.5, 6);
-    expect(row.destroy).toBeCloseTo(base.destroy - 0.5, 1);
+    expect(row.success).toBeCloseTo(base.success + 3.25, 6);
+    expect(row.destroy).toBeCloseTo(base.destroy - 0.75, 1);
   });
 
-  it('the whole sector adds up to +4%p success, −3%p destroy, +2%p great', () => {
+  it('the whole sector adds up to +12.25%p success, −9%p destroy, +7%p great (대장장이 신의 손 included)', () => {
     const e = treeEffects(withNodes(sectorNodes('odds')));
-    expect(e.success).toBeCloseTo(4, 6);
-    expect(e.destroy).toBeCloseTo(3, 6);
-    expect(e.great).toBeCloseTo(2, 6);
+    expect(e.success).toBeCloseTo(12.25, 6);
+    expect(e.destroy).toBeCloseTo(9, 6);
+    expect(e.great).toBeCloseTo(7, 6);
+    const hand = treeEffects(withNodes(['divine']));
+    expect(hand).toMatchObject({ success: 5, great: 2, destroy: 3, godHammerCap: 1 });
   });
 
   it('기적의 불꽃 + 과열 단조 make one conversion roll', () => {
@@ -194,12 +210,13 @@ describe('⚡ speed', () => {
     expect(BASE_SPEED).toBe(0.5);
     expect(treeEffects(withNodes([])).speed).toBe(0.5);
     expect(treeEffects(withNodes(['sp1'])).speed).toBeCloseTo(0.55, 6);
-    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(0.5 + 4 * 0.05 + 0.1, 6); // the path crosses 단련된 팔
+    expect(treeEffects(withNodes(['sp1m'])).speed).toBeCloseTo(0.53, 6); // the new stars between: +3%
+    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(0.95, 6); // crosses 단련된 팔 and 숙련된 손목
     expect(treeEffects({ ...withNodes([]), rentPrepaid: true }).speed).toBeCloseTo(0.5, 6);
     // 단련된 팔 (was 연속 강화 until 2026-11-27: holding the button is built in now) adds +10%
-    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.5 + 2 * 0.05 + 0.1, 6);
+    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.79, 6);
     expect(treeEffects(withNodes(pathTo('hold'))).holdRepeat).toBe(false);
-    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(0.5 + 15 * 0.05 + 0.1, 6);
+    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(2.04, 6);
   });
 
   it('리듬 adds success only when the attempt is quick', () => {
@@ -284,14 +301,13 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
     expect(staminaStarted(core.state)).toBe(false);
   });
 
-  it('체력 stars: max stamina up to 1000, drain −5% each (−40% in all), lucky strikes +2% each, a second wind', () => {
+  it('체력 stars: max stamina still 1000; the new stars slow the drain (capped at −60%) and win stamina back', () => {
     const all = withNodes(sectorNodes('stamina'));
     const e = treeEffects(all);
     expect(staminaMax(all)).toBe(1000);
-    expect(e.drainCut).toBeCloseTo(5 * 0.05 + 0.15, 6);
-    expect(drainRate(all)).toBeCloseTo(STAMINA.drainPerSec * 0.6, 6);
-    // every lucky-strike source gives 2% (user 2026-11-26)
-    expect(e.staminaSave).toBe(4 * 2);
+    expect(e.drainCut).toBeCloseTo(0.95, 6);
+    expect(drainRate(all)).toBeCloseTo(STAMINA.drainPerSec * (1 - STAMINA.maxCut), 6);
+    expect(e.staminaSave).toBe(24);
     expect(e.secondWind).toBe(30);
     expect(workSecondsLeft(all)).toBeGreaterThan(workSecondsLeft(withNodes([])) * 15);
   });
@@ -328,10 +344,11 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
 
 describe('◆ gold', () => {
   it('sale bonus and cost cuts in 5% steps', () => {
-    const s = withNodes(pathTo('gd3')); // sell +5, cost −5, sell +5
+    // gd1m +3% sell · gd1 +5% · gd2m −3% cost · gd2 −5% cost · gd3m +3% sell · gd3 +5%
+    const s = withNodes(pathTo('gd3'));
     expect(sellPrice(s, 10)).toBeGreaterThan(sellPrice(withNodes([]), 10));
-    expect(treeEffects(s).sell).toBeCloseTo(0.1, 6);
-    expect(enhanceCostFor(s, 10)).toBe(Math.max(1, Math.round(enhanceCost(10) * 0.95)));
+    expect(treeEffects(s).sell).toBeCloseTo(0.16, 6);
+    expect(enhanceCostFor(s, 10)).toBe(Math.max(1, Math.round(enhanceCost(10) * 0.92)));
     expect(sellPrice(s, 0)).toBe(0);
   });
 
@@ -475,6 +492,14 @@ describe('legacy skills are refunded', () => {
     const s = { ...withNodes(['o1', 'o2', 's1', 'i2s', 'gd1']), gold: 10 } as GameState;
     const m = migrate(s, STATE_VERSION)!;
     expect(m.gold).toBe(10 + 60 + 200 + 60 + 320);
-    expect(m.treeNodes).toEqual(['gd1']);
+    // and a star owned before 2026-11-27 gets the new star on its link for free (gd1m)
+    expect(m.treeNodes).toEqual(['gd1', 'gd1m']);
+  });
+
+  it('saves from before the disc doubled keep every star connected (2026-11-27)', () => {
+    const owned = pathTo('miracle').filter((id) => !id.endsWith('m'));
+    const m = migrate({ ...withNodes(owned), gold: 0 } as GameState, STATE_VERSION)!;
+    expect(new Set(m.treeNodes)).toEqual(new Set(pathTo('miracle')));
+    expect(m.gold).toBe(0);
   });
 });

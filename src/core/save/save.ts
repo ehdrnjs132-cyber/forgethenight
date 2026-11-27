@@ -115,6 +115,15 @@ export function migrate(data: GameState, fromVersion: number): GameState | null 
   };
   s = oldTree(s);
   if (s.nightSnapshot) s = { ...s, nightSnapshot: oldTree(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
+  // 2026-11-27: a star was added on every link of the disc. A save that owns both ends of a link gets the
+  // new star in between for free, so everything it bought stays connected and keeps working.
+  const bridges = (x: GameState): GameState => {
+    const owned = new Set(x.treeNodes ?? []);
+    const add = [...owned].map((id) => TREE_BY_ID[id]?.from).filter((f): f is string => !!f && f !== 'root' && !owned.has(f) && !!TREE_BY_ID[f]);
+    return add.length ? { ...x, treeNodes: [...(x.treeNodes ?? []), ...add] } : x;
+  };
+  s = bridges(s);
+  if (s.nightSnapshot) s = { ...s, nightSnapshot: bridges(s.nightSnapshot as GameState) as typeof s.nightSnapshot };
   const toSwords = (x: GameState): GameState =>
     x.weapons.some((w) => w.cls !== 'sword') ? { ...x, weapons: x.weapons.map((w) => (w.cls === 'sword' ? w : { ...w, cls: 'sword' })) } : x;
   s = toSwords(s);
