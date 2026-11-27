@@ -6,6 +6,7 @@ import type { GameCore } from '../../core/game';
 import { weaponDisplayName } from '../../config/swordNames';
 import { ELEMENT_INFO } from '../../config/weapons';
 import { INTRO } from '../../config/cinematics';
+import { STORY_SEEN_ID } from '../../config/story';
 import { C, H, W, label } from '../theme';
 import { Button } from '../ui/button';
 import { LevelBadge } from '../ui/levelBadge';
@@ -213,6 +214,8 @@ export class LobbyScene extends Phaser.Scene {
     }
     this.input.enabled = false;
     this.cameras.main.fadeOut(300, 0, 0, 0);
-    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Forge'));
+    // the first time ever: the dialogue cutscene (why the king collects, and how the forge works) first
+    const first = !this.core.hasSeen(STORY_SEEN_ID);
+    this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => (first ? this.scene.start('Story', { next: 'Forge' }) : this.scene.start('Forge')));
   }
 }
