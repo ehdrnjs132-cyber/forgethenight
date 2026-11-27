@@ -24,8 +24,10 @@ export interface TreeEffects {
   divine: number;
   /** Hammer speed: 1 = normal, 2 = twice as fast. Starts at BASE_SPEED. */
   speed: number;
-  /** Hold the 강화 button to keep enhancing. */
+  /** Hold the 강화 button to keep enhancing. Built in since 2026-11-27 (QA); no node sets it any more. */
   holdRepeat: boolean;
+  /** Extra 신의 망치 charges the hammer can hold (on top of GOD_HAMMER.cap). */
+  godHammerCap: number;
   /** %p success when enhancing again within RHYTHM_SECONDS. */
   rhythm: number;
   /** Every 3rd success in a row makes the next attempt free. */
@@ -175,14 +177,17 @@ export const TREE: readonly TreeNode[] = [
     ['od20', 'od16', 9, -16, GREAT],
     ['od21', 'master', 10, 8, SUCCESS],
     ['od22', 'od20', 10, -19, SAFE],
-    ['divine', 'od21', 11, 0, BIG('신의 망치', '성공·대성공 시 2% 확률로 단숨에 +5', (e) => void (e.divine += 2))],
+    // 2026-11-27 (QA): 신의 망치 is now a chosen one-shot unlocked by the second rent (systems/godHammer);
+    // this star lets the hammer hold a second charge
+    ['divine', 'od21', 11, 0, BIG('신의 손길', '신의 망치를 2회까지 충전해 둘 수 있다', (e) => void (e.godHammerCap += 1))],
   ]),
 
   // ⚡ 속도 — hammer speed in 5% steps; 연속 강화, 리듬, 몰아치기, 두 번 내려치기
   ...sector('speed', [
     ['sp1', 'root', 1, 0, SPEED],
     ['sp2', 'sp1', 2, 5, SPEED],
-    ['hold', 'sp2', 3, 0, BIG('연속 강화', '강화 버튼을 길게 누르면 계속 강화한다', (e) => void (e.holdRepeat = true))],
+    // 2026-11-27 (QA): holding the button is built in now; this star speeds the hammer instead
+    ['hold', 'sp2', 3, 0, BIG('단련된 팔', '망치질 속도 +10%', (e) => void (e.speed += 0.1))],
     ['sp4', 'hold', 4, -8, SPEED],
     ['sp5', 'sp4', 5, -14, SPEED],
     ['rhythm', 'sp5', 6, -21, BIG('리듬', `강화 후 ${RHYTHM_SECONDS}초 안에 다시 강화하면 성공 +2%p`, (e) => void (e.rhythm += 2))],
@@ -264,7 +269,7 @@ export const TREE: readonly TreeNode[] = [
   ...sector('insure', [
     ['in1', 'root', 1, 0, REFUND],
     ['in2', 'in1', 2, 6, REFUND],
-    ['phoenix', 'in2', 3, 0, BIG('불사조의 모루', '하루 1회, 파괴된 무기가 절반 단계로 되살아난다', (e) => void (e.phoenix = { perDay: 1, mode: 'half' }))],
+    ['phoenix', 'in2', 3, 0, BIG('불사조의 모루', '하루 1회, 보호로 지정한 무기가 파괴되면 절반 단계로 되살아난다', (e) => void (e.phoenix = { perDay: 1, mode: 'half' }))],
     ['in4', 'phoenix', 4, -11, REFUND],
     ['stones', 'in4', 5, -18, BIG('아침 보호석', '매일 아침 강화 보호석 1개', (e) => void (e.morningStones += 1))],
     ['in6', 'phoenix', 4, 10, REFUND],
@@ -302,6 +307,7 @@ export function baseEffects(): TreeEffects {
     divine: 0,
     speed: BASE_SPEED,
     holdRepeat: false,
+    godHammerCap: 0,
     rhythm: 0,
     comboFree: false,
     doubleRoll: 0,

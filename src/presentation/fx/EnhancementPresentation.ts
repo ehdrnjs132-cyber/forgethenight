@@ -30,6 +30,11 @@ export interface PresentationParts {
 export interface PlayHooks {
   /** Called on the impact frame, so the new level appears exactly as the hammer lands. */
   onImpact: () => void;
+  /**
+   * The awakening holds the input longer than a normal strike: true when that extra wait starts, false
+   * when it ends. The forge stops the stamina drain meanwhile (QA 2026-11-27: 40 → 31 during it).
+   */
+  onHold?: (held: boolean) => void;
 }
 
 export const HAMMER_IDLE = 32;
@@ -219,6 +224,13 @@ export class EnhancementPresentation {
           0,
           900,
         );
+        // 기적의 불꽃 / 과열 단조 actually fired (QA 2026-11-27): its own tag and colour above the result,
+        // so it never reads like a plain great success from the table
+        if (result.miracle && !result.divine) {
+          this.ring(0xff7ad9, 2.6, 380);
+          // under the result; further down when a milestone banner takes that spot
+          this.banner('✦ 기적의 불꽃 발동', '성공이 대성공으로 바뀌었다', 0xff8ae0, 30, result.milestone ? 178 : 92, 1100);
+        }
         settle = 220;
         break;
       case 'success':
@@ -272,6 +284,8 @@ export class EnhancementPresentation {
         break;
     }
 
+    // the strike's own wait; anything a milestone adds on top is held time (no stamina drain)
+    const normalSettle = settle;
     // §7.4: milestone on top, in the same moment (no second beat)
     if (m) {
       const glow = ELEMENT_INFO[result.weaponBefore.element].glow;
@@ -290,6 +304,14 @@ export class EnhancementPresentation {
       }
     }
 
-    await this.wait(settle);
+    await this.wait(normalSettle);
+    if (settle > normalSettle) {
+      hooks.onHold?.(true);
+      try {
+        await this.wait(settle - normalSettle);
+      } finally {
+        hooks.onHold?.(false);
+      }
+    }
   }
 }

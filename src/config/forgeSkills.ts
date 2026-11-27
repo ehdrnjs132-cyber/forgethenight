@@ -5,6 +5,14 @@
 /** Levels gained by 신의 망치. */
 export const DIVINE_STEP = 5;
 
+/**
+ * 신의 망치 as a chosen one-shot (QA proposal, user request 2026-11-27). Unlocked when the king's rent is
+ * paid for the `unlockRents`-th time; every paid rent after that (counted once per visit) adds a charge,
+ * up to `cap` (+ the 신의 손길 star). Armed before a strike: the strike rolls as usual, and a success or
+ * great success lands at +DIVINE_STEP (within MAX_LEVEL). The charge is spent whatever the result.
+ */
+export const GOD_HAMMER = { unlockRents: 2, cap: 1 };
+
 /** Gold the old chain charged for levels 1..5 of each skill. */
 export const LEGACY_SKILL_COSTS: Record<string, readonly number[]> = {
   miracle: [300, 900, 2_500, 7_000, 18_000],

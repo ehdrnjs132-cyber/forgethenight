@@ -60,6 +60,17 @@ export interface DailyCounters {
   staminaStarted?: boolean;
 }
 
+/** 신의 망치 (chosen one-shot): rents paid, charges held, whether the next strike uses one. */
+export interface GodHammerState {
+  /** Rent visits paid this run (prepaid ones included; mercy and unpaid ones not). */
+  rentsPaid: number;
+  charges: number;
+  /** The next strike uses a charge. */
+  armed: boolean;
+  /** Days of the rent visits already counted, so a visit can never charge twice. */
+  counted: number[];
+}
+
 /** The king's last rent visit, for the morning notice. */
 export interface RentNotice {
   day: number;
@@ -125,6 +136,13 @@ export interface GameState {
   cardDay?: number;
   /** Day the 운명의 무기 카드 (DAY 30+, weapons at stake) was last played. */
   weaponCardDay?: number;
+  /**
+   * The weapon 불사조의 모루 protects (QA 2026-11-27: the player picks it). Only its destruction is
+   * revived; null / absent = no weapon chosen, so nothing is revived.
+   */
+  phoenixTarget?: string | null;
+  /** 신의 망치 as a chosen one-shot (2026-11-27). Absent in older saves = nothing paid yet. */
+  godHammer?: GodHammerState;
   /** Day the merchant Morr last talked (his visit's dialogue plays once a visit). */
   merchantTalkDay?: number;
   /** Weapons destroyed in the run when he last talked (a later visit notices new breakage). */

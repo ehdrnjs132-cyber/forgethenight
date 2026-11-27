@@ -9,6 +9,7 @@ import { drainStamina, fateSplitLeft, staminaLeft } from './systems/forgeSkills'
 import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
 import { collectRent } from './systems/rent';
 import { markMerchantTalk, merchantTalkDue } from './systems/merchantTalk';
+import { toggleGodHammer, type GodHammerBlock } from './systems/godHammer';
 import { playCard, playWeaponCard, type CardBlock, type CardFace, type WeaponCardBlock } from './systems/cards';
 import { buy, consume, itemCount, openMerchant, sell, toggleArmed, undoEnhance, type BuyBlock, type SellBlock, type UndoBlock } from './systems/economy';
 import type { EnhanceItem, ItemId } from '../config/economy';
@@ -37,6 +38,10 @@ export type Action =
   | { type: 'RESET_SKILLS' }
   | { type: 'SLEEP' }
   | { type: 'TOGGLE_SPLIT' }
+  /** Arm / disarm 신의 망치 for the next strike (2026-11-27). */
+  | { type: 'TOGGLE_GOD_HAMMER' }
+  /** The weapon 불사조의 모루 protects (null: none). */
+  | { type: 'SET_PHOENIX_TARGET'; weaponId: string | null }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
   /** The merchant's visit dialogue has played today (it plays once a visit). */
   | { type: 'MERCHANT_TALKED' }
@@ -80,6 +85,7 @@ export type ActionResult =
   | { type: 'noRevive' }
   | { type: 'learned'; id: string }
   | { type: 'learnBlocked'; reason: LearnBlock }
+  | { type: 'godHammerBlocked'; reason: GodHammerBlock }
   | { type: 'skillsReset'; refunded: number }
   | { type: 'resetBlocked'; reason: ResetBlock }
   | { type: 'ok' };
@@ -336,7 +342,24 @@ export class GameCore {
       case 'TOGGLE_SPLIT': {
         if (this.state.phase !== 'day' || this.state.pendingSplit) return { type: 'ok' };
         if (!this.state.splitArmed && fateSplitLeft(this.state) <= 0) return { type: 'ok' };
-        this.commit({ ...this.state, splitArmed: !this.state.splitArmed });
+        // 운명 분열 and 신의 망치 never share a strike: arming one disarms the other
+        const g = this.state.godHammer;
+        this.commit({ ...this.state, splitArmed: !this.state.splitArmed, ...(g?.armed && !this.state.splitArmed ? { godHammer: { ...g, armed: false } } : {}) });
+        this.emit('changed', this.state);
+        return { type: 'ok' };
+      }
+      case 'TOGGLE_GOD_HAMMER': {
+        if (this.state.pendingSplit) return { type: 'godHammerBlocked', reason: 'split' };
+        const r = toggleGodHammer(this.state);
+        if (!r.ok) return { type: 'godHammerBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'ok' };
+      }
+      case 'SET_PHOENIX_TARGET': {
+        const id = action.weaponId;
+        if (id !== null && !this.state.weapons.some((w) => w.id === id)) return { type: 'ok' };
+        this.commit({ ...this.state, phoenixTarget: id });
         this.emit('changed', this.state);
         return { type: 'ok' };
       }

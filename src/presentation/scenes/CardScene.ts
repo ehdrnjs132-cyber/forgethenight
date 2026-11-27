@@ -81,6 +81,7 @@ export class CardScene extends Phaser.Scene {
     this.staked = new Set();
     this.stakeChips = [];
     this.cards = [];
+    this.pickBtns = [];
     this.pick = null;
     this.share = 0;
     this.dragging = false;
@@ -121,9 +122,22 @@ export class CardScene extends Phaser.Scene {
 
     const kb = this.input.keyboard!;
     kb.on('keydown-ESC', () => this.close());
-    kb.on('keydown-LEFT', () => this.setShare(this.share - 0.05));
-    kb.on('keydown-RIGHT', () => this.setShare(this.share + 0.05));
+    // keyboard (QA 2026-11-27): 1 / 2 pick a card; ← → pick one until a card is chosen, then move the
+    // bet (gold) or switch the card (weapons); Enter bets once it is ready
+    kb.on('keydown-ONE', () => this.choose(0));
+    kb.on('keydown-TWO', () => this.choose(1));
+    kb.on('keydown-NUMPAD_ONE', () => this.choose(0));
+    kb.on('keydown-NUMPAD_TWO', () => this.choose(1));
+    kb.on('keydown-LEFT', () => this.arrow(-1));
+    kb.on('keydown-RIGHT', () => this.arrow(1));
+    kb.on('keydown-ENTER', () => this.confirmBtn?.isEnabled() && this.confirm());
     this.cameras.main.fadeIn(200, 0, 0, 0);
+  }
+
+  private arrow(dir: -1 | 1) {
+    if (this.done) return;
+    if (this.pick === null || this.mode === 'weapons') this.choose(dir < 0 ? 0 : 1);
+    else this.setShare(this.share + dir * 0.05);
   }
 
   // ───────────────────────── cards
@@ -154,12 +168,23 @@ export class CardScene extends Phaser.Scene {
     c.on('pointerover', () => !this.done && this.pick !== i && this.tweens.add({ targets: c, y: CARD_Y - 8, duration: 120 }));
     c.on('pointerout', () => !this.done && this.pick !== i && this.tweens.add({ targets: c, y: CARD_Y, duration: 120 }));
     c.on('pointerup', () => this.choose(i));
+    // a named, focusable button on the card: Tab reaches it and screen readers read it (QA 2026-11-27)
+    const pickBtn = new Button(this, 0, CARD_H / 2 - 26, CARD_W - 28, PORTRAIT ? 40 : 34, i === 0 ? '왼쪽 카드 · 1' : '오른쪽 카드 · 2', {
+      variant: 'ghost',
+      size: PORTRAIT ? 16 : 14,
+      onClick: () => this.choose(i),
+    });
+    c.add(pickBtn);
+    this.pickBtns.push(pickBtn);
     (c as Phaser.GameObjects.Container & { q?: Phaser.GameObjects.Text }).q = q;
     return { c, back, face, ring, baseY: CARD_Y };
   }
 
+  /** The cards' own buttons (hidden once the bet is placed). */
+  private pickBtns: Button[] = [];
+
   private choose(i: 0 | 1) {
-    if (this.done) return;
+    if (this.done || this.pick === i) return;
     this.pick = i;
     this.sfx.click();
     this.cards.forEach((v, k) => {
@@ -241,6 +266,7 @@ export class CardScene extends Phaser.Scene {
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => this.dragging && p.isDown && this.setShareFromX(p.x));
     this.input.on('pointerup', () => (this.dragging = false));
+    ui.add(label(this, W / 2, BAR.y + (PORTRAIT ? 58 : 52), '← → 키로 금액 조절 (한 번에 5%씩) · Enter 베팅', 12 * big, C.mute, { weight: 700, origin: [0.5, 0.5] }));
     this.confirmBtn = new Button(this, W / 2, BAR.y + (PORTRAIT ? 120 : 92), PORTRAIT ? 360 : 300, PORTRAIT ? 70 : 58, '베팅 완료', {
       variant: 'gold',
       size: 24 * big,
@@ -345,6 +371,7 @@ export class CardScene extends Phaser.Scene {
       show = () => this.showResult(r.win, r.bet, r.payout, r.goldBefore, r.goldAfter);
     }
     this.done = true;
+    for (const b of this.pickBtns) b.setVisible(false); // the faces turn up next
     this.confirmBtn.setEnabled(false);
     this.closeBtn.setVisible(false);
     this.tweens.add({ targets: this.betUi, alpha: 0.35, duration: 200 });

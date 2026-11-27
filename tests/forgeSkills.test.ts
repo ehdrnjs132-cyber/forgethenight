@@ -171,11 +171,14 @@ describe('✦ odds', () => {
     expect(yes).toMatchObject({ outcome: 'great', miracle: true, level: hot.level + 2 });
   });
 
-  it('신의 망치 turns a success into +5', () => {
+  it('the 신의 망치 star no longer fires on its own (2026-11-27: the hammer is a chosen one-shot); it holds a second charge', () => {
     const s = withNodes(pathTo('divine'));
     const w = s.weapons[0];
     const c = rollCandidate(s, w, only('success'), new Rng(seedWhere((d) => d < 2)));
-    expect(c).toMatchObject({ divine: true, level: w.level + DIVINE_STEP });
+    expect(c.divine).toBe(false);
+    expect(c.level).toBe(w.level + 1);
+    expect(treeEffects(s).godHammerCap).toBe(1);
+    expect(DIVINE_STEP).toBe(5);
   });
 
   it('굳은 쇠 turns some drops into keep (and only with the star)', () => {
@@ -191,10 +194,12 @@ describe('⚡ speed', () => {
     expect(BASE_SPEED).toBe(0.5);
     expect(treeEffects(withNodes([])).speed).toBe(0.5);
     expect(treeEffects(withNodes(['sp1'])).speed).toBeCloseTo(0.55, 6);
-    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(0.5 + 4 * 0.05, 6);
+    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(0.5 + 4 * 0.05 + 0.1, 6); // the path crosses 단련된 팔
     expect(treeEffects({ ...withNodes([]), rentPrepaid: true }).speed).toBeCloseTo(0.5, 6);
-    expect(treeEffects(withNodes(pathTo('hold'))).holdRepeat).toBe(true);
-    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(0.5 + 15 * 0.05, 6);
+    // 단련된 팔 (was 연속 강화 until 2026-11-27: holding the button is built in now) adds +10%
+    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.5 + 2 * 0.05 + 0.1, 6);
+    expect(treeEffects(withNodes(pathTo('hold'))).holdRepeat).toBe(false);
+    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(0.5 + 15 * 0.05 + 0.1, 6);
   });
 
   it('리듬 adds success only when the attempt is quick', () => {
@@ -347,9 +352,17 @@ describe('✚ insurance', () => {
     expect(phoenixLevel(withNodes(pathTo('wings')), 15)).toBe(13);
     expect(phoenixLevel(withNodes(pathTo('immortal')), 15)).toBe(15);
     expect(phoenixLeft(withNodes(pathTo('immortal')))).toBe(3);
+    // only the weapon the player chose to protect is revived (QA 2026-11-27)
     const s = withNodes(pathTo('phoenix'), { level: 12 });
-    const r = enhance(s, s.weapons[0].id, { force: 'destroy' });
+    const unguarded = enhance(s, s.weapons[0].id, { force: 'destroy' });
+    expect(unguarded.ok && unguarded.result.phoenix).toBe(null);
+    const guarded = { ...s, phoenixTarget: s.weapons[0].id };
+    const r = enhance(guarded, s.weapons[0].id, { force: 'destroy' });
     expect(r.ok && r.result.phoenix).toBe(6);
+    // once a day: the next destruction of the same weapon is final
+    if (!r.ok) return;
+    const again = enhance(r.state, s.weapons[0].id, { force: 'destroy' });
+    expect(again.ok && again.result.phoenix).toBe(null);
   });
 
   it('파편 줍기 pays 5% of a destroyed weapon back per star', () => {

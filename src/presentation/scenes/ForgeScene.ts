@@ -3,7 +3,9 @@ import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import type { Weapon } from '../../core/state/types';
 import { collectEnhanceMods, effectiveRow, type EnhanceResult } from '../../core/systems/enhancement';
-import { drainRate, fateSplitLeft, overheatBonus, phoenixLeft, phoenixLevel, staminaLeft, staminaMax, staminaStarted } from '../../core/systems/forgeSkills';
+import { drainRate, fateSplitLeft, greatConversionChance, overheatBonus, phoenixLeft, phoenixLevel, staminaLeft, staminaMax, staminaStarted } from '../../core/systems/forgeSkills';
+import { godHammer, godHammerCap, godHammerUnlocked } from '../../core/systems/godHammer';
+import { GOD_HAMMER } from '../../config/forgeSkills';
 import { DIVINE_STEP } from '../../config/forgeSkills';
 import { cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
 import { DIRECTION_INFO, RHYTHM_SECONDS, TREE } from '../../config/skillTree';
@@ -33,6 +35,7 @@ import { DAILY_WEAPON_LIMIT, ENHANCE_ITEMS, ITEMS, MERCHANT, SALE_CONFIRM_LEVEL,
 import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
 import { merchantGreeting, merchantTalkDue } from '../../core/systems/merchantTalk';
+import { goldRecovery, goldRecoveryText } from '../../core/systems/recovery';
 import { MERCHANT_FIRST, MERCHANT_FIRST_SEEN_ID, MERCHANT_GREETINGS } from '../../config/story';
 import type { StoryData } from './StoryScene';
 
@@ -160,6 +163,10 @@ export class ForgeScene extends Phaser.Scene {
   private buyGlow: Phaser.FX.Glow | null = null;
   private sleepBtn!: Button;
   private splitBtn!: Button;
+  /** 신의 망치 (chosen one-shot, from the second rent): arms the next strike. */
+  private godBtn!: Button;
+  /** 불사조의 모루: protect the selected weapon. */
+  private phoenixBtn!: Button;
   private rentText!: Phaser.GameObjects.Text;
   /** DAY 1 lines over the blacksmith's head. */
   private bubble!: Bubble;
@@ -660,6 +667,10 @@ export class ForgeScene extends Phaser.Scene {
     this.undoBtn = PORTRAIT
       ? new Button(this, W - 130, y0 + gap.undo, 220, 36, '시간 역행석 사용', { variant: 'ghost', size: 13, sub: '', onClick: () => this.undo() })
       : new Button(this, cx, y0 + gap.undo, 250, 36, '시간 역행석 사용', { variant: 'ghost', size: 15, sub: '', onClick: () => this.undo() });
+    // 불사조의 모루 guards the weapon the player picks (QA 2026-11-27)
+    this.phoenixBtn = PORTRAIT
+      ? new Button(this, 130, y0 + gap.undo, 220, 36, '', { variant: 'ghost', size: 13, onClick: () => this.togglePhoenix() })
+      : new Button(this, cx, y0 + gap.undo + 40, 250, 32, '', { variant: 'ghost', size: 14, onClick: () => this.togglePhoenix() });
   }
 
   /** Portrait: odds as one row of five columns, then stones, the big enhance button and the action row. */
@@ -690,7 +701,8 @@ export class ForgeScene extends Phaser.Scene {
     this.equipBtn = new Button(this, 16 + unit / 2, PB.rowY, unit, 78, '장착', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.equipSelected() });
     this.sellBtn = new Button(this, 16 + unit * 1.5 + 8, PB.rowY, unit, 78, '판매', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.trySell() });
     this.sleepBtn = new Button(this, W - 16 - unit, PB.rowY, unit * 2, 78, '다음 날 ▶', { variant: 'gold', size: 26, sub: '하루 마치기', subSize: 14, onClick: () => this.openEvening() });
-    this.splitBtn = new Button(this, W - 16 - 110, PB.stonesY, 220, 36, '운명 분열', { variant: 'ghost', size: 15, onClick: () => this.toggleSplit() });
+    this.splitBtn = new Button(this, W - 16 - 80 - 168, PB.stonesY, 160, 36, '운명 분열', { variant: 'ghost', size: 14, onClick: () => this.toggleSplit() });
+    this.godBtn = new Button(this, W - 16 - 80, PB.stonesY, 160, 36, '신의 망치', { variant: 'ghost', size: 14, onClick: () => this.toggleGodHammer() });
   }
 
   private buildOdds() {
@@ -721,7 +733,10 @@ export class ForgeScene extends Phaser.Scene {
     this.stageText = label(this, RIGHT.x + 20, warnY + 20, '', 12, C.mute, { weight: 700 });
     this.statsText = label(this, RIGHT.x + 20, warnY + 38, '', 12, C.dim, { wrap: RIGHT.w - 40, lineSpacing: 2 });
     if (ENHANCE_TABLE_STATUS !== 'confirmed') label(this, RIGHT.x + RIGHT.w - 20, warnY + 20, '확률표 임시안', 12, C.dim, { origin: [1, 0] });
-    this.splitBtn = new Button(this, RIGHT.x + RIGHT.w / 2, warnY + 88, RIGHT.w - 40, 28, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
+    // 운명 분열 and 신의 망치 share the row (each shows once it exists)
+    const half = (RIGHT.w - 48) / 2;
+    this.splitBtn = new Button(this, RIGHT.x + 20 + half / 2, warnY + 88, half, 28, '운명 분열', { variant: 'ghost', size: 13, onClick: () => this.toggleSplit() });
+    this.godBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - half / 2, warnY + 88, half, 28, '신의 망치', { variant: 'ghost', size: 13, onClick: () => this.toggleGodHammer() });
     // Stones switched on for the next attempt (§15). Hidden until the player owns any.
     this.stoneTitle = label(this, RIGHT.x + 20, warnY + 106, '다음 강화에 사용', 12, C.mute, { weight: 700 });
     ENHANCE_ITEMS.forEach((item, i) => {
@@ -750,6 +765,8 @@ export class ForgeScene extends Phaser.Scene {
   private emptyShown = false;
   /** The strike being played is the first one today (the drain starts with it). */
   private firstStrikeToday = false;
+  /** The awakening is holding the input past a normal strike: no stamina drain meanwhile. */
+  private drainHold = false;
   // landscape: right of the rack's buy button, left of the odds panel
   // a little bigger on 2026-11-27 ("HP 칸 좀만 더 크게")
   private static readonly SB = PORTRAIT ? { x: W / 2, y: 384, w: 520, h: 28 } : { x: 722, y: 100, w: 400, h: 26 };
@@ -760,6 +777,7 @@ export class ForgeScene extends Phaser.Scene {
     this.staminaText = label(this, b.x, b.y, '', PORTRAIT ? 17 : 15, 0xffffff, { weight: 900, origin: [0.5, 0.5] }).setStroke('#0b0705', 4).setDepth(13);
     this.drainPending = 0;
     this.emptyShown = staminaLeft(this.core.state) <= 0;
+    this.drainHold = false; // a scene restart never inherits a hold
     // hand the last fraction of a second to the core whenever the forge stops (menus, evening, lobby)
     this.events.on(Phaser.Scenes.Events.PAUSE, () => this.flushDrain());
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.flushDrain());
@@ -777,7 +795,8 @@ export class ForgeScene extends Phaser.Scene {
   /** Every frame: let work time pass, move the bar, and save about once a second. */
   private tickStamina(sec: number) {
     const s = this.core.state;
-    if (s.phase !== 'day' || !staminaStarted(s) || staminaLeft(s) <= 0) {
+    // held: the awakening's extra input lock (QA 2026-11-27). Menus over the forge pause the whole scene.
+    if (this.drainHold || s.phase !== 'day' || !staminaStarted(s) || staminaLeft(s) <= 0) {
       this.drawStamina();
       return;
     }
@@ -980,6 +999,8 @@ export class ForgeScene extends Phaser.Scene {
           parts.push(g);
         }
         parts.push(new LevelBadge(this, SW / 2 - 26, -SH / 2 + 14, w.level, 17));
+        // the weapon 불사조의 모루 guards
+        if (w.id === s.phoenixTarget && treeEffects(s).phoenix.perDay > 0) parts.push(label(this, SW / 2 - 62, -SH / 2 + 14, '🔥', 16, 0xffffff, { origin: [0.5, 0.5] }));
         if (w.golden) {
           const t = label(this, -SW / 2 + 4, SH / 2 - 4, '황금', 13, 0xffd34d, { weight: 900, origin: [0, 1] });
           t.setStroke('#3a2208', 5);
@@ -1103,11 +1124,16 @@ export class ForgeScene extends Phaser.Scene {
     const parts: string[] = [];
     const te = treeEffects(sk);
     if (te.speed !== 1) parts.push(`속도 ×${te.speed.toFixed(2).replace(/0$/, '')}`);
-    if (te.miracle) parts.push(`기적 ${te.miracle}%`);
-    if (te.overheat.per && w) parts.push(`과열 +${overheatBonus(sk, w)}%p`);
-    if (te.phoenix.perDay) parts.push(`불사조 ${phoenixLeft(sk)}회`);
+    // 기적의 불꽃 / 과열 단조 act only after a SUCCESS is rolled: shown apart from the table's 대성공 % (QA 2026-11-27)
+    if ((te.miracle || te.overheat.per) && w) {
+      const heat = overheatBonus(sk, w);
+      parts.push(`성공 시 대성공 전환 ${greatConversionChance(sk, w)}%${heat ? ` (과열 +${heat}%p 포함)` : ''}`);
+    }
+    if (te.phoenix.perDay) {
+      const target = sk.weapons.find((x) => x.id === sk.phoenixTarget);
+      parts.push(`불사조 ${phoenixLeft(sk)}회 · ${target ? `보호 +${target.level}` : '보호 무기 없음'}`);
+    }
     // 운명 분열's uses are on its own button, right under this line
-    if (te.divine) parts.push(`신의 망치 ${te.divine}%`);
     if (sk.freeEnhance) parts.push('다음 강화 무료');
     this.statsText.setText(parts.length ? parts.join(' · ') : `누적 강화 ${st.enhanceAttempts}회 · 파괴 ${st.destroyed}자루 · 최고 +${st.bestLevel}`);
     this.statsText.setColor(css(parts.length ? 0xffd27a : C.dim));
@@ -1143,6 +1169,24 @@ export class ForgeScene extends Phaser.Scene {
       this.splitBtn.setLabel(st0.splitArmed ? `운명 분열 ON · ${left}회` : `운명 분열 · ${left}회`);
       this.splitBtn.setAlpha(st0.splitArmed ? 1 : 0.7);
       this.splitBtn.setEnabled(!this.animating && (st0.splitArmed || left > 0));
+    }
+    // 신의 망치: shown from the second paid rent; charges and whether the next strike uses one
+    const gh = godHammer(st0);
+    const ghOpen = godHammerUnlocked(st0);
+    this.godBtn.setVisible(ghOpen);
+    if (ghOpen) {
+      this.godBtn.setLabel(gh.armed ? `⚡ 신의 망치 ON · ${gh.charges}` : `⚡ 신의 망치 · ${gh.charges}/${godHammerCap(st0)}`);
+      this.godBtn.setAlpha(gh.armed ? 1 : 0.75);
+      this.godBtn.setEnabled(!this.animating && !st0.pendingSplit && (gh.armed || gh.charges > 0));
+    }
+    // 불사조의 모루: protect the selected weapon (one weapon at a time)
+    const ph = treeEffects(st0).phoenix.perDay > 0 && !!w;
+    this.phoenixBtn.setVisible(ph);
+    if (ph) {
+      const on = st0.phoenixTarget === w!.id;
+      this.phoenixBtn.setLabel(on ? '🔥 불사조가 지키는 중 · 해제' : '🔥 이 무기를 불사조로 보호');
+      this.phoenixBtn.setAlpha(on ? 1 : 0.75);
+      this.phoenixBtn.setEnabled(!this.animating);
     }
     // the king's next visit
     const due = rentDueDay(st0);
@@ -1182,6 +1226,48 @@ export class ForgeScene extends Phaser.Scene {
     this.sfx.click();
     this.core.dispatch({ type: 'TOGGLE_SPLIT' });
     this.toast(this.core.state.splitArmed ? '운명 분열: 다음 강화에서 결과 두 개를 보고 고릅니다' : '운명 분열을 쓰지 않습니다', DIRECTION_INFO.insure.color);
+  }
+
+  /** A line for the morning rent notice: 신의 망치 just opened, or got its charge. */
+  private godHammerNote(): string {
+    const s = this.core.state;
+    const g = godHammer(s);
+    if (!godHammerUnlocked(s)) {
+      const more = GOD_HAMMER.unlockRents - g.rentsPaid;
+      return more > 0 ? `\n\n월세를 ${more}번 더 내면 「신의 망치」가 열린다.` : '';
+    }
+    if (g.rentsPaid === GOD_HAMMER.unlockRents) return `\n\n⚡ 「신의 망치」가 열렸다! 고른 강화 한 번이 성공·대성공이면 단숨에 +5.\n충전 ${g.charges}/${godHammerCap(s)} · 월세를 낼 때마다 1회 충전`;
+    return `\n\n⚡ 신의 망치 충전 ${g.charges}/${godHammerCap(s)}`;
+  }
+
+  /** 신의 망치: arm the next strike (or take it back). */
+  private toggleGodHammer() {
+    if (this.animating) return;
+    const r = this.core.dispatch({ type: 'TOGGLE_GOD_HAMMER' });
+    if (r.type === 'godHammerBlocked') {
+      this.sfx.denied();
+      const why = {
+        locked: `${GOD_HAMMER.unlockRents}번째 월세를 내면 열립니다`,
+        empty: '충전이 없습니다 · 다음 월세를 내면 1회 충전됩니다',
+        night: '밤에는 쓸 수 없습니다',
+        split: '운명 분열 선택을 먼저 끝내세요',
+      }[r.reason];
+      this.toast(`신의 망치 · ${why}`, C.dangerHi);
+      return;
+    }
+    this.sfx.click();
+    const armed = godHammer(this.core.state).armed;
+    this.toast(armed ? '신의 망치: 다음 강화가 성공·대성공이면 +5 · 결과와 관계없이 충전 1회 사용' : '신의 망치를 쓰지 않습니다', armed ? DIRECTION_INFO.odds.color : C.mute);
+  }
+
+  /** 불사조의 모루: this weapon is the one revived if it breaks (or stop protecting it). */
+  private togglePhoenix() {
+    const w = this.selected();
+    if (this.animating || !w) return;
+    const on = this.core.state.phoenixTarget === w.id;
+    this.core.dispatch({ type: 'SET_PHOENIX_TARGET', weaponId: on ? null : w.id });
+    this.sfx.click();
+    this.toast(on ? '불사조의 모루가 아무 무기도 지키지 않습니다' : `불사조의 모루가 ${weaponName(w)} +${w.level}을(를) 지킵니다 · 하루 ${treeEffects(this.core.state).phoenix.perDay}회`, DIRECTION_INFO.insure.color);
   }
 
   private openSkills() {
@@ -1295,7 +1381,8 @@ export class ForgeScene extends Phaser.Scene {
     const r = this.core.dispatch({ type: 'BUY_WEAPON' });
     if (r.type === 'weaponBought') {
       this.sfx.coin();
-      this.selectedId = r.weapon.id;
+      // keep working on the weapon already chosen (QA 2026-11-27); only an empty choice takes the new one
+      if (!this.selected()) this.selectedId = r.weapon.id;
       this.toast(r.price > 0 ? `${weaponName(r.weapon)} 구매 · −${r.price.toLocaleString()}G · 다음 구매 ${weaponPrice(this.core.state).toLocaleString()}G` : `새 무기: ${weaponName(r.weapon)}`, C.goldHi);
       this.say(SMITH_LINES.buy);
       this.refresh();
@@ -1361,7 +1448,7 @@ export class ForgeScene extends Phaser.Scene {
     this.tryEnhance();
   }
 
-  /** 연속 강화 (skill tree): holding the button repeats the attempt until it is let go or the weapon breaks. */
+  /** Holding the 강화 button repeats the attempt until it is let go or the weapon breaks (built in since 2026-11-27). */
   private setupHoldRepeat() {
     this.holding = false;
     this.holdStarted = false;
@@ -1369,7 +1456,8 @@ export class ForgeScene extends Phaser.Scene {
       this.holding = true;
       this.holdStarted = false;
       this.time.delayedCall(380, () => {
-        if (!this.holding || this.animating || !treeEffects(this.core.state).holdRepeat) return;
+        // built in for everyone since 2026-11-27 (QA): no skill needed to hold the button
+        if (!this.holding || this.animating) return;
         this.holdStarted = true;
         this.tryEnhance();
       });
@@ -1420,8 +1508,9 @@ export class ForgeScene extends Phaser.Scene {
       } else if (res.reason === 'max-level') this.toast(`+${MAX_LEVEL}에 도달한 무기는 더 강화할 수 없습니다`);
       else if (res.reason === 'gold') {
         this.sfx.denied();
-        this.toast(`골드가 부족합니다 (강화 ${enhanceCostFor(this.core.state, w.level).toLocaleString()}G) · 무기를 팔아 골드를 마련하세요`, C.dangerHi);
-        this.say(SMITH_LINES.noGold);
+        // what the player can actually do about it (QA 2026-11-27: every weapon +0 → nothing sells)
+        this.toast(`골드가 부족합니다 (강화 ${enhanceCostFor(this.core.state, w.level).toLocaleString()}G) · ${goldRecoveryText(this.core.state)}`, C.dangerHi);
+        if (goldRecovery(this.core.state) === 'sell') this.say(SMITH_LINES.noGold); // "뭐라도 팔아야겠군" only when something sells
       } else if (res.reason === 'no-uses') this.toast('오늘은 운명 분열을 더 쓸 수 없습니다', C.dangerHi);
       else if (res.reason === 'split-pending' || res.reason === 'pending') this.showSplitChoice();
       return;
@@ -1466,6 +1555,11 @@ export class ForgeScene extends Phaser.Scene {
             this.damagePop(r.weaponBefore, r.weaponAfter);
           }
         },
+        // the awakening's extra wait does not cost stamina; the drain resumes when the input unlocks
+        onHold: (held) => {
+          if (held) this.flushDrain();
+          this.drainHold = held;
+        },
       })
       .then(() => {
         this.tweens.timeScale = 1;
@@ -1475,12 +1569,13 @@ export class ForgeScene extends Phaser.Scene {
         this.animating = false;
         this.refresh();
         // 연속 강화: keep going while the button is held and the weapon survived
-        if (this.holding && this.holdStarted && r.weaponAfter && treeEffects(this.core.state).holdRepeat) this.time.delayedCall(80, () => this.tryEnhance());
+        if (this.holding && this.holdStarted && r.weaponAfter) this.time.delayedCall(80, () => this.tryEnhance());
         this.afterEnhanceLine(r.outcome);
         if (r.protectedFrom)
           this.toast(`강화 보호석 발동 · ${r.protectedFrom === 'destroy' ? '파괴' : '하락'}을 막았습니다`, ITEMS.protect.color);
         else if (r.phoenix !== null) this.toast(`불사조의 모루 · 무기가 +${r.phoenix}으로 되살아났습니다 (오늘 남은 복구 ${phoenixLeft(this.core.state)}회)`, DIRECTION_INFO.insure.color);
         else if (r.divine) this.toast(`신의 망치 발동 · +${DIVINE_STEP}!`, DIRECTION_INFO.odds.color);
+        else if (r.godHammer) this.toast('신의 망치가 빗나갔다 · 성공이 아니어서 충전만 1회 썼습니다', C.mute);
         else if (r.miracle) this.toast('기적의 불꽃 · 성공이 대성공으로 바뀌었습니다', DIRECTION_INFO.odds.color);
         else if (r.refund > 0) this.toast(`파편 줍기 · ${r.refund.toLocaleString()}G를 돌려받았습니다`, DIRECTION_INFO.insure.color);
         else if (r.nextFree) this.toast('몰아치기 · 3연속 성공! 다음 강화는 무료', DIRECTION_INFO.speed.color);
@@ -1595,7 +1690,7 @@ export class ForgeScene extends Phaser.Scene {
       title: '왕이 월세를 걷으러 왔다',
       body: n.mercy
         ? `DAY ${n.day} 월세 ${n.amount.toLocaleString()}G를 낼 골드가 없었다.\n왕의 자비로 이번 한 번만 넘어간다. 다음엔 없다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G`
-        : `${rentPaidLine(n)}\n못 내는 날엔 대장간을 잃는다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G`,
+        : `${rentPaidLine(n)}\n못 내는 날엔 대장간을 잃는다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G${this.godHammerNote()}`,
       confirmLabel: '알겠다',
       cancelLabel: '닫기',
       onConfirm: () => undefined,

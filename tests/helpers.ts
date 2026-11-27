@@ -3,6 +3,7 @@ import type { GameState, Weapon } from '../src/core/state/types';
 import { enhance } from '../src/core/systems/enhancement';
 import type { Outcome } from '../src/config/enhancement';
 import { NIGHT_UNLOCK_DAY } from '../src/config/economy';
+import { TREE_BY_ID } from '../src/config/skillTree';
 
 /** A run past the first-enhance tutorial with the given weapons. */
 export function runWith(weapons: Partial<Weapon>[], seed = 1): GameState {
@@ -22,6 +23,19 @@ export function runWith(weapons: Partial<Weapon>[], seed = 1): GameState {
  */
 export function atNightDay(s: GameState): GameState {
   return { ...s, day: NIGHT_UNLOCK_DAY, rentDueDay: NIGHT_UNLOCK_DAY + 100, grantedDays: [...s.grantedDays, NIGHT_UNLOCK_DAY] };
+}
+
+/** A state owning the given skill-tree nodes, one weapon w1 and a spare. */
+export function withNodes(nodes: string[], w1: Partial<Weapon> = {}): GameState {
+  const s = runWith([{ level: 10, ...w1 }, {}]);
+  return { ...s, gold: 1_000_000, treeNodes: nodes };
+}
+
+/** Every node from the anvil out to `id`. */
+export function pathTo(id: string): string[] {
+  const out: string[] = [];
+  for (let n = TREE_BY_ID[id]; n && n.id !== 'root'; n = TREE_BY_ID[n.from!]) out.unshift(n.id);
+  return out;
 }
 
 /** Find an RNG seed whose next enhancement of `weaponId` gives `outcome`. */

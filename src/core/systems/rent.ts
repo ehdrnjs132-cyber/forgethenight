@@ -5,6 +5,7 @@ import { RENT } from '../../config/economy';
 import { Rng } from '../rng';
 import type { GameState, RentNotice } from '../state/types';
 import { treeEffects } from './skillTree';
+import { countRentPaid } from './godHammer';
 
 /** Base rent the king asks on `day` (before the tree's discount). */
 export function rentAmount(day: number): number {
@@ -50,11 +51,12 @@ export function collectRent(prev: GameState): { state: GameState; notice: RentNo
       ...(prev.rentPrepaidDay !== undefined ? { prepaidDay: prev.rentPrepaidDay } : {}),
     };
     const { rentPrepaidAmount: _a, rentPrepaidDay: _d, ...rest } = prev;
-    return { state: { ...rest, rng: rng.state, rentDueDay: next, lastRent: notice, rentPrepaid: false }, notice };
+    // a paid visit counts toward 신의 망치 (once per visit day, in the same state as the payment)
+    return { state: countRentPaid({ ...rest, rng: rng.state, rentDueDay: next, lastRent: notice, rentPrepaid: false }, prev.day), notice };
   }
   if (prev.gold >= amount) {
     const notice: RentNotice = { day: prev.day, amount, paid: amount, lifeLost: false };
-    return { state: { ...prev, gold: prev.gold - amount, rng: rng.state, rentDueDay: next, lastRent: notice }, notice };
+    return { state: countRentPaid({ ...prev, gold: prev.gold - amount, rng: rng.state, rentDueDay: next, lastRent: notice }, prev.day), notice };
   }
   if (mercyLeft(prev)) {
     const notice: RentNotice = { day: prev.day, amount, paid: 0, lifeLost: false, mercy: true };

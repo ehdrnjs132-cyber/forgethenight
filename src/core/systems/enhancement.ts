@@ -11,6 +11,8 @@ import { isTutorialDone } from './tutorial';
 import { consume, enhanceCostFor, isArmed, sellPrice } from './economy';
 import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
+import { DIVINE_STEP } from '../../config/forgeSkills';
+import { spendGodHammer } from './godHammer';
 
 /** Percentage-point adjustments from totems, skills and items (§16). Keep absorbs the rest. */
 export interface EnhanceMods {
@@ -121,8 +123,10 @@ export interface EnhanceResult {
   used: EnhanceItem[];
   /** 기적의 불꽃 / 과열 단조 turned a success into a great success. */
   miracle: boolean;
-  /** 신의 망치: +5. */
+  /** 신의 망치: +5 (the chosen charge landed on a success or great success). */
   divine: boolean;
+  /** A 신의 망치 charge was spent on this strike (whether or not it landed). */
+  godHammer: boolean;
   /** 불사조의 모루 revived the destroyed weapon at this level (outcome stays 'destroy'). */
   phoenix: number | null;
   /** 두 번 내려치기 rolled twice and kept the better result. */
@@ -152,9 +156,11 @@ interface Prepared {
   free: boolean;
   doubled?: boolean;
   staminaRefund: number;
+  /** An armed 신의 망치 charge was spent on this strike. */
+  godHammer?: boolean;
 }
 
-function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): Prepared {
+function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}, allowGodHammer = false): Prepared {
   const before = findWeapon(prev, weaponId)!;
   const row = effectiveRow(before.level, collectEnhanceMods(prev, before, opts.rhythm));
   const used: EnhanceItem[] = [];
@@ -176,7 +182,14 @@ function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): 
     state = s.state;
     staminaRefund = s.refund;
   }
-  return { state, before, row, rng, used, free: prev.freeEnhance === true, staminaRefund };
+  // 신의 망치: the armed charge is spent with the strike, in the same saved state as the cost and the roll
+  let god = false;
+  if (allowGodHammer && !opts.force) {
+    const g = spendGodHammer(state);
+    state = g.state;
+    god = g.used;
+  }
+  return { state, before, row, rng, used, free: prev.freeEnhance === true, staminaRefund, godHammer: god };
 }
 
 /**
@@ -189,15 +202,22 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
   const used = [...prepared.used];
   // Protection stone: a drop or destruction becomes keep, and only then is the stone spent.
   const protectedFrom = (cand.outcome === 'down' || cand.outcome === 'destroy') && isArmed(state, 'protect') ? cand.outcome : null;
-  const outcome: Outcome = protectedFrom ? 'keep' : cand.outcome;
+  let outcome: Outcome = protectedFrom ? 'keep' : cand.outcome;
   let newLevel = protectedFrom ? before.level : cand.level;
   if (protectedFrom) {
     used.push('protect');
     state = consume(state, 'protect');
   }
   const upward = outcome === 'success' || outcome === 'great';
+  // 신의 망치 (chosen one-shot): the strike rolled as usual; a success or great success lands at +5
+  const godHammer = prepared.godHammer === true && upward;
+  if (godHammer) {
+    newLevel = Math.min(MAX_LEVEL, before.level + DIVINE_STEP);
+    outcome = 'great'; // shown like the old 신의 망치: the great-success beat with its own banner
+  }
   let phoenix: number | null = null;
-  if (newLevel === null && phoenixLeft(state) > 0) {
+  // 불사조의 모루 guards only the weapon the player chose to protect (QA 2026-11-27)
+  if (newLevel === null && phoenixLeft(state) > 0 && state.phoenixTarget === before.id) {
     // 불사조의 모루: the weapon comes back (same class and element) instead of being lost
     phoenix = phoenixLevel(state, before.level);
     newLevel = phoenix;
@@ -249,8 +269,9 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
       milestone,
       protectedFrom,
       used,
-      miracle: !protectedFrom && cand.miracle,
-      divine: !protectedFrom && cand.divine,
+      miracle: !protectedFrom && !godHammer && cand.miracle,
+      divine: godHammer || (!protectedFrom && cand.divine),
+      godHammer: prepared.godHammer === true,
       phoenix,
       doubled: prepared.doubled === true,
       refund,
@@ -265,7 +286,7 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
 export function enhance(prev: GameState, weaponId: string, opts: EnhanceOptions = {}): EnhanceAttempt {
   const blocked = checkEnhance(prev, weaponId, opts);
   if (blocked) return { ok: false, state: prev, blocked };
-  const p = prepare(prev, weaponId, opts);
+  const p = prepare(prev, weaponId, opts, true);
   let cand = rollCandidate(p.state, p.before, p.row, p.rng, opts.force);
   // 두 번 내려치기: sometimes a second roll, keeping the better one (drawn only when the node is owned)
   const dbl = treeEffects(p.state).doubleRoll;
