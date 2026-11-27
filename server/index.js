@@ -136,7 +136,7 @@ app.post('/api/google', async (req, res) => {
   else {
     u = auth(req.body);
     if (u && u.google) u = null; // that profile belongs to another Google account
-    if (!u) u = { uid: newId(), name: cleanName(g.gname) || `earth ${1 + crypto.randomInt(999)}`, google: null, tokens: [], best: null, created: Date.now() };
+    if (!u) u = { uid: newId(), name: cleanName(g.gname) || `대장장이 ${1 + crypto.randomInt(999)}`, google: null, tokens: [], best: null, created: Date.now() };
     u.google = g.sub;
     store.set(`g:${g.sub}`, u.uid);
   }

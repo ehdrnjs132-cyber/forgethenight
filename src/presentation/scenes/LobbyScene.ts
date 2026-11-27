@@ -1,11 +1,10 @@
 // Lobby (user request 2026-11-19): the screen after loading, before the forge.
 // Title, account, the current run at a glance, the best weapon held, and the menu:
-// continue / ranking / replay intro / sound / install app.
+// continue / ranking / rules / sound / install app. (The intro video was removed on 2026-11-27.)
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { weaponDisplayName } from '../../config/swordNames';
 import { ELEMENT_INFO } from '../../config/weapons';
-import { INTRO } from '../../config/cinematics';
 import { STORY_SEEN_ID } from '../../config/story';
 import { C, H, W, label } from '../theme';
 import { Button } from '../ui/button';
@@ -16,7 +15,6 @@ import { Sfx } from '../audio/sfx';
 import { account } from '../../online/account';
 import { needsGoogle, openLogin, openRanking } from '../../online/ui';
 import { canOfferInstall, installApp } from '../../install';
-import type { CinematicData } from './CinematicScene';
 import { ChatBox } from '../ui/chat';
 import { duel } from '../../online/duel';
 import { myDuelInfo } from './DuelLobbyScene';
@@ -91,7 +89,7 @@ export class LobbyScene extends Phaser.Scene {
     const r = this.core.records;
     label(this, colX, cardY - 34, fresh ? '새로운 대장간' : `DAY ${s.day}  ·  ${s.gold.toLocaleString()}G`, PORTRAIT ? 28 : 26, C.text, { weight: 900, origin: [0.5, 0.5] });
     label(this, colX, cardY + 12, `최고 강화 +${r.bestLevel}  ·  최장 생존 DAY ${Math.max(r.bestDay, s.day)}`, PORTRAIT ? 18 : 17, C.goldHi, { weight: 700, origin: [0.5, 0.5] });
-    label(this, colX, cardY + 42, `도전 ${Math.max(1, r.runs)}회차  ·  밤 내기 패배 ${r.deaths}회`, PORTRAIT ? 15 : 14, C.mute, { weight: 700, origin: [0.5, 0.5] });
+    label(this, colX, cardY + 42, `도전 ${Math.max(1, r.runs)}회차  ·  투기장 패배 ${r.deaths}회`, PORTRAIT ? 15 : 14, C.mute, { weight: 700, origin: [0.5, 0.5] });
 
     // menu
     const bw = PORTRAIT ? 520 : 420;
@@ -109,12 +107,13 @@ export class LobbyScene extends Phaser.Scene {
     const half = (bw - gap) / 2;
     const bh = PORTRAIT ? 76 : 64;
     new Button(this, menuX - half / 2 - gap / 2, y, half, bh, '🏆 랭킹', { variant: 'dark', size: 22, onClick: () => void openRanking() });
-    new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '🎬 인트로', { variant: 'dark', size: 22, onClick: () => this.replayIntro() });
+    // (🎬 인트로 was here until 2026-11-27; the intro video is gone)
+    new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📖 강화 규칙', { variant: 'dark', size: 22, onClick: () => this.openRules() });
     y += bh + gap;
-    this.soundBtn = new Button(this, menuX - half / 2 - gap / 2, y, half, bh, '', { variant: 'dark', size: 22, onClick: () => this.toggleSound() });
+    const install = canOfferInstall();
+    this.soundBtn = new Button(this, install ? menuX - half / 2 - gap / 2 : menuX, y, install ? half : bw, bh, '', { variant: 'dark', size: 22, onClick: () => this.toggleSound() });
     this.refreshSound();
-    if (canOfferInstall()) new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📲 앱 설치', { variant: 'dark', size: 22, onClick: () => void installApp() });
-    else new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📖 강화 규칙', { variant: 'dark', size: 22, onClick: () => this.openRules() });
+    if (install) new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📲 앱 설치', { variant: 'dark', size: 22, onClick: () => void installApp() });
     y += bh + gap;
     new Button(this, menuX, y, bw, bh, '⚔ 온라인 결투', { variant: 'danger', size: 24, sub: '로비에 있는 사람과 골드를 걸고 실시간 대결', subSize: 13, onClick: () => this.openDuels() });
     if (!fresh) {
@@ -186,11 +185,6 @@ export class LobbyScene extends Phaser.Scene {
 
   private refreshSound() {
     this.soundBtn.setLabel?.(Sfx.globalMuted ? '🔇 소리 꺼짐' : '🔊 소리 켜짐');
-  }
-
-  private replayIntro() {
-    const data: CinematicData = { clips: INTRO, next: 'Lobby', titleCard: true, seenId: 'intro' };
-    this.scene.start('Cinematic', data);
   }
 
   private openRules() {

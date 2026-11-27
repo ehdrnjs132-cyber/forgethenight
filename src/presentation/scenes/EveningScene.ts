@@ -1,5 +1,5 @@
 // Evening (user request 2026-11-19): "다음 날" ends the day here. The sun goes down, then three choices:
-//   · 밤 내기 — the optional gamble, explained, with tonight's two rivals and the stakes
+//   · 왕의 투기장 — the optional night gamble (from DAY 20), with tonight's two rivals and the stakes
 //   · 운명의 카드 — from DAY 10: pick one of two cards and bet gold (replaced 월세 미리 내기 on 2026-11-26)
 //   · 잠자기 — the night passes and the next morning begins
 // Opens over the paused forge.
@@ -117,9 +117,10 @@ export class EveningScene extends Phaser.Scene {
     const wrap = CARD.w - pad * 2;
     const top = -h / 2;
     const big = PORTRAIT ? 1.1 : 1;
-    card.add(label(this, -CARD.w / 2 + pad, top + 22, '🌙 밤 내기', 26 * big, 0xd9b8ff, { weight: 900 }));
+    // the king's arena (2026-11-27: no more rivals from other worlds)
+    card.add(label(this, -CARD.w / 2 + pad, top + 22, '🏟 왕의 투기장', 26 * big, 0xd9b8ff, { weight: 900 }));
     card.add(
-      label(this, -CARD.w / 2 + pad, top + 64 * big, '다른 세계의 대장장이 2명이 내기를 걸어온다. 상대 무기의 단계는 싸워 봐야 안다.\n이기면 골드 ×1.5 · 지면 골드 절반.', 14 * big, C.text, { wrap, lineSpacing: 6 }),
+      label(this, -CARD.w / 2 + pad, top + 64 * big, '왕의 투기장에서 왕국의 대장장이 2명이 내기를 걸어온다. 상대 무기의 단계는 싸워 봐야 안다.\n이기면 골드 ×1.5 · 지면 골드 절반.', 14 * big, C.text, { wrap, lineSpacing: 6 }),
     );
     const rivals = tonightsRivals(s).lineup;
     let y = top + (PORTRAIT ? 160 : 170);
@@ -141,7 +142,7 @@ export class EveningScene extends Phaser.Scene {
     const win = Math.floor(s.gold * NIGHT_STAKE.winMul);
     const lose = Math.floor(s.gold * NIGHT_STAKE.loseMul);
     card.add(label(this, -CARD.w / 2 + pad, y + 4, `이기면 ${win.toLocaleString()}G · 지면 ${lose.toLocaleString()}G`, 14 * big, C.mute, { weight: 700, wrap }));
-    const btn = new Button(this, 0, h / 2 - 44, CARD.w - 40, 60, '내기에 응한다', { variant: 'danger', size: 20 * big, onClick: () => this.gamble() });
+    const btn = new Button(this, 0, h / 2 - 44, CARD.w - 40, 60, '투기장에 나간다', { variant: 'danger', size: 20 * big, onClick: () => this.gamble() });
     card.add(btn);
   }
 

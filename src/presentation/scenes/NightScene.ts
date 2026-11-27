@@ -468,7 +468,7 @@ export class NightScene extends Phaser.Scene {
     const hpText = fix(label(this, 32, 22, '', 14, C.text, { weight: 700 }));
     fix(label(this, 32, 66, name, 15, this.glowColor, { weight: 900 }));
     fix(label(this, 32, 86, `기본 피해 ${formatDamage(this.baseDamage)} · ${COMBOS[this.cls].steps.length}연타 콤보`, 12, C.mute, { weight: 700 }));
-    fix(label(this, W / 2, 20 + TITLE_Y, this.online ? `온라인 결투 · 판돈 ${this.online.bet.toLocaleString()}G` : `DAY ${this.nd.day} · 다른 세계의 대장장이`, 12, C.mute, { weight: 700, origin: [0.5, 0] }));
+    fix(label(this, W / 2, 20 + TITLE_Y, this.online ? `온라인 결투 · 판돈 ${this.online.bet.toLocaleString()}G` : `DAY ${this.nd.day} · 왕의 투기장`, 12, C.mute, { weight: 700, origin: [0.5, 0] }));
     const rivals = fix(label(this, W / 2, 46 + TITLE_Y, '', 22, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }));
     const combo = fix(label(this, W - 40, 150, '', 40, C.goldHi, { display: true, weight: 900, origin: [1, 0.5] }));
     combo.setStroke('#140a05', 8);
@@ -499,8 +499,8 @@ export class NightScene extends Phaser.Scene {
       return;
     }
     const t = label(this, W / 2, H / 2 - 70, `DAY ${this.nd.day} · 밤`, 46, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(110);
-    const s = label(this, W / 2, H / 2 - 22, `차원의 균열이 열린다 — 다른 세계의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
-    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 그들이 강화해 온 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
+    const s = label(this, W / 2, H / 2 - 22, `왕의 투기장 문이 열린다 — 왕국의 대장장이 ${this.nd.lineup.length}명`, 18, C.text, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
+    const s2 = label(this, W / 2, H / 2 + 8, this.prologue ? NARRATOR_LINES.prologueNight : '머리 위 숫자가 상대 무기의 강화 단계다', 15, 0xc9b2ff, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 60 }).setScrollFactor(0).setDepth(110);
     for (const o of [t, s, s2]) {
       o.setAlpha(0);
       this.tweens.add({ targets: o, alpha: 1, duration: 300 });
@@ -1435,7 +1435,7 @@ export class NightScene extends Phaser.Scene {
         kind: 'result',
         tone: 'victory',
         title: '내기에서 이겼습니다',
-        subtitle: `골드 ×1.5 · 다른 세계의 대장장이 ${this.kills}명을 쓰러뜨렸다`,
+        subtitle: `골드 ×1.5 · 투기장에서 대장장이 ${this.kills}명을 쓰러뜨렸다`,
         rows,
         note: notes.join('\n'),
         buttonLabel: r.cleared ? '대장간으로' : `DAY ${r.day} 시작`,

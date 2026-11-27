@@ -19,17 +19,15 @@ describe('day 1 is a normal, guided day (user decision 2026-11-19)', () => {
     expect(game.dispatch({ type: 'SLEEP' }).type).toBe('slept');
   });
 
-  it('rivals are named "earth N" with N in 1..999', () => {
+  it('rivals are the kingdom’s smiths with a title and a name (no "earth N" since 2026-11-27)', () => {
     const game = new GameCore(new MemoryStorage(), 21);
     game.state = atNightDay(game.state); // the night battle is offered from DAY 20
     game.dispatch({ type: 'EQUIP', weaponId: game.state.weapons[0].id });
     const r = game.dispatch({ type: 'START_NIGHT' });
     if (r.type !== 'nightStarted') throw new Error();
     for (const d of r.lineup) {
-      const m = d.name.match(/^earth (\d+)$/);
-      expect(m).not.toBeNull();
-      expect(Number(m![1])).toBeGreaterThanOrEqual(1);
-      expect(Number(m![1])).toBeLessThanOrEqual(999);
+      expect(d.name).toMatch(/^\S+( \S+)? \S+$/);
+      expect(d.name).not.toMatch(/earth/);
     }
   });
 });

@@ -1,5 +1,6 @@
-// Doppelganger generation (reboot spec §3.3, §3.6): each blacksmith from another world really forges
-// its weapon with the player's own enhancement table, and keeps an honest record of how it got there.
+// Rival generation (reboot spec §3.3, §3.6): each rival smith at the king's arena really forges its
+// weapon with the player's own enhancement table, and keeps an honest record of how it got there.
+// (They were "doppelgangers from other worlds" until 2026-11-27; the code keeps the old type names.)
 import { ENHANCE_TABLE, type Outcome } from '../../config/enhancement';
 import { CLASS_WORD, ELEMENT_WORD, TEMPERAMENTS, nightPlan, type Temperament } from '../../config/doppelganger';
 import { DROP_CLASSES, ELEMENTS, MAX_LEVEL, type Element, type WeaponClass } from '../../config/weapons';
@@ -7,6 +8,14 @@ import { weaponDisplayName } from '../../config/swordNames';
 import { Rng } from '../rng';
 import { PROLOGUE_ENABLED } from './prologue';
 import { levelAfter, rollOutcome } from './enhancement';
+
+const RIVAL_TITLES = ['떠돌이', '붉은 수염', '강철팔', '외눈', '늙은', '젊은', '북부의', '항구의', '광산의', '사막의'] as const;
+const RIVAL_NAMES = ['브론', '토르가', '하겐', '멜', '도란', '카이', '루크', '이르마', '베른', '오스', '그레타', '발도', '니엘', '람', '시그', '펠릭', '레나', '바크', '우르', '에다'] as const;
+
+/** A rival smith's name from one draw 0..998, e.g. "강철팔 하겐". */
+export function rivalName(n: number): string {
+  return `${RIVAL_TITLES[n % RIVAL_TITLES.length]} ${RIVAL_NAMES[Math.floor(n / RIVAL_TITLES.length) % RIVAL_NAMES.length]}`;
+}
 
 /** What the defeat card shows (spec §3.6). Counts are for the weapon it brought, plus weapons it lost. */
 export interface ForgeRecord {
@@ -107,8 +116,9 @@ export function generateNight(day: number, seed: number): { doppelgangers: Doppe
     const cls = rng.pick(DROP_CLASSES);
     const element = rng.pick(ELEMENTS);
     const { level, record } = forgeWeapon(rng, temperament, plan.attemptBudget, plan.expectedLevel, plan.weapons);
-    // User decision 2026-11-18: every rival is "earth N", N random 1..999 (the world it came from).
-    const name = `earth ${1 + rng.int(999)}`;
+    // 2026-11-27: the other-world story is gone; rivals are the kingdom's smiths at the king's arena.
+    // Same single draw as the old "earth N" (so tonight's lineup is unchanged), mapped to a name.
+    const name = rivalName(rng.int(999));
     list.push({ id: `d${day}-${i}`, name, temperament, weapon: { cls, element, level }, record });
   }
   return { doppelgangers: list, rng: rng.state };

@@ -4,8 +4,6 @@ import { swordFormTexture, weaponImagePath, weaponTexture } from '../weaponArt';
 import type { GameCore } from '../../core/game';
 import { PORTRAIT } from '../layout';
 import { H, W } from '../theme';
-import { INTRO } from '../../config/cinematics';
-import type { CinematicData } from './CinematicScene';
 
 /** Processed world art in public/assets/world (see tools/art/process-assets.ts). */
 export const WORLD_ART = [
@@ -125,11 +123,7 @@ export class BootScene extends Phaser.Scene {
       const summary = core.notice.summary;
       core.notice = null;
       this.scene.start('GameOver', { summary, reason: 'closed' });
-    } else if (core && !core.hasSeen('intro') && !new URLSearchParams(location.search).has('nointro')) {
-      // first launch: the story intro, then the title card, then DAY 1 (spec PART 8)
-      const data: CinematicData = { clips: INTRO, next: 'Lobby', titleCard: true, seenId: 'intro' };
-      this.scene.start('Cinematic', data);
-    } else this.scene.start('Lobby');
+    } else this.scene.start('Lobby'); // the intro video was removed on 2026-11-27 (its other-world story is gone)
   }
 
   /** Starter hammer, drawn horizontally like the weapon images (head on the right). */
