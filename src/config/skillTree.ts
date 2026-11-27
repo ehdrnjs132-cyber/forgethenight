@@ -164,17 +164,22 @@ export const SECTOR_DEG: Record<Direction, number> = { odds: -90, speed: -18, st
  * Distance of ring 1 from the anvil, and between rings, in px. Twice as many rings since 2026-11-27 (a star
  * was added between every two), so the step is tighter.
  */
-export const RING_PX = { first: 110, step: 46 } as const;
+export const RING_PX = { first: 110, step: 44 } as const;
+/** Rings per step of the original layout: 3 since 2026-11-27 (two new stars on every link; it was 2, before that 1). */
+export const RING_SCALE = 3;
 /**
  * Price of a star: grows with the ring; big stars cost three small ones; the final star of each sector
  * three times more again (2026-11-27: "마지막 단계는 더욱 비싸지겠지"). The growth per ring is √1.62, so a
  * star that moved from ring r to ring 2r keeps the price it had.
  */
-export const COST = { base: 150, growth: Math.sqrt(1.62), majorMul: 3, finalMul: 1.2 } as const;
+// 2026-11-27 ("후반에 갈수록 가격 갭이 좀 더 커지게"): the growth itself grows toward the edge. Per step of the
+// original layout the price rises ×1.45 near the anvil and ×1.9 at the edge (it used to be ×1.62 everywhere).
+export const COST = { base: 150, rate: 0.36, curve: 0.014, majorMul: 3, finalMul: 1.2 } as const;
 
 const nice = (v: number) => (v < 1_000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100);
 export function starCost(ring: number, major: boolean, final = false): number {
-  return nice(COST.base * Math.pow(COST.growth, ring - 2) * (major ? COST.majorMul : 1) * (final ? COST.finalMul : 1));
+  const t = ring / RING_SCALE - 1;
+  return nice(COST.base * Math.exp(COST.rate * t + COST.curve * t * t) * (major ? COST.majorMul : 1) * (final ? COST.finalMul : 1));
 }
 
 /** The last star of each sector: the goal at the edge of the disc. */
@@ -274,15 +279,17 @@ function sector(dir: Direction, specs: readonly Spec[]): TreeNode[] {
   let notable = 0;
   const bigIds = new Set<string>(['root']);
   for (const [id, from, oldRing, ang, s] of specs) {
-    const ring = oldRing * 2;
-    const p = at.get(from) ?? { ring: ring - 2, ang };
+    const ring = oldRing * RING_SCALE;
+    const p = at.get(from) ?? { ring: ring - RING_SCALE, ang };
     const pAng = from === 'root' ? ang : p.ang;
-    const midRing = Math.max(1, Math.round((p.ring + ring) / 2));
-    // a notable never sits right next to a big star, on either end of its link (they would touch)
-    const bigEnd = !Array.isArray(s) || bigIds.has(from);
-    const between: Minor | Notable = NOTABLE_RINGS.has(oldRing) && !bigEnd ? NOTABLES[dir][notable++ % NOTABLES[dir].length] : MID[dir][mid++ % MID[dir].length];
+    const step = (k: number) => Math.max(k, Math.round(p.ring + ((ring - p.ring) * k) / 3));
+    // the star next to the spec may be a notable, but never right beside a big star (they would touch)
+    const between: Minor | Notable = NOTABLE_RINGS.has(oldRing) && Array.isArray(s) ? NOTABLES[dir][notable++ % NOTABLES[dir].length] : MID[dir][mid++ % MID[dir].length];
+    const near: Minor = MID[dir][mid++ % MID[dir].length];
     if (!Array.isArray(s)) bigIds.add(id);
-    nodes.push(place(`${id}m`, midRing, (pAng + ang) / 2, between, from));
+    // 2026-11-27 ("스킬들 1.5배"): a second new star on every link, next to the parent (`<id>n`)
+    nodes.push(place(`${id}n`, step(1), pAng + (ang - pAng) / 3, near, from));
+    nodes.push(place(`${id}m`, step(2), pAng + ((ang - pAng) * 2) / 3, between, `${id}n`));
     nodes.push(place(id, ring, ang, s, `${id}m`, FINAL_STARS.has(id)));
     at.set(id, { ring, ang });
   }

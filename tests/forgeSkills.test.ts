@@ -97,10 +97,15 @@ describe('star disc shape', () => {
       }
   });
 
-  it('twice the stars of the 2026-11-26 disc: a new star on every link, named mid-tier stars, the same finals (2026-11-27)', () => {
-    expect(TREE.length).toBe(2 * 108 + 1);
-    for (const n of TREE) if (n.id !== 'root' && !TREE_BY_ID[n.id.slice(0, -1)]) expect(TREE_BY_ID[`${n.id}m`], n.id).toBeDefined();
-    expect(TREE.filter((n) => n.major && n.id.endsWith('m') && TREE_BY_ID[n.id.slice(0, -1)]).length).toBeGreaterThanOrEqual(10);
+  it('three times the stars of the 2026-11-26 disc: two new stars on every link, named mid-tier stars, the same finals (2026-11-27)', () => {
+    // 2026-11-27: doubled, then 1.5× again ("스킬들 1.5배 많이"): 108 → 216 → 324 stars around the anvil
+    expect(TREE.length).toBe(3 * 108 + 1);
+    for (const n of TREE) {
+      if (n.id === 'root' || TREE_BY_ID[n.id.slice(0, -1)]) continue;
+      expect(TREE_BY_ID[`${n.id}m`]?.from, n.id).toBe(`${n.id}n`);
+      expect(n.from).toBe(`${n.id}m`);
+    }
+    expect(TREE.filter((n) => n.major && n.id.endsWith('m') && TREE_BY_ID[n.id.slice(0, -1)]).length).toBeGreaterThanOrEqual(15);
     // the finals are still the end of their lines, and the priciest stars of the disc
     for (const id of FINAL_STARS) {
       expect(TREE.some((n) => n.from === id), id).toBe(false);
@@ -122,29 +127,29 @@ describe('star disc shape', () => {
   it('buyable stars are the ones next to an owned star', () => {
     const s = withNodes([]);
     const visible = TREE.filter((n) => nodeVisible(s, n)).map((n) => n.id).sort();
-    expect(visible).toEqual(['gd1m', 'in1m', 'od1m', 'root', 'sp1m', 'st1m']);
+    expect(visible).toEqual(['gd1n', 'in1n', 'od1n', 'root', 'sp1n', 'st1n']);
   });
 
   it('a star is bought once, only after the one it grows from, with gold', () => {
     const s = { ...withNodes([]), gold: 200 };
-    expect(checkBuyNode(s, 'od1')).toBe('locked'); // grows from od1m now
-    const a = buyNode(s, 'od1m');
+    expect(checkBuyNode(s, 'od1m')).toBe('locked'); // grows from od1n now
+    const a = buyNode(s, 'od1n');
     expect(a.ok).toBe(true);
     if (!a.ok) return;
-    expect(a.state.gold).toBe(200 - TREE_BY_ID.od1m.cost);
-    expect(checkBuyNode(a.state, 'od1m')).toBe('owned');
-    expect(checkBuyNode({ ...a.state, gold: 0 }, 'od1')).toBe('gold');
+    expect(a.state.gold).toBe(200 - TREE_BY_ID.od1n.cost);
+    expect(checkBuyNode(a.state, 'od1n')).toBe('owned');
+    expect(checkBuyNode({ ...a.state, gold: 0 }, 'od1m')).toBe('gold');
     expect(checkBuyNode({ ...a.state, phase: 'night' }, 'sp1')).toBe('night');
   });
 
   it('stars are learned only after sunset: from the forge the tree is view-only (user 2026-11-27)', () => {
     const s = { ...withNodes([]), gold: 10_000 };
-    expect(checkBuyNode(s, 'od1m', false)).toBe('day');
-    expect(buyNode(s, 'od1m', false)).toEqual({ ok: false, reason: 'day' });
-    expect(checkBuyNode(s, 'od1m', true)).toBeNull();
+    expect(checkBuyNode(s, 'od1n', false)).toBe('day');
+    expect(buyNode(s, 'od1n', false)).toEqual({ ok: false, reason: 'day' });
+    expect(checkBuyNode(s, 'od1n', true)).toBeNull();
     const core = new GameCore(new MemoryStorage(), 3);
     core.state = { ...core.state, gold: 500 };
-    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1m' })).toEqual({ type: 'nodeBlocked', reason: 'day' });
+    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1n' })).toEqual({ type: 'nodeBlocked', reason: 'day' });
     expect(core.state.gold).toBe(500);
   });
 
@@ -152,27 +157,27 @@ describe('star disc shape', () => {
     const storage = new MemoryStorage();
     const core = new GameCore(storage, 3);
     core.state = { ...core.state, gold: 500 };
-    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1m', evening: true }).type).toBe('nodeBought');
-    expect(new SaveManager(storage).loadRun().state!.treeNodes).toEqual(['gd1m']);
+    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1n', evening: true }).type).toBe('nodeBought');
+    expect(new SaveManager(storage).loadRun().state!.treeNodes).toEqual(['gd1n']);
   });
 });
 
 describe('✦ odds', () => {
   it('small stars shift the row by 0.5%p, the new ones between them by 0.25%p, notables by 1.5%p', () => {
-    // od1m +0.25 · od1 +0.5 · od2m −0.25 destroy · od2 −0.5 destroy · od3m +0.25 great · od3 +0.5 · 정밀한 손 +1.5 · od5 +0.5
+    // twelve stars to od5: success 0.25 + 0.5 + 0.25 + 0.5 + 1.5 (정밀한 손) + 0.5, destroy 0.25 + 0.5 + 0.25
     const s = withNodes(pathTo('od5'));
     const w = s.weapons[0];
     const base = effectiveRow(w.level);
     const row = effectiveRow(w.level, collectEnhanceMods(s, w));
-    expect(row.success).toBeCloseTo(base.success + 3.25, 6);
-    expect(row.destroy).toBeCloseTo(base.destroy - 0.75, 1);
+    expect(row.success).toBeCloseTo(base.success + 3.5, 6);
+    expect(row.destroy).toBeCloseTo(base.destroy - 1, 1);
   });
 
-  it('the whole sector adds up to +12.25%p success, −9%p destroy, +7%p great (대장장이 신의 손 included)', () => {
+  it('the whole sector adds up to +14%p success, −11%p destroy, +8.75%p great (대장장이 신의 손 included)', () => {
     const e = treeEffects(withNodes(sectorNodes('odds')));
-    expect(e.success).toBeCloseTo(12.25, 6);
-    expect(e.destroy).toBeCloseTo(9, 6);
-    expect(e.great).toBeCloseTo(7, 6);
+    expect(e.success).toBeCloseTo(14, 6);
+    expect(e.destroy).toBeCloseTo(11, 6);
+    expect(e.great).toBeCloseTo(8.75, 6);
     const hand = treeEffects(withNodes(['divine']));
     expect(hand).toMatchObject({ success: 5, great: 2, destroy: 3, godHammerCap: 1 });
   });
@@ -210,13 +215,13 @@ describe('⚡ speed', () => {
     expect(BASE_SPEED).toBe(0.5);
     expect(treeEffects(withNodes([])).speed).toBe(0.5);
     expect(treeEffects(withNodes(['sp1'])).speed).toBeCloseTo(0.55, 6);
-    expect(treeEffects(withNodes(['sp1m'])).speed).toBeCloseTo(0.53, 6); // the new stars between: +3%
-    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(0.95, 6); // crosses 단련된 팔 and 숙련된 손목
+    expect(treeEffects(withNodes(['sp1n'])).speed).toBeCloseTo(0.53, 6); // the new stars between: +3%
+    expect(treeEffects(withNodes(pathTo('sp5'))).speed).toBeCloseTo(1.19, 6); // crosses 단련된 팔 and 숙련된 손목
     expect(treeEffects({ ...withNodes([]), rentPrepaid: true }).speed).toBeCloseTo(0.5, 6);
     // 단련된 팔 (was 연속 강화 until 2026-11-27: holding the button is built in now) adds +10%
-    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.79, 6);
+    expect(treeEffects(withNodes(pathTo('hold'))).speed).toBeCloseTo(0.88, 6);
     expect(treeEffects(withNodes(pathTo('hold'))).holdRepeat).toBe(false);
-    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(2.04, 6);
+    expect(treeEffects(withNodes(sectorNodes('speed'))).speed).toBeCloseTo(2.7, 6);
   });
 
   it('리듬 adds success only when the attempt is quick', () => {
@@ -305,9 +310,9 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
     const all = withNodes(sectorNodes('stamina'));
     const e = treeEffects(all);
     expect(staminaMax(all)).toBe(1000);
-    expect(e.drainCut).toBeCloseTo(0.95, 6);
+    expect(e.drainCut).toBeCloseTo(1.37, 6);
     expect(drainRate(all)).toBeCloseTo(STAMINA.drainPerSec * (1 - STAMINA.maxCut), 6);
-    expect(e.staminaSave).toBe(24);
+    expect(e.staminaSave).toBe(37);
     expect(e.secondWind).toBe(30);
     expect(workSecondsLeft(all)).toBeGreaterThan(workSecondsLeft(withNodes([])) * 15);
   });
@@ -344,11 +349,11 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
 
 describe('◆ gold', () => {
   it('sale bonus and cost cuts in 5% steps', () => {
-    // gd1m +3% sell · gd1 +5% · gd2m −3% cost · gd2 −5% cost · gd3m +3% sell · gd3 +5%
+    // nine stars to gd3: sale 3 + 5 + 3 + 3 + 5 = +19%, cost 3 + 3 + 5 + 3 = −14%
     const s = withNodes(pathTo('gd3'));
     expect(sellPrice(s, 10)).toBeGreaterThan(sellPrice(withNodes([]), 10));
-    expect(treeEffects(s).sell).toBeCloseTo(0.16, 6);
-    expect(enhanceCostFor(s, 10)).toBe(Math.max(1, Math.round(enhanceCost(10) * 0.92)));
+    expect(treeEffects(s).sell).toBeCloseTo(0.19, 6);
+    expect(enhanceCostFor(s, 10)).toBe(Math.max(1, Math.round(enhanceCost(10) * 0.86)));
     expect(sellPrice(s, 0)).toBe(0);
   });
 
