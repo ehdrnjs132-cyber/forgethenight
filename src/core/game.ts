@@ -6,7 +6,7 @@ import { SaveManager, type LoadSource, type StorageLike } from './save/save';
 import { beginSplit, chooseSplit, enhance, type EnhanceOptions, type EnhanceResult, type SplitBlock } from './systems/enhancement';
 import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } from './systems/weapons';
 import { drainStamina, fateSplitLeft, staminaLeft } from './systems/forgeSkills';
-import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
+import { buyNode, resetTree, treeEffects, type NodeBuyBlock, type TreeResetBlock } from './systems/skillTree';
 import { collectRent } from './systems/rent';
 import { pickPerk, rerollPerks, type PerkBlock } from './systems/rentPerks';
 import { markMerchantTalk, merchantTalkDue } from './systems/merchantTalk';
@@ -52,6 +52,8 @@ export type Action =
   | { type: 'PLAY_TIME'; seconds: number }
   /** `evening`: bought from the evening screen. Stars cannot be learned in the forge (user 2026-11-27). */
   | { type: 'BUY_NODE'; id: string; evening?: boolean }
+  /** 스킬 초기화 서적: forget every star, get the gold back (from the evening screen, like learning). */
+  | { type: 'RESET_TREE'; evening?: boolean }
   /** 운명의 카드: the chosen card and the bet (2026-11-26; replaces paying the rent early). */
   | { type: 'CARD_BET'; pick: 0 | 1; bet: number }
   /** 운명의 무기 카드 (DAY 30+): the chosen weapons at stake. */
@@ -96,6 +98,8 @@ export type ActionResult =
   | { type: 'godHammerBlocked'; reason: GodHammerBlock }
   | { type: 'skillsReset'; refunded: number }
   | { type: 'resetBlocked'; reason: ResetBlock }
+  | { type: 'treeReset'; refunded: number }
+  | { type: 'treeResetBlocked'; reason: TreeResetBlock }
   | { type: 'perkPicked'; id: string; level: number }
   | { type: 'perksRerolled'; cost: number }
   | { type: 'perkBlocked'; reason: PerkBlock }
@@ -434,6 +438,13 @@ export class GameCore {
         this.commit(r.state);
         this.emit('changed', this.state);
         return { type: 'perksRerolled', cost: r.cost };
+      }
+      case 'RESET_TREE': {
+        const r = resetTree(this.state, action.evening === true);
+        if (!r.ok) return { type: 'treeResetBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'treeReset', refunded: r.refunded };
       }
       case 'BUY_NODE': {
         const r = buyNode(this.state, action.id, action.evening === true);

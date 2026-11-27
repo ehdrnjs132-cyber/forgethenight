@@ -164,6 +164,8 @@ export interface GameState {
   forgeSkills?: Partial<Record<string, number>>;
   /** Skill tree nodes bought (config/skillTree.ts; absent = none). */
   treeNodes?: string[];
+  /** Gold paid for the stars in treeNodes (스킬 초기화 서적 gives it back; absent in older saves = estimated). */
+  treeSpent?: number;
   /** 몰아치기: the next enhancement costs nothing. */
   freeEnhance?: boolean;
   /** 왕의 자비 already used this run. */

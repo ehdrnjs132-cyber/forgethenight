@@ -3,6 +3,8 @@
 import { FINAL_STARS, TREE, TREE_BY_ID, baseEffects, starPrice, type TreeEffects, type TreeNode } from '../../config/skillTree';
 import type { GameState } from '../state/types';
 import { applyPerks } from '../../config/rentPerks';
+import { consume, itemCount } from './economy';
+import { godHammerCap } from './godHammer';
 
 export function ownsNode(state: GameState, id: string): boolean {
   return id === 'root' || (state.treeNodes ?? []).includes(id);
@@ -61,7 +63,44 @@ export function buyNode(prev: GameState, id: string, atEvening = true): { ok: tr
   const block = checkBuyNode(prev, id, atEvening);
   if (block) return { ok: false, reason: block };
   const cost = nodeCost(prev, id);
-  return { ok: true, state: { ...prev, gold: prev.gold - cost, treeNodes: [...(prev.treeNodes ?? []), id] }, cost };
+  return { ok: true, state: { ...prev, gold: prev.gold - cost, treeNodes: [...(prev.treeNodes ?? []), id], treeSpent: treeSpent(prev) + cost }, cost };
+}
+
+/**
+ * Gold paid for the owned stars. Saves from before 2026-11-27 did not keep it: then each line's stars are
+ * priced in tree order at today's per-line prices (stars given free by the migration count too).
+ */
+export function treeSpent(state: GameState): number {
+  if (state.treeSpent !== undefined) return state.treeSpent;
+  const owned = new Set(state.treeNodes ?? []);
+  const perLine = new Map<string, number>();
+  let sum = 0;
+  for (const n of TREE) {
+    if (n.id === 'root' || !owned.has(n.id)) continue;
+    const k = (perLine.get(n.dir) ?? 0) + 1;
+    perLine.set(n.dir, k);
+    sum += starPrice(k, n.major, FINAL_STARS.has(n.id));
+  }
+  return sum;
+}
+
+export type TreeResetBlock = 'no-book' | 'nothing' | 'night' | 'day';
+
+/**
+ * 스킬 초기화 서적 (user 2026-11-27: "Refund tree gold"): every star is forgotten and all the gold paid for
+ * them comes back; one book is used. Like learning, only after sunset (`atEvening`).
+ */
+export function resetTree(prev: GameState, atEvening = true): { ok: true; state: GameState; refunded: number } | { ok: false; reason: TreeResetBlock } {
+  if (prev.phase !== 'day') return { ok: false, reason: 'night' };
+  if (!atEvening) return { ok: false, reason: 'day' };
+  if (itemCount(prev, 'resetBook') <= 0) return { ok: false, reason: 'no-book' };
+  if (ownedCount(prev) === 0) return { ok: false, reason: 'nothing' };
+  const refunded = treeSpent(prev);
+  let state: GameState = consume({ ...prev, gold: prev.gold + refunded, treeNodes: [], treeSpent: 0, splitArmed: false }, 'resetBook');
+  // a 신의 망치 charge above the cap the tree gave goes (the charges themselves came from rent)
+  const g = state.godHammer;
+  if (g && g.charges > godHammerCap(state)) state = { ...state, godHammer: { ...g, charges: godHammerCap(state) } };
+  return { ok: true, state, refunded };
 }
 
 /** Something on the tree can be bought right now (the forge's button pulses). */

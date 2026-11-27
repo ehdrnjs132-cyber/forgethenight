@@ -6,7 +6,9 @@
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { DIRECTION_INFO, RING_PX, SECTOR_DEG, TREE, TREE_BY_ID, type Direction, type TreeNode } from '../../config/skillTree';
-import { checkBuyNode, nodeCost, nodeVisible, ownedCount, ownsNode, type NodeBuyBlock } from '../../core/systems/skillTree';
+import { checkBuyNode, nodeCost, nodeVisible, ownedCount, ownsNode, treeSpent, type NodeBuyBlock } from '../../core/systems/skillTree';
+import { itemCount } from '../../core/systems/economy';
+import type { ModalData } from './ModalScene';
 import { C, H, W, css, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
@@ -200,6 +202,12 @@ export class SkillScene extends Phaser.Scene {
       sub: PORTRAIT ? undefined : 'P',
       onClick: () => this.openPerks(),
     }).setDepth(5);
+    // 스킬 초기화 서적 (user 2026-11-27: refunds the gold paid for the stars), next to it
+    this.resetBtn = new Button(this, MAP_W - (PORTRAIT ? 120 : 110), TOP_H + (PORTRAIT ? 34 : 28) + (PORTRAIT ? 60 : 50), PORTRAIT ? 220 : 200, PORTRAIT ? 50 : 40, '', {
+      variant: 'dark',
+      size: PORTRAIT ? 16 : 14,
+      onClick: () => this.askReset(),
+    }).setDepth(5);
 
     // detail panel
     const pg = this.add.graphics();
@@ -310,6 +318,7 @@ export class SkillScene extends Phaser.Scene {
   private refresh() {
     const s = this.core.state;
     this.goldText.setText(`${s.gold.toLocaleString()} G`);
+    if (this.resetBtn) this.refreshReset();
     this.countText.setText(`배운 별 ${ownedCount(s)} / ${TREE.length - 1} · 이어진 별만 배울 수 있습니다`);
     this.buyable = new Set();
     // lines first: learned ones glow warm white, the rest are faint threads
@@ -427,6 +436,45 @@ export class SkillScene extends Phaser.Scene {
   }
 
   private perkWin: Phaser.GameObjects.Container | null = null;
+  private resetBtn!: Button;
+
+  private refreshReset() {
+    const s = this.core.state;
+    const books = itemCount(s, 'resetBook');
+    this.resetBtn.setLabel(`📕 초기화 · 서적 ${books}권`);
+    this.resetBtn.setEnabled(books > 0 && ownedCount(s) > 0 && this.from === 'Evening');
+  }
+
+  /** Forget every star and get the gold back, after a confirm. */
+  private askReset() {
+    const s = this.core.state;
+    if (itemCount(s, 'resetBook') <= 0 || ownedCount(s) === 0) return;
+    if (this.from !== 'Evening') {
+      this.sfx.denied();
+      return;
+    }
+    const refund = treeSpent(s);
+    const data: ModalData = {
+      kind: 'confirm',
+      returnTo: 'Skills',
+      danger: true,
+      title: '스킬트리를 초기화할까?',
+      body: `배운 별 ${ownedCount(s)}개를 모두 지우고 ${refund.toLocaleString()}G를 돌려받는다.\n스킬 초기화 서적 1권을 쓴다. 왕의 하사품은 그대로 남는다.`,
+      confirmLabel: '초기화',
+      cancelLabel: '그만두기',
+      onConfirm: () => {
+        const r = this.core.dispatch({ type: 'RESET_TREE', evening: true });
+        if (r.type !== 'treeReset') return;
+        this.sfx.coin();
+        this.refresh();
+        const t = label(this, MAP_CX, MAP_CY, `+${r.refunded.toLocaleString()}G 돌려받았다`, PORTRAIT ? 30 : 26, C.goldHi, { weight: 900, origin: [0.5, 0.5] }).setDepth(50).setStroke('#000', 6);
+        this.tweens.add({ targets: t, y: MAP_CY - 50, alpha: 0, delay: 900, duration: 600, onComplete: () => t.destroy() });
+      },
+    };
+    this.scene.launch('Modal', data);
+    this.scene.bringToTop('Modal'); // Modal is registered before Skills, so it would draw underneath
+    this.scene.pause();
+  }
 
   /** The 왕의 하사품 picked this run, rarest first; they are part of the run and go with it. */
   private openPerks() {
