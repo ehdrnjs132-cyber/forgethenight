@@ -58,6 +58,25 @@ export interface DailyCounters {
   secondWind?: number;
   /** The first strike of the day was made, so stamina is draining (2026-11-26). */
   staminaStarted?: boolean;
+  /** Today's forge record for the end-of-day summary (2026-11-27). Absent = nothing done yet. */
+  log?: DayLog;
+}
+
+/** What happened at the anvil today (the evening's summary). */
+export interface DayLog {
+  attempts: number;
+  great: number;
+  success: number;
+  keep: number;
+  down: number;
+  destroy: number;
+  /** Gold from weapons sold today. */
+  earned: number;
+  /** Gold spent on strikes today. */
+  spent: number;
+  sold: number;
+  /** The highest weapon reached by a strike today (its look, for the showcase). */
+  best: { level: number; element: Element; cls: WeaponClass; golden?: boolean } | null;
 }
 
 /** 신의 망치 (chosen one-shot): rents paid, charges held, whether the next strike uses one. */

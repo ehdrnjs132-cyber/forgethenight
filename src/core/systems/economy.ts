@@ -7,6 +7,7 @@ import { findWeapon, removeWeapon } from './weapons';
 import { skillTotals } from './skills';
 import { treeEffects } from './skillTree';
 import { GOLDEN_SELL_MUL } from '../../config/skillTree';
+import { logSale } from './dayLog';
 
 /** §14 price, log-interpolated between table rows and rounded to a readable number. */
 export function salePrice(level: number): number {
@@ -42,13 +43,16 @@ export function sell(prev: GameState, weaponId: string): SellAttempt {
   return {
     ok: true,
     price,
-    state: {
-      ...state,
-      gold: prev.gold + price,
-      // A sold weapon can no longer be brought back by the time stone.
-      lastEnhance: null,
-      stats: { ...state.stats, sold: state.stats.sold + 1, goldEarned: state.stats.goldEarned + price },
-    },
+    state: logSale(
+      {
+        ...state,
+        gold: prev.gold + price,
+        // A sold weapon can no longer be brought back by the time stone.
+        lastEnhance: null,
+        stats: { ...state.stats, sold: state.stats.sold + 1, goldEarned: state.stats.goldEarned + price },
+      },
+      price,
+    ),
   };
 }
 

@@ -62,6 +62,7 @@ export class BootScene extends Phaser.Scene {
     if (PORTRAIT) this.load.image('art-forge_bg_portrait', 'assets/world/forge_bg_portrait.jpg');
     // the dwarf kingdom behind the evening screen (2026-11-27)
     this.load.image('art-kingdom_dusk', 'assets/world/kingdom_dusk.jpg');
+    this.load.image('art-kingdom_night', 'assets/world/kingdom_night.jpg');
     // Higgsfield video → sprite sheets (tools/art/process-anims.ts). The manifest lists what exists.
     this.load.json('anim-manifest', 'assets/anim/manifest.json');
     this.load.once('filecomplete-json-anim-manifest', (_k: string, _t: string, data: AnimSheet[]) => {

@@ -13,6 +13,7 @@ import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 import { DIVINE_STEP } from '../../config/forgeSkills';
 import { spendGodHammer } from './godHammer';
+import { logOutcome, logStrike } from './dayLog';
 
 /** Percentage-point adjustments from totems, skills and items (§16). Keep absorbs the rest. */
 export interface EnhanceMods {
@@ -174,6 +175,7 @@ function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}, a
     stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1, goldSpentEnhancing: prev.stats.goldSpentEnhancing + cost },
   };
   for (const item of used) state = consume(state, item);
+  state = logStrike(state, cost); // today's record (the evening summary)
   const rng = new Rng(prev.rng);
   // the strike starts the day's stamina drain (the scripted prologue strikes do not)
   let staminaRefund = 0;
@@ -256,6 +258,7 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
   // 몰아치기: every third success in a row makes the next attempt free
   const nextFree = t.comboFree && after !== null && upward && phoenix === null && (after.streak ?? 0) > 0 && (after.streak ?? 0) % 3 === 0;
   if (nextFree) state = { ...state, freeEnhance: true };
+  state = logOutcome(state, outcome, after); // today's record (the evening summary)
   const stageChanged = after !== null && appearanceStage(after.level) !== appearanceStage(before.level);
   const milestone = after && phoenix === null ? milestoneCrossed(before.level, after.level) : null;
   return {

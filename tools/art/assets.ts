@@ -43,6 +43,18 @@ export const ASSETS: AssetSpec[] = [
       `${STYLE_V2} No characters, no text, no logo.`,
   },
   {
+    // the end-of-day screen, blurred behind the summary (user request 2026-11-27: "배경은 밤그림")
+    key: 'kingdom_night',
+    aspect: '16:9',
+    transparent: false,
+    refs: ['kingdom_dusk'],
+    prompt:
+      'The exact same dwarven mountain kingdom scene as the reference image, same composition, same buildings, same balcony and braziers, ' +
+      'but late at night: a deep blue and indigo sky full of stars and a bright full moon high in the upper middle, cool silver moonlight on the stone, ' +
+      'the many little windows, gates, braziers and forge chimneys glowing warm amber against the dark, a soft mist in the valley. ' +
+      `${STYLE_V2} No characters, no text, no logo.`,
+  },
+  {
     key: 'forge_bg',
     aspect: '16:9',
     transparent: false,
