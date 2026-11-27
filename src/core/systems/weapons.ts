@@ -14,6 +14,14 @@ export function equippedWeapon(state: GameState): Weapon | undefined {
   return state.equippedId ? findWeapon(state, state.equippedId) : undefined;
 }
 
+/**
+ * The weapon taken into a fight (the king's arena, online duels): the highest-level one on the rack.
+ * There is no 장착 button any more (user 2026-11-27); the best weapon always goes.
+ */
+export function bestWeapon(state: GameState): Weapon | undefined {
+  return [...state.weapons].sort((a, b) => b.level - a.level)[0];
+}
+
 /** True when `id` is the only weapon left (the starter hammer, added in M3, does not count). */
 export function isLastWeapon(state: GameState, id: string): boolean {
   return state.weapons.length === 1 && state.weapons[0].id === id;

@@ -10,7 +10,7 @@ import { DIVINE_STEP } from '../../config/forgeSkills';
 import { cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
 import { DIRECTION_INFO, RHYTHM_SECONDS, TREE } from '../../config/skillTree';
 import { rentDueDay, rentFor, rentPaidLine } from '../../core/systems/rent';
-import { equippedWeapon, findWeapon, freeWeaponsLeft, weaponPrice } from '../../core/systems/weapons';
+import { bestWeapon, findWeapon, freeWeaponsLeft, weaponPrice } from '../../core/systems/weapons';
 import { OUTCOMES, OUTCOME_INFO, ENHANCE_TABLE_STATUS, type Outcome } from '../../config/enhancement';
 import { APPEARANCE_STAGES, MILESTONES, WEAPON_SIZE, appearanceStage, weaponSizeScale } from '../../config/appearance';
 import { ELEMENT_INFO, INVENTORY_CAP, MAX_LEVEL } from '../../config/weapons';
@@ -72,7 +72,7 @@ const TOP_BAR_H = 152;
 const STAGE = PORTRAIT ? { x: 340, bottom: 752 + EXTRA - LIFT, height: 344 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
 /**
  * Portrait dock, measured up from the bottom edge: odds, stones / skills, the action row
- * (판매 · 강화 · 장착) and 다음 날 on its own row so a fast run of 강화 taps never ends the day by mistake.
+ * (판매 · 강화) and 다음 날 on its own row so a fast run of 강화 taps never ends the day by mistake.
  */
 const PB = {
   oddsY: H - SAFE_BOTTOM - 370,
@@ -81,7 +81,7 @@ const PB = {
   rowY: H - SAFE_BOTTOM - 32,
 };
 /** Portrait action row: side buttons and the gap between them and 강화. */
-const ACT = { side: 150, gap: 10, h: 104, dayH: 64 };
+const ACT = { side: 190, gap: 12, h: 104, dayH: 64 };
 
 /**
  * Shelf centres and sizes measured on the painted rack in forge_rack_bg (1280×720 screen space),
@@ -174,7 +174,6 @@ export class ForgeScene extends Phaser.Scene {
   /** "−1" next to 하락 in the odds list; at +0 it reads "최저 유지" (landscape only). */
   private downDelta: Phaser.GameObjects.Text | null = null;
   private enhanceBtn!: Button;
-  private equipBtn!: Button;
   private sellBtn!: Button;
   private buyBtn!: Button;
   private buyPulse: Phaser.Tweens.Tween | null = null;
@@ -238,7 +237,6 @@ export class ForgeScene extends Phaser.Scene {
     kb.on('keydown-SPACE', () => this.tryEnhance());
     kb.on('keydown-UP', () => this.step(-1));
     kb.on('keydown-DOWN', () => this.step(1));
-    kb.on('keydown-E', () => this.equipSelected());
     kb.on('keydown-N', () => this.openEvening());
     kb.on('keydown-Z', () => this.openEvening());
     kb.on('keydown-S', () => this.trySell());
@@ -719,11 +717,11 @@ export class ForgeScene extends Phaser.Scene {
       this.stoneChips.push(chip);
     });
     // sub: ' ' so the sub line exists (cost, price, weapon) and can be filled in by renderOdds
-    // the action row (2026-11-27): 판매 · [ 강화 ] · 장착 — the big button in the middle of the thumb's reach
-    const mid = W - 32 - (ACT.side + ACT.gap) * 2;
-    this.sellBtn = new Button(this, 16 + ACT.side / 2, PB.enhanceY, ACT.side, ACT.h, '판매', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.trySell() });
-    this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, mid, ACT.h, '강화', { variant: 'gold', size: 42, sub: ' ', subSize: 16, onClick: () => this.clickEnhance() });
-    this.equipBtn = new Button(this, W - 16 - ACT.side / 2, PB.enhanceY, ACT.side, ACT.h, '장착', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.equipSelected() });
+    // the action row (2026-11-27): 판매 · [ 강화 ] — the big button on the right, under the thumb;
+    // no 장착 (the best weapon always goes into a fight)
+    const wide = W - 32 - ACT.side - ACT.gap;
+    this.sellBtn = new Button(this, 16 + ACT.side / 2, PB.enhanceY, ACT.side, ACT.h, '판매', { variant: 'dark', size: 26, sub: ' ', subSize: 14, onClick: () => this.trySell() });
+    this.enhanceBtn = new Button(this, W - 16 - wide / 2, PB.enhanceY, wide, ACT.h, '강화', { variant: 'gold', size: 44, sub: ' ', subSize: 16, onClick: () => this.clickEnhance() });
     // 다음 날 on its own row under them: never hit by a fast run of 강화 taps
     this.sleepBtn = new Button(this, W / 2, PB.rowY, W - 32, ACT.dayH, '다음 날 ▶', { variant: 'dark', size: 22, sub: '하루 마치기 · 저녁으로', subSize: 13, onClick: () => this.openEvening() });
     this.splitBtn = new Button(this, W - 16 - 80 - 168, PB.stonesY, 160, 36, '운명 분열', { variant: 'ghost', size: 14, onClick: () => this.toggleSplit() });
@@ -775,8 +773,7 @@ export class ForgeScene extends Phaser.Scene {
       sub: '무료 · Space',
       onClick: () => this.clickEnhance(),
     });
-    this.equipBtn = new Button(this, RIGHT.x + 20 + 67, RIGHT.y + 522, 134, 50, '장착', { variant: 'dark', sub: 'E', onClick: () => this.equipSelected() });
-    this.sellBtn = new Button(this, RIGHT.x + RIGHT.w - 20 - 67, RIGHT.y + 522, 134, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
+    this.sellBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 522, 276, 50, '판매', { variant: 'dark', sub: 'S', onClick: () => this.trySell() });
     // "다음 날" ends the day; the evening screen then offers the night gamble or paying rent early
     this.sleepBtn = new Button(this, RIGHT.x + RIGHT.w / 2, RIGHT.y + 580, 276, 52, '다음 날 ▶', { variant: 'gold', size: 22, sub: '하루 마치기 · Z', onClick: () => this.openEvening() });
   }
@@ -922,7 +919,7 @@ export class ForgeScene extends Phaser.Scene {
   private refresh() {
     if (this.animating) return;
     const s = this.core.state;
-    if (!this.selected()) this.selectedId = equippedWeapon(s)?.id ?? s.weapons[0]?.id ?? null;
+    if (!this.selected()) this.selectedId = bestWeapon(s)?.id ?? null;
     this.dayText.setText(`DAY ${s.day}`);
     this.goldText.setText(`${s.gold.toLocaleString()} G`);
     this.drawLives(s.lives);
@@ -968,7 +965,6 @@ export class ForgeScene extends Phaser.Scene {
       const locked = i >= s.inventoryCap;
       const w = locked ? undefined : s.weapons[i];
       const sel = !!w && w.id === this.selectedId;
-      const eq = !!w && w.id === s.equippedId;
       const parts: Phaser.GameObjects.GameObject[] = [];
 
       if (sel) {
@@ -1030,11 +1026,6 @@ export class ForgeScene extends Phaser.Scene {
         if (w.golden) {
           const t = label(this, -SW / 2 + 4, SH / 2 - 4, '황금', 13, 0xffd34d, { weight: 900, origin: [0, 1] });
           t.setStroke('#3a2208', 5);
-          parts.push(t);
-        }
-        if (eq) {
-          const t = label(this, -SW / 2 + 4, -SH / 2 + 4, '장착', 13, C.goldHi, { weight: 900, origin: [0, 0] });
-          t.setStroke('#140a05', 5);
           parts.push(t);
         }
       } else if (!this.painted) {
@@ -1175,17 +1166,10 @@ export class ForgeScene extends Phaser.Scene {
       w && w.level >= MAX_LEVEL ? '최대 단계' : '강화',
       w && w.level >= MAX_LEVEL ? `+${MAX_LEVEL} 도달` : !w ? (PORTRAIT ? '' : 'Space') : cost === 0 ? `무료${key('Space')}` : `${cost.toLocaleString()}G${this.core.state.gold < cost ? ' · 골드 부족' : ''}${key('Space')}`,
     );
-    const eq = !!w && this.core.state.equippedId === w.id;
-    this.equipBtn.setEnabled(!!w && !eq && !this.animating);
-    this.equipBtn.setLabel(eq ? '장착 중' : '장착', eq ? (PORTRAIT ? '밤에 사용' : '이 무기로 밤에 싸웁니다') : PORTRAIT ? '' : 'E');
     this.sellBtn.setEnabled(!!w && !this.animating);
     this.sellBtn.setLabel('판매', w ? `${sellPrice(this.core.state, w.level, w.golden).toLocaleString()}G${key('S')}` : PORTRAIT ? '' : 'S');
     this.renderItems();
-    const armed = equippedWeapon(this.core.state);
-    const hammer = this.core.state.weapons.length === 0;
     const st0 = this.core.state;
-    void armed;
-    void hammer;
     this.sleepBtn.setEnabled(!this.animating && !st0.pendingSplit);
     // 운명 분열 toggle: only once learned; shows today's uses left
     const splitLv = treeEffects(st0).fateSplit;
@@ -1347,12 +1331,10 @@ export class ForgeScene extends Phaser.Scene {
       });
       return;
     }
-    const equipped = this.core.state.equippedId === w.id;
     const last = this.core.state.weapons.length === 1;
-    if (w.level >= SALE_CONFIRM_LEVEL || equipped || last) {
+    if (w.level >= SALE_CONFIRM_LEVEL || last) {
       const why = [
         w.level >= SALE_CONFIRM_LEVEL ? `+${w.level}까지 키운 무기입니다.` : '',
-        equipped ? '지금 장착 중인 무기입니다.' : '',
         last ? '마지막 남은 무기입니다. 팔면 기본 망치로 싸워야 합니다.' : '',
       ].filter(Boolean);
       this.openModal({
@@ -1450,14 +1432,6 @@ export class ForgeScene extends Phaser.Scene {
     this.select(ws[ni].id);
   }
 
-
-  private equipSelected() {
-    const w = this.selected();
-    if (!w || this.animating) return;
-    this.core.dispatch({ type: 'EQUIP', weaponId: w.id });
-    this.toast(`${weaponName(w)} +${w.level}을(를) 장착했습니다`);
-    this.say(SMITH_LINES.equip);
-  }
 
   private openModal(data: ModalRequest) {
     const full: ModalData = { ...data, returnTo: 'Forge' };
@@ -1563,7 +1537,6 @@ export class ForgeScene extends Phaser.Scene {
     this.anims.globalTimeScale = speed;
     this.say(SMITH_LINES.enhanceStart);
     this.enhanceBtn.setEnabled(false);
-    this.equipBtn.setEnabled(false);
     this.sellBtn.setEnabled(false);
     this.renderItems();
     void this.fx

@@ -7,7 +7,7 @@
 // portrait = the same blocks stacked, the list scrolling underneath.
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
-import { equippedWeapon } from '../../core/systems/weapons';
+import { bestWeapon } from '../../core/systems/weapons';
 import type { NightWeapon } from '../../core/systems/daynight';
 import { weaponDisplayName } from '../../config/swordNames';
 import { ELEMENT_INFO, type Element } from '../../config/weapons';
@@ -20,17 +20,17 @@ import { glowStrength, weaponLookTexture } from '../weaponArt';
 import { DUEL_RULES, duel, type DuelMsg, type LobbyPlayer, type MyDuelInfo } from '../../online/duel';
 import { ChatBox } from '../ui/chat';
 
-/** The weapon taken into a duel: the equipped one, else the highest (else the starter hammer). */
+/** The weapon taken into a duel: the highest on the rack (else the starter hammer). */
 export function myNightWeapon(core: GameCore): NightWeapon {
   const s = core.state;
-  const w = equippedWeapon(s) ?? [...s.weapons].sort((a, b) => b.level - a.level)[0];
+  const w = bestWeapon(s);
   return w ? { kind: 'weapon', weapon: w } : { kind: 'hammer' };
 }
 
-/** The weapon taken into a duel: the equipped one, else the highest. */
+/** The weapon taken into a duel: the highest on the rack. */
 export function myDuelInfo(core: GameCore): MyDuelInfo {
   const s = core.state;
-  const w = equippedWeapon(s) ?? [...s.weapons].sort((a, b) => b.level - a.level)[0];
+  const w = bestWeapon(s);
   return { weapon: w ? { level: w.level, element: w.element, name: weaponDisplayName(w) } : { level: 0, element: 'fire', name: '대장장이 망치' }, gold: s.gold };
 }
 
@@ -168,7 +168,7 @@ export class DuelLobbyScene extends Phaser.Scene {
     const iy = PORTRAIT ? y + 118 : y + 108;
     for (let i = 5; i >= 1; i--) glow.fillStyle(el?.glow ?? 0xffb347, 0.05).fillEllipse(ix, iy, 120 + i * 50, 40 + i * 18);
     const s = this.core.state;
-    const w0 = equippedWeapon(s) ?? [...s.weapons].sort((a, b) => b.level - a.level)[0];
+    const w0 = bestWeapon(s);
     const key = w0 ? weaponLookTexture(this, w0) : 'weapon-hammer';
     if (this.textures.exists(key)) {
       const img = this.add.image(ix, iy, key);

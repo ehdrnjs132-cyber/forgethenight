@@ -7,7 +7,7 @@
 // Opens over the paused forge.
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
-import { equippedWeapon } from '../../core/systems/weapons';
+import { bestWeapon } from '../../core/systems/weapons';
 import { tonightsRivals } from '../../core/systems/doppelganger';
 import { rentDueDay, rentFor } from '../../core/systems/rent';
 import { cardPlayedToday, cardUnlocked, weaponCardPlayedToday, weaponCardUnlocked } from '../../core/systems/cards';
@@ -389,10 +389,10 @@ export class EveningScene extends Phaser.Scene {
     this.scene.pause();
   }
 
-  /** The weapon taken into the night: the equipped one, else the highest-level one, else the hammer. */
+  /** The weapon taken into the arena: the highest on the rack, else the hammer (no 장착 button since 2026-11-27). */
   private nightWeapon() {
     const s = this.core.state;
-    return equippedWeapon(s) ?? [...s.weapons].sort((a, b) => b.level - a.level)[0];
+    return bestWeapon(s);
   }
 
   private gamble() {
