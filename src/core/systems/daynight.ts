@@ -3,7 +3,7 @@
 // restores the snapshot with one life fewer and throws away that night's XP.
 import { addXp } from '../../combat/rules';
 import { LAST_DAY } from '../../config/rules';
-import { NIGHT_STAKE, NIGHT_UNLOCK_DAY } from '../../config/economy';
+import { NIGHT_ARENA, NIGHT_STAKE, NIGHT_UNLOCK_DAY } from '../../config/economy';
 import type { GameOverSummary, GameState, NightSnapshot, Weapon } from '../state/types';
 import { equippedWeapon } from './weapons';
 import { inPrologue } from './prologue';
@@ -21,8 +21,8 @@ export function nightWeapon(state: GameState): NightWeapon | null {
 export type NightBlock = 'not-day' | 'no-weapon' | 'early';
 
 /** The dwarf battle is offered from DAY 20 (2026-11-26); the scripted first-day prologue night is the exception. */
-export function nightUnlocked(state: GameState): boolean {
-  return state.day >= NIGHT_UNLOCK_DAY || inPrologue(state);
+export function nightUnlocked(state: GameState, arena: boolean = NIGHT_ARENA.enabled): boolean {
+  return (arena && state.day >= NIGHT_UNLOCK_DAY) || inPrologue(state);
 }
 
 export function startNight(prev: GameState): { ok: true; state: GameState; weapon: NightWeapon } | { ok: false; reason: NightBlock } {

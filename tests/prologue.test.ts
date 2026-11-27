@@ -3,6 +3,10 @@ import { GameCore } from '../src/core/game';
 import { MemoryStorage } from '../src/core/save/save';
 import { inPrologue } from '../src/core/systems/prologue';
 import { atNightDay } from './helpers';
+import { NIGHT_ARENA as ARENA_SWITCH } from '../src/config/economy';
+
+// The arena was removed from the game on 2026-11-27; these tests keep its dormant code working.
+ARENA_SWITCH.enabled = true;
 
 describe('day 1 is a normal, guided day (user decision 2026-11-19)', () => {
   it('no scripted prologue: enhancing is a real roll, selling and sleeping work from the start', () => {

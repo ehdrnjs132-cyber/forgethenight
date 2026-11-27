@@ -18,6 +18,7 @@ import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/
 import { completeTutorial, type TutorialId } from './systems/tutorial';
 import { loseGamble, sleep, startNight, winGamble, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
+import { NIGHT_ARENA } from '../config/economy';
 import { endPrologue, inPrologue } from './systems/prologue';
 import { tonightsRivals, type Doppelganger } from './systems/doppelganger';
 
@@ -131,6 +132,13 @@ export class GameCore {
     this.recoveredFromCorruption = loaded.recovered;
     this.records = this.save.loadRecords();
     this.state = loaded.state ?? this.startRun(seed);
+    // The arena was removed (2026-11-27): a save left in the middle of a fight goes back to that evening,
+    // with nothing lost, instead of counting as a lost night.
+    if (this.state.phase === 'night' && !NIGHT_ARENA.enabled && !inPrologue(this.state)) {
+      const snap = this.state.nightSnapshot;
+      this.state = snap ? { ...(snap as GameState), nightSnapshot: null } : { ...this.state, phase: 'day', nightSnapshot: null };
+      this.commit(this.state);
+    }
     // §25: closing the game during a night must not dodge the outcome. It counts as a lost night.
     if (this.state.phase === 'night') {
       if (inPrologue(this.state)) {

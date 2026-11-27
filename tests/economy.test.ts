@@ -7,6 +7,10 @@ import { ENHANCE_TABLE } from '../src/config/enhancement';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager } from '../src/core/save/save';
 import { START_GOLD } from '../src/config/rules';
+import { NIGHT_ARENA as ARENA_SWITCH } from '../src/config/economy';
+
+// The arena was removed from the game on 2026-11-27; these tests keep its dormant code working.
+ARENA_SWITCH.enabled = true;
 
 describe('sale prices (§14)', () => {
   it('matches the table rows and grows between them', () => {

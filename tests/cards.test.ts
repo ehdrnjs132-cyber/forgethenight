@@ -9,6 +9,10 @@ import { betFromShare, maxBet, cardPlayedToday, cardUnlocked, checkCard, checkWe
 import type { GameState } from '../src/core/state/types';
 import { runWith } from './helpers';
 import { salePrice } from '../src/core/systems/economy';
+import { NIGHT_ARENA as ARENA_SWITCH } from '../src/config/economy';
+
+// The arena was removed from the game on 2026-11-27; these tests keep its dormant code working.
+ARENA_SWITCH.enabled = true;
 
 const at = (day: number, gold = 1_000): GameState => ({ ...runWith([{}]), day, gold });
 

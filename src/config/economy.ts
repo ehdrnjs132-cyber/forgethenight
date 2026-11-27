@@ -78,6 +78,11 @@ export const DAILY_WEAPON_LIMIT = 4;
 export const NIGHT_STAKE = { winMul: 1.5, loseMul: 0.5 };
 /** The dwarf battle at night is offered from this day on (user 2026-11-26; the first-day prologue keeps its scripted night). */
 export const NIGHT_UNLOCK_DAY = 20;
+/**
+ * The king's arena (the dwarf battle at night) was removed on 2026-11-27 (user: "밤결투기능 없애줘").
+ * The online duel keeps its own fight. Set to true to bring the arena back.
+ */
+export const NIGHT_ARENA = { enabled: false };
 
 /**
  * 운명의 카드 (user request 2026-11-26): from DAY unlockDay, once a day in the evening. Two cards, one O

@@ -1,8 +1,8 @@
 // Evening (user requests 2026-11-19 … 2026-11-27). "다음 날" ends the day here:
 //   sunset over the dwarf kingdom → the night picture, blurred, behind an end-of-day summary
 //   ("하루 끝!": today's strikes by result, the best level reached, the gold made) → a row of simple
-//   choices at the bottom: 스킬트리 · 월세 (the king's next visit) · 잠자기 · 카드 내기 (+ 투기장 from DAY 20,
-//   무기 카드 from DAY 30) → (sleep) the moon crosses, dawn warms the kingdom.
+//   choices at the bottom: 스킬트리 · 월세 (the king's next visit) · 잠자기 · 카드 내기 (+ 무기 카드 from DAY 30;
+//   the 투기장 from DAY 20 was removed 2026-11-27 and shows only if NIGHT_ARENA is switched back on) → (sleep) the moon crosses, dawn warms the kingdom.
 // Layout after the user's reference (2026-11-27): a big title, two stat panels side by side, buttons below.
 // Opens over the paused forge.
 import Phaser from 'phaser';

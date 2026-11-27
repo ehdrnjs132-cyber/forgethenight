@@ -6,6 +6,10 @@ import { NIGHT_STAKE, NIGHT_UNLOCK_DAY, RENT } from '../src/config/economy';
 import { atNightDay } from './helpers';
 import { GAMBLE_RIVALS, tonightsRivals } from '../src/core/systems/doppelganger';
 import { rentAmount, rentPaidLine } from '../src/core/systems/rent';
+import { NIGHT_ARENA as ARENA_SWITCH } from '../src/config/economy';
+
+// The arena was removed from the game on 2026-11-27; these tests keep its dormant code working.
+ARENA_SWITCH.enabled = true;
 
 function readyGame(storage = new MemoryStorage()) {
   const game = new GameCore(storage, 11);
