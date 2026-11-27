@@ -17,6 +17,9 @@ import { account } from '../../online/account';
 import { needsGoogle, openLogin, openRanking } from '../../online/ui';
 import { canOfferInstall, installApp } from '../../install';
 import type { CinematicData } from './CinematicScene';
+import { ChatBox } from '../ui/chat';
+import { duel } from '../../online/duel';
+import { myDuelInfo } from './DuelLobbyScene';
 
 export class LobbyScene extends Phaser.Scene {
   private core!: GameCore;
@@ -24,6 +27,8 @@ export class LobbyScene extends Phaser.Scene {
   private accountBtn!: Button;
   private soundBtn!: Button;
   private readonly onAccount = () => this.refreshAccount();
+  /** Leaving for the duel lobby keeps the online connection; anywhere else closes it. */
+  private toDuels = false;
 
   constructor() {
     super('Lobby');
@@ -117,7 +122,23 @@ export class LobbyScene extends Phaser.Scene {
       new Button(this, menuX, y, bw, bh, '↺ 처음부터 하기', { variant: 'ghost', size: 22, onClick: () => this.confirmRestart() });
     }
 
-    this.input.keyboard?.on('keydown-ENTER', () => this.enterForge());
+    // Enter is the chat now (user 2026-11-27); Space still starts
+    this.input.keyboard?.on('keydown-SPACE', () => this.enterForge());
+    this.buildPresence();
+  }
+
+  /**
+   * Who is online, and the lobby chat (user 2026-11-27: "로비에 누가 있는지 알려주고 enter 치면 채팅").
+   * Signed-in players join the online room as "in the lobby" (not challengeable until the duel lobby).
+   */
+  private buildPresence() {
+    this.toDuels = false;
+    new ChatBox(this, PORTRAIT ? { mode: 'lobby', x: 24, y: 72, w: W - 48, grow: 'down', scale: 1.25 } : { mode: 'lobby', x: 24, y: H - 18, w: 600, grow: 'up' });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      if (!this.toDuels) duel.disconnect();
+    });
+    if (needsGoogle()) return;
+    duel.connect(myDuelInfo(this.core), 'lobby').catch(() => undefined); // offline: the pill says so
   }
 
   private drawBackground() {
@@ -203,6 +224,7 @@ export class LobbyScene extends Phaser.Scene {
       openLogin();
       return;
     }
+    this.toDuels = true;
     this.input.enabled = false;
     this.cameras.main.fadeOut(250, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('DuelLobby'));

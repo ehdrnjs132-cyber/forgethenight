@@ -31,7 +31,23 @@ export interface LobbyPlayer {
   weaponName: string;
   gold: number;
   busy: boolean;
+  /** In the main lobby (only present) or the duel lobby (can be challenged). Older servers: absent. */
+  where?: Where;
 }
+
+export type Where = 'lobby' | 'duel';
+
+/** One line of chat (2026-11-27). 'lobby' reaches everyone not fighting; 'match' only the two fighters. */
+export interface ChatLine {
+  uid: string;
+  name: string;
+  text: string;
+  at: number;
+  room: 'lobby' | 'match';
+}
+
+/** Longest message the server keeps (server/duel.js DUEL.chatMax). */
+export const CHAT_MAX = 100;
 
 export interface MatchSide {
   uid: string;
@@ -66,6 +82,8 @@ export type DuelMsg =
   | { t: 'hp'; hp: [number, number]; by: 0 | 1; dmg: number }
   | { t: 'end'; winner: 0 | 1 | null; reason: 'ko' | 'time' | 'leave'; bet: number; hp: [number, number] }
   | { t: 'gold'; delta: number; note: string }
+  | ({ t: 'chat' } & ChatLine)
+  | { t: 'chatHistory'; messages: ChatLine[] }
   | { t: 'error'; error: string }
   | { t: 'closed' };
 
@@ -83,6 +101,9 @@ class DuelLink {
   onGold: ((delta: number, note: string) => void) | null = null;
   me: { uid: string; name: string } | null = null;
   lobby: LobbyPlayer[] = [];
+  /** Recent chat, newest last (the lobby's history on arrival, then everything that comes in). */
+  chat: ChatLine[] = [];
+  private where: Where = 'duel';
 
   get connected(): boolean {
     return this.ws?.readyState === WebSocket.OPEN && this.me !== null;
@@ -97,13 +118,17 @@ class DuelLink {
     if (m.t === 'gold') this.onGold?.(m.delta, m.note);
     if (m.t === 'lobby') this.lobby = m.players;
     if (m.t === 'welcome') this.me = m.you;
+    if (m.t === 'chatHistory') this.chat = m.messages.slice(-50);
+    if (m.t === 'chat') this.chat = [...this.chat, m].slice(-50);
     this.listeners.forEach((f) => f(m));
   }
 
-  /** Open the connection and announce this player (weapon and gold). */
-  async connect(info: MyDuelInfo): Promise<void> {
+  /** Open the connection and announce this player (weapon and gold) and where they are. */
+  async connect(info: MyDuelInfo, where: Where = 'duel'): Promise<void> {
+    this.where = where;
     if (this.ws && this.ws.readyState <= WebSocket.OPEN) {
       this.update(info);
+      this.send({ t: 'where', where });
       return;
     }
     const q = new URLSearchParams(location.search);
@@ -116,7 +141,7 @@ class DuelLink {
       this.ws = ws;
       const timer = setTimeout(() => reject(new Error('timeout')), 45_000);
       ws.onopen = () => {
-        ws.send(JSON.stringify({ t: 'hello', ...creds, ...info }));
+        ws.send(JSON.stringify({ t: 'hello', ...creds, ...info, where: this.where }));
       };
       ws.onmessage = (e) => {
         let m: DuelMsg;
@@ -151,6 +176,12 @@ class DuelLink {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
   }
 
+  /** Say one line (the server decides who hears it: the lobby, or the other fighter in a duel). */
+  say(text: string) {
+    const t = text.replace(/\s+/g, ' ').trim().slice(0, CHAT_MAX);
+    if (t) this.send({ t: 'chat', text: t });
+  }
+
   update(info: MyDuelInfo) {
     this.send({ t: 'update', ...info });
   }
@@ -159,6 +190,8 @@ class DuelLink {
     this.ws?.close();
     this.ws = null;
     this.me = null;
+    this.lobby = [];
+    this.chat = [];
   }
 }
 

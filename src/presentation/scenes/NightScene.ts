@@ -29,6 +29,7 @@ import { inPrologue } from '../../core/systems/prologue';
 import { PROP_COUNT } from './BootScene';
 import type { ModalData, ModalRequest } from './ModalScene';
 import { DUEL_RULES, duel, type DuelFx, type DuelMsg, type MatchInfo } from '../../online/duel';
+import { ChatBox } from '../ui/chat';
 import { weaponLookTexture, type WeaponLook } from '../weaponArt';
 
 export interface NightData {
@@ -322,6 +323,8 @@ export class NightScene extends Phaser.Scene {
     this.countdown = label(this, W / 2, H / 2 - 120, '', 110, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setScrollFactor(0).setDepth(115).setStroke('#140a05', 12);
     const off = duel.on((msg) => this.onDuel(msg));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, off);
+    // chat with the opponent (2026-11-27): Enter to type; the lines float bottom-left and fade
+    new ChatBox(this, PORTRAIT ? { mode: 'battle', x: 20, y: H - 150, w: W - 40, grow: 'up', scale: 1.25 } : { mode: 'battle', x: 20, y: H - 44, w: 440, grow: 'up' });
   }
 
   private onDuel(m: DuelMsg) {
@@ -478,7 +481,7 @@ export class NightScene extends Phaser.Scene {
         fix(label(this, sx + i * 62 + 26, H - 64, k, 11, C.text, { weight: 900, origin: [0.5, 0.5] }));
         fix(label(this, sx + i * 62 + 26, H - 16, n, 10, C.mute, { weight: 700, origin: [0.5, 0.5] }));
       });
-      fix(label(this, 20, H - 22, `WASD 이동 · 마우스 조준 · 좌클릭 콤보(누르고 있으면 연속) · Esc 포기 | 목숨 ${this.core.state.lives}`, 12, C.dim, { origin: [0, 0.5] }));
+      fix(label(this, 20, H - 22, `WASD 이동 · 마우스 조준 · 좌클릭 콤보(누르고 있으면 연속) · Esc 포기${this.online ? ' · Enter 채팅' : ` | 목숨 ${this.core.state.lives}`}`, 12, C.dim, { origin: [0, 0.5] }));
     } else {
       // phone: a pause/give-up button instead of Esc, top right
       const quit = fix(label(this, W - 24, 30, '포기', 16, C.text, { weight: 900, origin: [1, 0.5] }));

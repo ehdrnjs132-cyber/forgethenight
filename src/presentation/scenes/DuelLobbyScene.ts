@@ -13,6 +13,7 @@ import { LevelBadge } from '../ui/levelBadge';
 import { PORTRAIT } from '../layout';
 import { Sfx } from '../audio/sfx';
 import { DUEL_RULES, duel, type DuelMsg, type LobbyPlayer, type MyDuelInfo } from '../../online/duel';
+import { ChatBox } from '../ui/chat';
 
 /** The weapon taken into a duel: the equipped one, else the highest (else the starter hammer). */
 export function myNightWeapon(core: GameCore): NightWeapon {
@@ -83,10 +84,12 @@ export class DuelLobbyScene extends Phaser.Scene {
     label(this, 30, betY + 52, PORTRAIT ? '결투장에 있는 사람 · 이긴 쪽이 판돈을 가져간다' : '결투장에 있는 사람 · 이긴 쪽이 판돈을 가져간다 (판돈은 두 사람 중 적은 골드 기준)', 15 * big, C.mute, { weight: 700, origin: [0, 0.5], wrap: W - 60 });
     this.list = this.add.container(0, betY + 86);
 
-    this.status = label(this, W / 2, H - (PORTRAIT ? 130 : 86), '결투장에 연결하는 중… (서버가 자고 있으면 30초쯤)', 17 * big, C.goldHi, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 40 });
-    this.cancelBtn = new Button(this, W / 2, H - (PORTRAIT ? 70 : 40), 260, 54, '신청 취소', { variant: 'dark', size: 19 * big, onClick: () => this.cancelChallenge() });
+    this.status = label(this, W / 2, H - (PORTRAIT ? 190 : 86), '결투장에 연결하는 중… (서버가 자고 있으면 30초쯤)', 17 * big, C.goldHi, { weight: 700, origin: [0.5, 0.5], align: 'center', wrap: W - 40 });
+    this.cancelBtn = new Button(this, W / 2, H - (PORTRAIT ? 124 : 40), 260, 54, '신청 취소', { variant: 'dark', size: 19 * big, onClick: () => this.cancelChallenge() });
     this.cancelBtn.setVisible(false);
 
+    // the lobby chat here too (2026-11-27); bottom-left, clear of the cancel button
+    new ChatBox(this, PORTRAIT ? { mode: 'lobby', x: 24, y: H - 14, w: W - 48, grow: 'up', scale: 1.25 } : { mode: 'lobby', x: 24, y: H - 14, w: 470, grow: 'up' });
     this.off = duel.on((m) => this.onMsg(m));
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.off?.());
     duel
@@ -156,7 +159,8 @@ export class DuelLobbyScene extends Phaser.Scene {
   private renderList() {
     const c = this.list;
     c.removeAll(true);
-    const others = duel.lobby.filter((p) => p.uid !== duel.me?.uid);
+    // people in the main lobby are online but not in the duel room yet: they cannot be challenged
+    const others = duel.lobby.filter((p) => p.uid !== duel.me?.uid && p.where !== 'lobby');
     const big = PORTRAIT ? 1.1 : 1;
     if (!duel.connected) return;
     if (!others.length) {
@@ -231,7 +235,7 @@ export class DuelLobbyScene extends Phaser.Scene {
     if (this.leaving) return;
     this.leaving = true;
     if (this.pending) duel.send({ t: 'cancel', id: this.pending.id });
-    duel.disconnect();
+    // the connection stays: the main lobby shows who is online and keeps the chat
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => this.scene.start('Lobby'));
   }

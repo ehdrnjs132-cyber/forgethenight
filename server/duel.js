@@ -28,6 +28,10 @@ export const DUEL = {
   fightMs: 75_000,
   challengeMs: 20_000,
   betPcts: [10, 25, 50],
+  /** Chat (2026-11-27): longest message, fastest pace per player, lobby history kept for newcomers. */
+  chatMax: 100,
+  chatGapMs: 700,
+  chatHistory: 30,
 };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -38,7 +42,7 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  */
 export function attachDuels(server, { auth, store }) {
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096 });
-  /** uid → { ws, uid, name, weapon, gold, matchId|null } */
+  /** uid → { ws, uid, name, weapon, gold, matchId|null, where: 'lobby'|'duel', lastChat } */
   const players = new Map();
   /** id → { id, from, to, bet, timer } */
   const challenges = new Map();
@@ -48,7 +52,10 @@ export function attachDuels(server, { auth, store }) {
   const send = (ws, msg) => ws && ws.readyState === 1 && ws.send(JSON.stringify(msg));
   const toUid = (uid, msg) => send(players.get(uid)?.ws, msg);
 
-  const view = (p) => ({ uid: p.uid, name: p.name, level: p.weapon.level, element: p.weapon.element, weaponName: p.weapon.name, gold: p.gold, busy: !!p.matchId });
+  /** Recent lobby chat, sent to whoever comes in. */
+  const lobbyChat = [];
+
+  const view = (p) => ({ uid: p.uid, name: p.name, level: p.weapon.level, element: p.weapon.element, weaponName: p.weapon.name, gold: p.gold, busy: !!p.matchId, where: p.where });
   function broadcastLobby() {
     const list = [...players.values()].map(view);
     for (const p of players.values()) send(p.ws, { t: 'lobby', players: list });
@@ -126,7 +133,7 @@ export function attachDuels(server, { auth, store }) {
           send(old.ws, { t: 'error', error: 'elsewhere' });
           old.ws.close();
         }
-        me = { ws, uid: u.uid, name: u.name, weapon: cleanWeapon(msg.weapon), gold: cleanGold(msg.gold), matchId: old?.matchId ?? null };
+        me = { ws, uid: u.uid, name: u.name, weapon: cleanWeapon(msg.weapon), gold: cleanGold(msg.gold), matchId: old?.matchId ?? null, where: cleanWhere(msg.where), lastChat: 0 };
         players.set(u.uid, me);
         const pend = store.get(`pend:${u.uid}`);
         if (pend?.delta) {
@@ -134,6 +141,7 @@ export function attachDuels(server, { auth, store }) {
           store.set(`pend:${u.uid}`, { delta: 0 });
         }
         send(ws, { t: 'welcome', you: { uid: u.uid, name: u.name } });
+        send(ws, { t: 'chatHistory', messages: lobbyChat });
         broadcastLobby();
         return;
       }
@@ -146,9 +154,32 @@ export function attachDuels(server, { auth, store }) {
           broadcastLobby();
           break;
         }
+        case 'where': {
+          // the main lobby (only present) or the duel lobby (can be challenged)
+          me.where = cleanWhere(msg.where);
+          broadcastLobby();
+          break;
+        }
+        case 'chat': {
+          const text = cleanChat(msg.text);
+          const now = Date.now();
+          if (!text || now - me.lastChat < DUEL.chatGapMs) return;
+          me.lastChat = now;
+          const line = { t: 'chat', uid: me.uid, name: me.name, text, at: now };
+          const m = matches.get(me.matchId);
+          if (m && !m.over) {
+            // in a duel: only the two fighters
+            for (const s of m.sides) toUid(s.uid, { ...line, room: 'match' });
+            break;
+          }
+          lobbyChat.push({ ...line, room: 'lobby' });
+          if (lobbyChat.length > DUEL.chatHistory) lobbyChat.shift();
+          for (const p of players.values()) if (!p.matchId) send(p.ws, { ...line, room: 'lobby' });
+          break;
+        }
         case 'challenge': {
           const target = players.get(String(msg.to));
-          if (!target || target === me || target.matchId || me.matchId) return send(ws, { t: 'challengeFailed', reason: 'busy' });
+          if (!target || target === me || target.matchId || me.matchId || target.where !== 'duel') return send(ws, { t: 'challengeFailed', reason: 'busy' });
           const pct = DUEL.betPcts.includes(msg.pct) ? msg.pct : DUEL.betPcts[0];
           const bet = Math.floor((Math.min(me.gold, target.gold) * pct) / 100);
           if (bet <= 0) return send(ws, { t: 'challengeFailed', reason: 'gold' });
@@ -259,10 +290,23 @@ export function attachDuels(server, { auth, store }) {
 
 function cleanWeapon(w) {
   return {
-    level: clamp(Math.floor(Number(w?.level) || 0), 0, 50),
+    level: clamp(Math.floor(Number(w?.level) || 0), 0, 100), // the weapon cap is +100 since 2026-11-26
     element: ['fire', 'earth', 'lightning', 'water', 'ice'].includes(w?.element) ? w.element : 'fire',
     name: String(w?.name || '').replace(/[\u0000-\u001f<>]/g, '').slice(0, 24),
   };
+}
+
+function cleanWhere(w) {
+  return w === 'lobby' ? 'lobby' : 'duel';
+}
+
+/** One line of chat: no control characters or angle brackets, trimmed, at most DUEL.chatMax long. */
+export function cleanChat(t) {
+  return String(t ?? '')
+    .replace(/[\u0000-\u001f\u007f<>]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, DUEL.chatMax);
 }
 
 function cleanGold(g) {
