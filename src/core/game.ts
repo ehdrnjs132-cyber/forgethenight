@@ -37,7 +37,8 @@ export type Action =
   | { type: 'SLEEP' }
   | { type: 'TOGGLE_SPLIT' }
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
-  | { type: 'BUY_NODE'; id: string }
+  /** `evening`: bought from the evening screen. Stars cannot be learned in the forge (user 2026-11-27). */
+  | { type: 'BUY_NODE'; id: string; evening?: boolean }
   /** 운명의 카드: the chosen card and the bet (2026-11-26; replaces paying the rent early). */
   | { type: 'CARD_BET'; pick: 0 | 1; bet: number }
   /** 운명의 무기 카드 (DAY 30+): the chosen weapons at stake. */
@@ -345,7 +346,7 @@ export class GameCore {
         return { type: 'enhanced', result: r.result };
       }
       case 'BUY_NODE': {
-        const r = buyNode(this.state, action.id);
+        const r = buyNode(this.state, action.id, action.evening === true);
         if (!r.ok) return { type: 'nodeBlocked', reason: r.reason };
         this.commit(r.state);
         this.emit('changed', this.state);

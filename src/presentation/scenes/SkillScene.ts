@@ -43,7 +43,13 @@ const BLOCK_TEXT: Record<NodeBuyBlock, string> = {
   locked: '이어진 별을 먼저 배워야 합니다',
   gold: '골드가 부족합니다 · 무기를 팔아 마련하세요',
   night: '밤에는 배울 수 없습니다',
+  day: '해가 진 뒤에 배울 수 있습니다 · 「다음 날」을 누르세요',
 };
+
+/** Where the tree was opened: the forge shows it (view-only), the evening screen lets you learn. */
+export interface SkillData {
+  from?: 'Forge' | 'Evening';
+}
 
 /** Unlearned stars keep a dim dot of their sector colour, like gems not yet lit. */
 const mixDot = (col: number) => Phaser.Display.Color.ValueToColor(col).darken(35).color;
@@ -68,6 +74,7 @@ export class SkillScene extends Phaser.Scene {
   private selected = 'root';
   private buyable = new Set<string>();
   private closing = false;
+  private from: 'Forge' | 'Evening' = 'Forge';
   private zoom = FIT;
   private drag: { x: number; y: number; mx: number; my: number; moved: boolean } | null = null;
   private pulse = 0;
@@ -76,8 +83,9 @@ export class SkillScene extends Phaser.Scene {
     super('Skills');
   }
 
-  create() {
+  create(data: SkillData = {}) {
     this.core = this.registry.get('core') as GameCore;
+    this.from = data.from ?? 'Forge';
     this.closing = false;
     this.views = [];
     this.buyable = new Set();
@@ -135,6 +143,10 @@ export class SkillScene extends Phaser.Scene {
     this.countText = label(this, 20, TOP_H - (PORTRAIT ? 22 : 14), '', PORTRAIT ? 14 : 12, C.mute, { weight: 700, origin: [0, 0.5] });
     this.goldText = label(this, MAP_W - 20, PORTRAIT ? 30 : 26, '', PORTRAIT ? 24 : 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
     label(this, MAP_W - 20, TOP_H - (PORTRAIT ? 22 : 14), '드래그로 둘러보기 · 휠로 확대', PORTRAIT ? 13 : 11, C.dim, { weight: 700, origin: [1, 0.5] });
+    // in the forge the tree is only a preview: stars are learned after sunset
+    if (this.from === 'Forge') {
+      label(this, MAP_W / 2, PORTRAIT ? 30 : 26, '🌙 보기 전용 · 해가 진 뒤에 배울 수 있다', PORTRAIT ? 15 : 14, 0xc9b8ff, { weight: 900, origin: [0.5, 0.5] });
+    }
     // zoom buttons (phones have no wheel)
     const zx = MAP_W - 34;
     const zy = MAP_BOTTOM - (PORTRAIT ? 150 : 130);
@@ -149,7 +161,7 @@ export class SkillScene extends Phaser.Scene {
     if (PORTRAIT) pg.lineBetween(0, PANEL_Y + 0.5, W, PANEL_Y + 0.5);
     else pg.lineBetween(PANEL_X + 0.5, 0, PANEL_X + 0.5, H);
     this.detail = this.add.container(PANEL_X, PANEL_Y);
-    new Button(this, PANEL_X + PANEL_W / 2, H - (PORTRAIT ? 44 : 40), PANEL_W - 48, PORTRAIT ? 64 : 52, '대장간으로', { variant: 'dark', size: PORTRAIT ? 22 : 18, sub: PORTRAIT ? undefined : 'K · Esc', onClick: () => this.close() });
+    new Button(this, PANEL_X + PANEL_W / 2, H - (PORTRAIT ? 44 : 40), PANEL_W - 48, PORTRAIT ? 64 : 52, this.from === 'Evening' ? '돌아가기' : '대장간으로', { variant: 'dark', size: PORTRAIT ? 22 : 18, sub: PORTRAIT ? undefined : 'K · Esc', onClick: () => this.close() });
     // test slot only: gold to try the tree quickly
     if (new URLSearchParams(location.search).get('slot') === 'test') {
       new Button(this, 120, TOP_H + 26, 200, 34, '테스트: 골드 +100만', {
@@ -321,7 +333,7 @@ export class SkillScene extends Phaser.Scene {
     y += desc.height + 14;
     if (n.id === 'root') return;
     const owned = ownsNode(s, n.id);
-    const block = checkBuyNode(s, n.id);
+    const block = checkBuyNode(s, n.id, this.from === 'Evening');
     if (n.from && !ownsNode(s, n.from)) {
       d.add(label(this, pad, y, `먼저: ${TREE_BY_ID[n.from].name}`, 13 * big, C.dim, { weight: 700 }));
       y += 24 * big;
@@ -345,7 +357,7 @@ export class SkillScene extends Phaser.Scene {
   }
 
   private buy() {
-    const r = this.core.dispatch({ type: 'BUY_NODE', id: this.selected });
+    const r = this.core.dispatch({ type: 'BUY_NODE', id: this.selected, evening: this.from === 'Evening' });
     if (r.type !== 'nodeBought') {
       this.sfx.denied();
       return;
@@ -371,7 +383,7 @@ export class SkillScene extends Phaser.Scene {
     this.closing = true;
     this.cameras.main.fadeOut(200, 0, 0, 0);
     this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
-      this.scene.resume('Forge');
+      this.scene.resume(this.from);
       this.scene.stop();
     });
   }

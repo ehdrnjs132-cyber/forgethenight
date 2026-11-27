@@ -124,11 +124,22 @@ describe('star disc shape', () => {
     expect(checkBuyNode({ ...a.state, phase: 'night' }, 'sp1')).toBe('night');
   });
 
-  it('BUY_NODE through the core is saved', () => {
+  it('stars are learned only after sunset: from the forge the tree is view-only (user 2026-11-27)', () => {
+    const s = { ...withNodes([]), gold: 10_000 };
+    expect(checkBuyNode(s, 'od1', false)).toBe('day');
+    expect(buyNode(s, 'od1', false)).toEqual({ ok: false, reason: 'day' });
+    expect(checkBuyNode(s, 'od1', true)).toBeNull();
+    const core = new GameCore(new MemoryStorage(), 3);
+    core.state = { ...core.state, gold: 500 };
+    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1' })).toEqual({ type: 'nodeBlocked', reason: 'day' });
+    expect(core.state.gold).toBe(500);
+  });
+
+  it('BUY_NODE from the evening screen is saved', () => {
     const storage = new MemoryStorage();
     const core = new GameCore(storage, 3);
     core.state = { ...core.state, gold: 500 };
-    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1' }).type).toBe('nodeBought');
+    expect(core.dispatch({ type: 'BUY_NODE', id: 'gd1', evening: true }).type).toBe('nodeBought');
     expect(new SaveManager(storage).loadRun().state!.treeNodes).toEqual(['gd1']);
   });
 });

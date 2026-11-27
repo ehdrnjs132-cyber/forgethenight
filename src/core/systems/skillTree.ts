@@ -25,20 +25,23 @@ export function nodeVisible(state: GameState, node: TreeNode): boolean {
   return node.id === 'root' || ownsNode(state, node.id) || (node.from !== null && ownsNode(state, node.from));
 }
 
-export type NodeBuyBlock = 'unknown' | 'owned' | 'locked' | 'gold' | 'night';
+// 'day': stars are learned only once the day's work is over, from the evening screen
+// (user 2026-11-27: "스킬트리는 밤넘어갔을때만 찍을수있게"). In the forge the tree is view-only.
+export type NodeBuyBlock = 'unknown' | 'owned' | 'locked' | 'gold' | 'night' | 'day';
 
-export function checkBuyNode(state: GameState, id: string): NodeBuyBlock | null {
+export function checkBuyNode(state: GameState, id: string, atEvening = true): NodeBuyBlock | null {
   const n = TREE_BY_ID[id];
   if (!n || id === 'root') return 'unknown';
   if (ownsNode(state, id)) return 'owned';
   if (state.phase !== 'day') return 'night';
+  if (!atEvening) return 'day';
   if (n.from && !ownsNode(state, n.from)) return 'locked';
   if (state.gold < n.cost) return 'gold';
   return null;
 }
 
-export function buyNode(prev: GameState, id: string): { ok: true; state: GameState; cost: number } | { ok: false; reason: NodeBuyBlock } {
-  const block = checkBuyNode(prev, id);
+export function buyNode(prev: GameState, id: string, atEvening = true): { ok: true; state: GameState; cost: number } | { ok: false; reason: NodeBuyBlock } {
+  const block = checkBuyNode(prev, id, atEvening);
   if (block) return { ok: false, reason: block };
   const cost = TREE_BY_ID[id].cost;
   return { ok: true, state: { ...prev, gold: prev.gold - cost, treeNodes: [...(prev.treeNodes ?? []), id] }, cost };

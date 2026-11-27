@@ -10,6 +10,8 @@ import { tonightsRivals } from '../../core/systems/doppelganger';
 import { rentDueDay, rentFor } from '../../core/systems/rent';
 import { cardPlayedToday, cardUnlocked, weaponCardPlayedToday, weaponCardUnlocked } from '../../core/systems/cards';
 import { nightUnlocked } from '../../core/systems/daynight';
+import { anyNodeAffordable, ownedCount } from '../../core/systems/skillTree';
+import { TREE } from '../../config/skillTree';
 import { CARD_GAME, NIGHT_STAKE, WEAPON_CARD } from '../../config/economy';
 import { weaponDisplayName } from '../../config/swordNames';
 import { C, DISPLAY, H, W, css, label } from '../theme';
@@ -36,6 +38,9 @@ export class EveningScene extends Phaser.Scene {
     this.core = this.registry.get('core') as GameCore;
     this.busy = false;
     const day = this.core.state.day;
+    // back from the cards or the skill tree: gold and stars may have changed
+    this.events.off(Phaser.Scenes.Events.RESUME);
+    this.events.on(Phaser.Scenes.Events.RESUME, () => this.buildChoices());
 
     // sunset: warm orange melting into night purple, then the choices
     const sky = this.add.graphics();
@@ -88,6 +93,19 @@ export class EveningScene extends Phaser.Scene {
     });
     const back = new Button(this, W / 2, H - (PORTRAIT ? 60 : 40), PORTRAIT ? 240 : 200, PORTRAIT ? 56 : 44, '대장간으로 돌아가기', { variant: 'ghost', size: PORTRAIT ? 18 : 15, onClick: () => this.back() });
     root.add(back);
+    // the skill tree is learned only here, after sunset (user 2026-11-27)
+    const canLearn = anyNodeAffordable(s);
+    const skills = new Button(
+      this,
+      PORTRAIT ? W - 110 : W - 130,
+      PORTRAIT ? 90 : 56,
+      PORTRAIT ? 190 : 220,
+      PORTRAIT ? 56 : 48,
+      '✦ 스킬트리',
+      { variant: canLearn ? 'gold' : 'dark', size: PORTRAIT ? 18 : 17, sub: `${ownedCount(s)} / ${TREE.length - 1}${canLearn ? ' · 배울 수 있다' : ''}`, subSize: 12, onClick: () => this.openSkills() },
+    );
+    root.add(skills);
+    if (canLearn) this.tweens.add({ targets: skills, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     this.tweens.add({ targets: root, alpha: 1, duration: 300 });
   }
 
@@ -183,11 +201,15 @@ export class EveningScene extends Phaser.Scene {
     if (this.busy) return;
     this.scene.launch('Cards', {
       mode,
-      onClose: () => {
-        this.scene.resume();
-        this.buildChoices();
-      },
+      onClose: () => this.scene.resume(), // the resume handler rebuilds the choices
     });
+    this.scene.pause();
+  }
+
+  private openSkills() {
+    if (this.busy) return;
+    this.scene.launch('Skills', { from: 'Evening' });
+    this.scene.bringToTop('Skills'); // registered before Evening, so it would draw underneath
     this.scene.pause();
   }
 

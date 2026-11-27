@@ -5,7 +5,7 @@ import type { Weapon } from '../../core/state/types';
 import { collectEnhanceMods, effectiveRow, type EnhanceResult } from '../../core/systems/enhancement';
 import { drainRate, fateSplitLeft, overheatBonus, phoenixLeft, phoenixLevel, staminaLeft, staminaMax, staminaStarted } from '../../core/systems/forgeSkills';
 import { DIVINE_STEP } from '../../config/forgeSkills';
-import { anyNodeAffordable, cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
+import { cheapestOpenNode, ownedCount, treeEffects } from '../../core/systems/skillTree';
 import { DIRECTION_INFO, RHYTHM_SECONDS, TREE } from '../../config/skillTree';
 import { rentDueDay, rentFor, rentPaidLine } from '../../core/systems/rent';
 import { equippedWeapon, findWeapon, freeWeaponsLeft, weaponPrice } from '../../core/systems/weapons';
@@ -1140,9 +1140,9 @@ export class ForgeScene extends Phaser.Scene {
     this.shopBtn.setVisible(merchantHere(s));
     const pts = s.player.skillPoints;
     const k = PORTRAIT ? '' : ' · K';
-    // enhancement skills are bought with gold: pulse when the next one is affordable
-    const affordable = anyNodeAffordable(s);
-    this.skillBtn.setLabel('스킬트리', `${ownedCount(s)} / ${TREE.length - 1}${k}`);
+    // stars are learned only after sunset (user 2026-11-27): in the forge the tree is a preview, so no "buy now" pulse
+    const affordable = false;
+    this.skillBtn.setLabel('스킬트리', `${ownedCount(s)} / ${TREE.length - 1} · 밤에 배움${k}`);
     void pts;
     if (affordable && !this.skillPulse) this.skillPulse = this.tweens.add({ targets: this.skillBtn, scale: 1.06, duration: 520, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
     else if (!affordable && this.skillPulse) {
@@ -1162,7 +1162,7 @@ export class ForgeScene extends Phaser.Scene {
   private openSkills() {
     if (this.animating || this.leaving) return;
     this.sfx.click();
-    this.scene.launch('Skills');
+    this.scene.launch('Skills', { from: 'Forge' });
     this.scene.pause();
   }
 
