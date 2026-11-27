@@ -11,6 +11,8 @@ import { C, H, W, css, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
 import { PORTRAIT } from '../layout';
+import { PERKS, TIER_NAME, type PerkTier } from '../../config/rentPerks';
+import { TIER_COLOR, drawPerkIcon } from '../ui/perkIcons';
 
 const PANEL_W = PORTRAIT ? W : 400;
 const PANEL_H = PORTRAIT ? 360 : H;
@@ -128,12 +130,13 @@ export class SkillScene extends Phaser.Scene {
     let lastTap = 0;
     const area = this.add.zone(MAP_CX, MAP_CY, MAP_W, MAP_BOTTOM - MAP_TOP).setInteractive();
     area.on('pointerdown', (p: Phaser.Input.Pointer) => {
-      if (this.pinch) return;
+      if (this.pinch || this.perkWin) return;
       this.drag = { x: p.x, y: p.y, mx: this.map.x, my: this.map.y, moved: false };
     });
     this.input.on('pointermove', (p: Phaser.Input.Pointer) => {
       const a = this.input.pointer1;
       const b = this.input.pointer2;
+      if (this.perkWin) return;
       if (a.isDown && b.isDown) {
         // pinch: scale around the point between the fingers, which also pans with them
         const dist = Math.max(10, Math.hypot(a.x - b.x, a.y - b.y));
@@ -174,7 +177,7 @@ export class SkillScene extends Phaser.Scene {
       lastTap = hit ? 0 : now;
     });
     this.input.on('wheel', (p: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
-      if (p.x < MAP_W && p.y > MAP_TOP) this.zoomTo(this.zoom * (dy > 0 ? 0.88 : 1.14), p.x, p.y);
+      if (!this.perkWin && p.x < MAP_W && p.y > MAP_TOP) this.zoomTo(this.zoom * (dy > 0 ? 0.88 : 1.14), p.x, p.y);
     });
 
     // top bar (drawn over the map)
@@ -189,6 +192,14 @@ export class SkillScene extends Phaser.Scene {
       label(this, MAP_W / 2, PORTRAIT ? 30 : 26, '🌙 보기 전용 · 해가 진 뒤에 배울 수 있다', PORTRAIT ? 15 : 14, 0xc9b8ff, { weight: 900, origin: [0.5, 0.5] });
     }
     // (the ＋ − ◎ zoom buttons were removed on 2026-11-27: phones pinch, PC uses the wheel)
+    // 왕의 하사품 owned this run (user 2026-11-27: "스킬트리창에 패시브스킬 뭐가 적용되어있는지 볼수있는 창")
+    const perkCount = PERKS.filter((pk) => (this.core.state.perks?.[pk.id] ?? 0) > 0).length;
+    new Button(this, MAP_W - (PORTRAIT ? 120 : 110), TOP_H + (PORTRAIT ? 34 : 28), PORTRAIT ? 220 : 200, PORTRAIT ? 50 : 40, `👑 하사품 ${perkCount}개`, {
+      variant: 'gold',
+      size: PORTRAIT ? 18 : 15,
+      sub: PORTRAIT ? undefined : 'P',
+      onClick: () => this.openPerks(),
+    }).setDepth(5);
 
     // detail panel
     const pg = this.add.graphics();
@@ -211,9 +222,10 @@ export class SkillScene extends Phaser.Scene {
     }
 
     const kb = this.input.keyboard!;
-    kb.on('keydown-ESC', () => this.close());
-    kb.on('keydown-K', () => this.close());
-    kb.on('keydown-ENTER', () => this.buy());
+    kb.on('keydown-ESC', () => (this.perkWin ? this.closePerks() : this.close()));
+    kb.on('keydown-K', () => (this.perkWin ? this.closePerks() : this.close()));
+    kb.on('keydown-ENTER', () => !this.perkWin && this.buy());
+    kb.on('keydown-P', () => (this.perkWin ? this.closePerks() : this.openPerks()));
     this.cameras.main.fadeIn(250, 0, 0, 0);
     this.refresh();
   }
@@ -412,6 +424,101 @@ export class SkillScene extends Phaser.Scene {
     const next = TREE.filter((m) => m.from === r.id).sort((a, b) => nodeCost(this.core.state, a.id) - nodeCost(this.core.state, b.id))[0];
     if (next) this.selected = next.id;
     this.refresh();
+  }
+
+  private perkWin: Phaser.GameObjects.Container | null = null;
+
+  /** The 왕의 하사품 picked this run, rarest first; they are part of the run and go with it. */
+  private openPerks() {
+    if (this.perkWin) return;
+    this.sfx.click();
+    const owned = PERKS.filter((pk) => (this.core.state.perks?.[pk.id] ?? 0) > 0);
+    const order: PerkTier[] = ['rainbow', 'gold', 'silver', 'bronze'];
+    owned.sort((a, b) => order.indexOf(a.tier) - order.indexOf(b.tier));
+    const win = this.add.container(0, 0).setDepth(100);
+    this.perkWin = win;
+    const dim = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0.72).setInteractive();
+    const pw = PORTRAIT ? W - 32 : 760;
+    const ph = PORTRAIT ? H - 200 : H - 80;
+    const px = (W - pw) / 2;
+    const py = (H - ph) / 2;
+    dim.on('pointerup', (pt: Phaser.Input.Pointer) => {
+      if (pt.x < px || pt.x > px + pw || pt.y < py || pt.y > py + ph) this.closePerks();
+    });
+    const g = this.add.graphics();
+    g.fillStyle(0x120d09, 0.98).fillRoundedRect(px, py, pw, ph, 18);
+    g.lineStyle(3, C.gold, 0.9).strokeRoundedRect(px, py, pw, ph, 18);
+    g.lineStyle(1, C.goldHi, 0.25).strokeRoundedRect(px + 7, py + 7, pw - 14, ph - 14, 13);
+    win.add([dim, g]);
+    win.add(label(this, W / 2, py + 40, '👑 왕의 하사품', PORTRAIT ? 30 : 28, C.goldHi, { weight: 900, display: true, origin: [0.5, 0.5] }));
+    win.add(label(this, W / 2, py + 78, `받은 하사품 ${owned.length}개 · 월세를 낼 때마다 하나씩 · 판이 끝나면 사라진다`, PORTRAIT ? 15 : 14, C.mute, { weight: 700, origin: [0.5, 0.5] }));
+
+    const listTop = py + 104;
+    const listH = ph - 104 - 86;
+    const rowH = PORTRAIT ? 96 : 84;
+    const list = this.add.container(0, listTop);
+    const maskG = this.make.graphics({}).fillStyle(0xffffff).fillRect(px + 8, listTop, pw - 16, listH);
+    list.setMask(maskG.createGeometryMask());
+    win.add(list);
+    if (!owned.length) {
+      list.add(label(this, W / 2, listH / 2 - 20, '아직 받은 하사품이 없다.', PORTRAIT ? 22 : 20, C.text, { weight: 900, origin: [0.5, 0.5] }));
+      list.add(label(this, W / 2, listH / 2 + 16, '월세를 내면 왕이 카드 세 장 중 하나를 골라 준다.', PORTRAIT ? 16 : 15, C.mute, { weight: 700, origin: [0.5, 0.5] }));
+    }
+    owned.forEach((pk, i) => {
+      const lv = this.core.state.perks?.[pk.id] ?? 0;
+      const t = TIER_COLOR[pk.tier];
+      const y = i * rowH;
+      const row = this.add.graphics();
+      row.fillStyle(i % 2 ? 0x1a140f : 0x16110c, 1).fillRoundedRect(px + 18, y + 4, pw - 36, rowH - 8, 12);
+      row.lineStyle(2, t.main, 0.7).strokeRoundedRect(px + 18, y + 4, pw - 36, rowH - 8, 12);
+      const icon = this.add.graphics({ x: px + 18 + 44, y: y + rowH / 2 });
+      drawPerkIcon(icon, pk.icon, pk.tier, PORTRAIT ? 62 : 56);
+      const tx = px + 18 + 90;
+      const name = label(this, tx, y + (PORTRAIT ? 28 : 24), pk.name, PORTRAIT ? 20 : 19, t.hi, { weight: 900, origin: [0, 0.5] });
+      const tier = label(this, tx + name.width + 10, y + (PORTRAIT ? 28 : 24), `${TIER_NAME[pk.tier]}${pk.tradeoff ? ' · ⚖ 거래' : ''}`, PORTRAIT ? 13 : 12, pk.tradeoff ? 0xff9a7a : t.main, { weight: 700, origin: [0, 0.5] });
+      const lvText = label(this, px + pw - 36, y + (PORTRAIT ? 28 : 24), `Lv ${lv}/${pk.max}`, PORTRAIT ? 17 : 16, lv >= pk.max ? C.goldHi : C.text, { weight: 900, origin: [1, 0.5] });
+      const desc = label(this, tx, y + (PORTRAIT ? 62 : 56), pk.text(lv), PORTRAIT ? 16 : 15, C.text, { weight: 700, origin: [0, 0.5], wrap: pw - 160 });
+      list.add([row, icon, name, tier, lvText, desc]);
+    });
+
+    // scroll: wheel on PC, a finger drag on phones
+    const content = owned.length * rowH;
+    const minY = Math.min(listTop, listTop + listH - content);
+    let dragFrom: { y: number; ly: number } | null = null;
+    const inList = (pt: Phaser.Input.Pointer) => pt.x > px && pt.x < px + pw && pt.y > listTop && pt.y < listTop + listH;
+    const onWheel = (pt: Phaser.Input.Pointer, _o: unknown, _dx: number, dy: number) => {
+      if (inList(pt)) list.y = Phaser.Math.Clamp(list.y - dy * 0.6, minY, listTop);
+    };
+    const onDown = (pt: Phaser.Input.Pointer) => {
+      if (inList(pt)) dragFrom = { y: pt.y, ly: list.y };
+    };
+    const onMove = (pt: Phaser.Input.Pointer) => {
+      if (dragFrom && pt.isDown) list.y = Phaser.Math.Clamp(dragFrom.ly + pt.y - dragFrom.y, minY, listTop);
+    };
+    const onUp = () => (dragFrom = null);
+    this.input.on('wheel', onWheel);
+    this.input.on('pointerdown', onDown);
+    this.input.on('pointermove', onMove);
+    this.input.on('pointerup', onUp);
+    win.once(Phaser.GameObjects.Events.DESTROY, () => {
+      this.input.off('wheel', onWheel);
+      this.input.off('pointerdown', onDown);
+      this.input.off('pointermove', onMove);
+      this.input.off('pointerup', onUp);
+      maskG.destroy();
+    });
+
+    win.add(new Button(this, W / 2, py + ph - 44, PORTRAIT ? pw - 60 : 260, PORTRAIT ? 60 : 50, '닫기', { variant: 'dark', size: PORTRAIT ? 20 : 17, sub: PORTRAIT ? undefined : 'P · Esc', onClick: () => this.closePerks() }));
+    win.setAlpha(0);
+    this.tweens.add({ targets: win, alpha: 1, duration: 160 });
+  }
+
+  private closePerks() {
+    const w = this.perkWin;
+    if (!w) return;
+    this.perkWin = null;
+    this.sfx.click();
+    w.destroy();
   }
 
   private close() {

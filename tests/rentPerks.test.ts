@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { GameCore } from '../src/core/game';
 import { PERKS, PERK_BY_ID, PERK_ODDS, TIER_MAX } from '../src/config/rentPerks';
 import { collectRent, rentFor } from '../src/core/systems/rent';
 import { pickPerk, rerollCost, rerollPerks, rollChoices, tierOdds } from '../src/core/systems/rentPerks';
@@ -161,6 +162,19 @@ describe('왕의 하사품 (rent perks, 2026-11-27)', () => {
     expect(a.state.daily?.staminaUsed ?? 0).toBe(0);
     const b = drainStamina(a.state, 2);
     expect(b.state.daily?.staminaUsed).toBeGreaterThan(0);
+  });
+
+  it('perks belong to the run: unpaid rent ends it and the new run starts with none', () => {
+    const mem = new Map<string, string>();
+    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v), removeItem: (k: string) => void mem.delete(k) };
+    const core = new GameCore(storage, 1);
+    core.state = { ...core.state, perks: { b_grip: 3, r_bless: 1 }, gold: 0, rentDueDay: core.state.day + 1 };
+    const r = core.dispatch({ type: 'SLEEP' });
+    expect(r.type === 'slept' && r.gameOver).toBeTruthy();
+    expect(core.state.perks ?? {}).toEqual({});
+    core.state = { ...core.state, perks: { b_grip: 1 } };
+    core.dispatch({ type: 'NEW_RUN' });
+    expect(core.state.perks ?? {}).toEqual({});
   });
 
   it('cards: 운명 읽기 gives a second game, 카드 감각 pays part of a loss back', () => {
