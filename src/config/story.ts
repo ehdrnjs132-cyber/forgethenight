@@ -10,7 +10,7 @@ export type Beat =
   | 'kingGrins' // he leans in and the grin shows, red flash
   | 'kingLeaves' // he fades into the dark
   | 'morning' // daylight, Morr leans in
-  | 'stamp' // a big "월세 D-7" stamp hits the screen
+  | 'stamp' // a big "월세 D-5" stamp hits the screen
   | 'cards' // the gambler lays two face-down cards on the table
   | 'cardsFlip' // they turn: one O, one X
   | 'perkCards'; // three glowing reward cards rise behind the king
@@ -42,11 +42,11 @@ export const STORY: readonly StoryLine[] = [
   { speaker: 'me', text: '…폐하?' },
   { speaker: 'king', text: '이 땅의 모든 대장간은 왕의 것이다.' },
   { speaker: 'king', text: '너는 빌려 쓸 뿐이지.' },
-  { speaker: 'king', text: '그러니 7일마다 월세를 바쳐라.' },
-  { speaker: 'king', text: '첫 수금은 7일 뒤다.' },
+  { speaker: 'king', text: '그러니 5일마다 월세를 바쳐라.' },
+  { speaker: 'king', text: '첫 수금은 5일 뒤다.' },
   { speaker: 'king', text: '못 내면?', beat: 'kingGrins' },
   { speaker: 'king', text: '…대장간도, 네 목숨도 내 것이다.' },
-  { speaker: 'me', text: '(7일 안에… 월세를 벌어야 한다.)', beat: 'kingLeaves' },
+  { speaker: 'me', text: '(5일 안에… 월세를 벌어야 한다.)', beat: 'kingLeaves' },
   // ── 장면 2 · 모르의 요령 (아침)
   { speaker: 'morr', text: '허허, 왕이 다녀갔구먼.', beat: 'morning' },
   { speaker: 'morr', text: '처음인가? 요령 몇 가지만 알려 주지.' },

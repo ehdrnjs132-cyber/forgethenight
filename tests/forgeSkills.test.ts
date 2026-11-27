@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENHANCE_TABLE, OUTCOMES, type EnhanceRow, type Outcome } from '../src/config/enhancement';
 import { DIVINE_STEP, legacyRefund } from '../src/config/forgeSkills';
-import { BASE_SPEED, FINAL_STARS, LEGACY_TREE_COSTS, REFUND_CAP, STAMINA, TREE, TREE_BY_ID, starCost } from '../src/config/skillTree';
+import { BASE_SPEED, FINAL_STARS, REFUND_CAP, STAMINA, TREE, TREE_BY_ID, starPrice } from '../src/config/skillTree';
 import { DAILY_WEAPON_LIMIT, RENT } from '../src/config/economy';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager, migrate } from '../src/core/save/save';
@@ -25,6 +25,7 @@ import {
   workSecondsLeft,
 } from '../src/core/systems/forgeSkills';
 import { buyNode, checkBuyNode, nodeVisible, treeEffects } from '../src/core/systems/skillTree';
+import { nodeCost } from '../src/core/systems/skillTree';
 import { enhanceCost, enhanceCostFor, sellPrice } from '../src/core/systems/economy';
 import { collectRent, rentAmount, rentFor } from '../src/core/systems/rent';
 import { dailyWeaponLimit } from '../src/core/systems/weapons';
@@ -106,22 +107,20 @@ describe('star disc shape', () => {
       expect(n.from).toBe(`${n.id}m`);
     }
     expect(TREE.filter((n) => n.major && n.id.endsWith('m') && TREE_BY_ID[n.id.slice(0, -1)]).length).toBeGreaterThanOrEqual(15);
-    // the finals are still the end of their lines, and the priciest stars of the disc
-    for (const id of FINAL_STARS) {
-      expect(TREE.some((n) => n.from === id), id).toBe(false);
-      expect(TREE_BY_ID[id].cost).toBe(starCost(TREE_BY_ID[id].ring, true, true));
-    }
-    expect(Math.max(...TREE.filter((n) => !FINAL_STARS.has(n.id)).map((n) => n.cost))).toBeLessThan(Math.min(...[...FINAL_STARS].map((id) => TREE_BY_ID[id].cost)));
+    // the finals are still the end of their lines
+    for (const id of FINAL_STARS) expect(TREE.some((n) => n.from === id), id).toBe(false);
   });
 
-  it('stars cost more further out, big stars three small ones, and far more than the old tree', () => {
-    expect(starCost(2, false)).toBeGreaterThan(starCost(1, false));
-    expect(starCost(5, true) / starCost(5, false)).toBeGreaterThan(2.8);
-    expect(starCost(5, true) / starCost(5, false)).toBeLessThan(3.2);
-    for (const n of TREE) if (n.id !== 'root') expect(n.cost).toBe(starCost(n.ring, n.major, FINAL_STARS.has(n.id)));
-    const total = TREE.reduce((a, n) => a + n.cost, 0);
-    const oldTotal = Object.values(LEGACY_TREE_COSTS).reduce((a, v) => a + v, 0);
-    expect(total).toBeGreaterThan(oldTotal * 5);
+  it('every star learned makes the next one dearer: 100, 200, 400, 600, 1000, then on up (user 2026-11-27)', () => {
+    expect([1, 2, 3, 4, 5].map((n) => starPrice(n))).toEqual([100, 200, 400, 600, 1000]);
+    for (let n = 5; n < 324; n++) expect(starPrice(n + 1)).toBeGreaterThan(starPrice(n));
+    // big stars twice, a sector's final star three times (×2 again for being big)
+    expect(starPrice(10, true) / starPrice(10)).toBeCloseTo(2, 1);
+    expect(starPrice(30, true, true)).toBeGreaterThan(starPrice(30, true) * 2.9);
+    // the price follows the count, wherever the star is
+    const three = withNodes(['od1n', 'od1m', 'od1']);
+    expect(nodeCost(three, 'od2n')).toBe(600);
+    expect(nodeCost(three, 'sp1n')).toBe(600);
   });
 
   it('buyable stars are the ones next to an owned star', () => {
@@ -136,7 +135,7 @@ describe('star disc shape', () => {
     const a = buyNode(s, 'od1n');
     expect(a.ok).toBe(true);
     if (!a.ok) return;
-    expect(a.state.gold).toBe(200 - TREE_BY_ID.od1n.cost);
+    expect(a.state.gold).toBe(100); // the first star costs 100
     expect(checkBuyNode(a.state, 'od1n')).toBe('owned');
     expect(checkBuyNode({ ...a.state, gold: 0 }, 'od1m')).toBe('gold');
     expect(checkBuyNode({ ...a.state, phase: 'night' }, 'sp1')).toBe('night');
@@ -437,13 +436,13 @@ describe('✚ insurance', () => {
 describe('rent (2026-11-20): unpaid rent ends the run', () => {
   const due = (s: GameState): GameState => ({ ...s, rentDueDay: s.day });
 
-  it('the king comes every 7 days (2026-11-26)', () => {
+  it('the king comes every 5 days (2026-11-27; it was 7)', () => {
     const s0 = withNodes([]);
-    expect(RENT.firstAfter).toBe(7);
+    expect(RENT.firstAfter).toBe(5);
     let s = due({ ...s0, gold: 10_000_000 });
     for (let i = 0; i < 3; i++) {
       const r = collectRent(s);
-      expect(r.state.rentDueDay).toBe(s.day + 7);
+      expect(r.state.rentDueDay).toBe(s.day + 5);
       s = due({ ...r.state, day: r.state.rentDueDay! });
     }
   });

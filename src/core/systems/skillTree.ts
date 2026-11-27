@@ -1,11 +1,18 @@
 // The four-direction skill tree (config/skillTree.ts): owned nodes, what they add up to, and buying.
 // Pure functions over GameState.
-import { TREE, TREE_BY_ID, baseEffects, type TreeEffects, type TreeNode } from '../../config/skillTree';
+import { FINAL_STARS, TREE, TREE_BY_ID, baseEffects, starPrice, type TreeEffects, type TreeNode } from '../../config/skillTree';
 import type { GameState } from '../state/types';
 import { applyPerks } from '../../config/rentPerks';
 
 export function ownsNode(state: GameState, id: string): boolean {
   return id === 'root' || (state.treeNodes ?? []).includes(id);
+}
+
+/** What star `id` costs right now: the price of the next star learned (more stars learned, higher price). */
+export function nodeCost(state: GameState, id: string): number {
+  const n = TREE_BY_ID[id];
+  if (!n || id === 'root') return 0;
+  return starPrice(ownedCount(state) + 1, n.major, FINAL_STARS.has(id));
 }
 
 /** Owned nodes other than the anvil. */
@@ -38,14 +45,14 @@ export function checkBuyNode(state: GameState, id: string, atEvening = true): No
   if (state.phase !== 'day') return 'night';
   if (!atEvening) return 'day';
   if (n.from && !ownsNode(state, n.from)) return 'locked';
-  if (state.gold < n.cost) return 'gold';
+  if (state.gold < nodeCost(state, id)) return 'gold';
   return null;
 }
 
 export function buyNode(prev: GameState, id: string, atEvening = true): { ok: true; state: GameState; cost: number } | { ok: false; reason: NodeBuyBlock } {
   const block = checkBuyNode(prev, id, atEvening);
   if (block) return { ok: false, reason: block };
-  const cost = TREE_BY_ID[id].cost;
+  const cost = nodeCost(prev, id);
   return { ok: true, state: { ...prev, gold: prev.gold - cost, treeNodes: [...(prev.treeNodes ?? []), id] }, cost };
 }
 
@@ -56,5 +63,5 @@ export function anyNodeAffordable(state: GameState): boolean {
 
 /** Cheapest node not owned yet (for the day-1 hint). */
 export function cheapestOpenNode(state: GameState): number {
-  return Math.min(...TREE.filter((n) => n.id !== 'root' && nodeVisible(state, n) && !ownsNode(state, n.id)).map((n) => n.cost), Infinity);
+  return Math.min(...TREE.filter((n) => n.id !== 'root' && nodeVisible(state, n) && !ownsNode(state, n.id)).map((n) => nodeCost(state, n.id)), Infinity);
 }

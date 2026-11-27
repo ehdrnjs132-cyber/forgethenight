@@ -66,9 +66,10 @@ export const WEAPON_BASE_PRICE = 0;
  * days; the amount is base × growth^(day−1), rounded to 10G. Unpaid rent ends the run (2026-11-20).
  */
 // 2026-11-26 (user): the king comes once every 7 days (was every 3–5 days).
+// 2026-11-27 (user: "월세 4일마다", then "월세주기 5일로"): every 5 days.
 // 2026-11-27 (user, problem #2): 22%/day (×4 a week) outran any steady income, so the rent was
 // settled by an all-in coin flip; 16%/day is about ×2.8 a week.
-export const RENT = { base: 150, growth: 1.16, firstAfter: 7, minGap: 7, maxGap: 7 };
+export const RENT = { base: 150, growth: 1.16, firstAfter: 5, minGap: 5, maxGap: 5 };
 
 /** Weapons per day (user decision 2026-11-19: up to 6): the morning delivery plus free ones from the forge button. */
 // 2026-11-27: 4 with the rack cut to 4 slots (the morning brings 2, the forge button 2 more)

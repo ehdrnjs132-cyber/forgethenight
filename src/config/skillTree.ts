@@ -138,13 +138,12 @@ export interface TreeNode {
   /** Position on the star disc in px from the anvil at (0, 0): x to the right, y downward. */
   x: number;
   y: number;
-  /** Ring (distance step) from the anvil; prices grow with it. */
+  /** Ring (distance step) from the anvil. */
   ring: number;
   /** A big star: a special skill. Small stars are +5% / +0.5%p steps. */
   major: boolean;
   name: string;
   desc: string;
-  cost: number;
   /** Node that must be owned first (the one it grows from). */
   from: string | null;
   apply: (e: TreeEffects) => void;
@@ -168,18 +167,19 @@ export const RING_PX = { first: 110, step: 44 } as const;
 /** Rings per step of the original layout: 3 since 2026-11-27 (two new stars on every link; it was 2, before that 1). */
 export const RING_SCALE = 3;
 /**
- * Price of a star: grows with the ring; big stars cost three small ones; the final star of each sector
- * three times more again (2026-11-27: "마지막 단계는 더욱 비싸지겠지"). The growth per ring is √1.62, so a
- * star that moved from ring r to ring 2r keeps the price it had.
+ * Price of a star (user 2026-11-27: "찍을수록 더 비싸지게 · 100 - 200 - 400 - 600 - 1000 이런식으로"): it depends on
+ * how many stars are already learned, not on where the star is. The first five follow the user's numbers,
+ * then the price keeps climbing (n^1.6). Big stars cost twice a small one; a sector's final star three times.
  */
-// 2026-11-27 ("후반에 갈수록 가격 갭이 좀 더 커지게"): the growth itself grows toward the edge. Per step of the
-// original layout the price rises ×1.45 near the anvil and ×1.9 at the edge (it used to be ×1.62 everywhere).
-export const COST = { base: 150, rate: 0.36, curve: 0.014, majorMul: 3, finalMul: 1.2 } as const;
+export const STAR_PRICE = { first: [100, 200, 400, 600, 1_000], exp: 1.6, majorMul: 2, finalMul: 3 } as const;
 
 const nice = (v: number) => (v < 1_000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100);
-export function starCost(ring: number, major: boolean, final = false): number {
-  const t = ring / RING_SCALE - 1;
-  return nice(COST.base * Math.exp(COST.rate * t + COST.curve * t * t) * (major ? COST.majorMul : 1) * (final ? COST.finalMul : 1));
+/** Price of the `nth` star learned (1 = the first). */
+export function starPrice(nth: number, major = false, final = false): number {
+  const n = Math.max(1, Math.floor(nth));
+  const f = STAR_PRICE.first;
+  const plain = n <= f.length ? f[n - 1] : f[f.length - 1] * Math.pow(n / f.length, STAR_PRICE.exp);
+  return nice(plain * (major ? STAR_PRICE.majorMul : 1) * (final ? STAR_PRICE.finalMul : 1));
 }
 
 /** The last star of each sector: the goal at the edge of the disc. */
@@ -266,12 +266,12 @@ const NOTABLE_RINGS: ReadonlySet<number> = new Set([4, 8]);
  * parent, halfway in ring and angle; the spec now grows from that new star.
  */
 function sector(dir: Direction, specs: readonly Spec[]): TreeNode[] {
-  const place = (id: string, ring: number, ang: number, s: Minor | Notable, from: string, final = false): TreeNode => {
+  const place = (id: string, ring: number, ang: number, s: Minor | Notable, from: string): TreeNode => {
     const major = !Array.isArray(s);
     const rad = ((SECTOR_DEG[dir] + ang) * Math.PI) / 180;
     const r = RING_PX.first + (ring - 1) * RING_PX.step;
     const [name, desc, apply] = major ? [(s as Notable).name, (s as Notable).desc, (s as Notable).apply] : (s as Minor);
-    return { id, dir, x: Math.round(Math.cos(rad) * r), y: Math.round(Math.sin(rad) * r), ring, major, name, desc, apply, from, cost: starCost(ring, major, final) };
+    return { id, dir, x: Math.round(Math.cos(rad) * r), y: Math.round(Math.sin(rad) * r), ring, major, name, desc, apply, from };
   };
   const at = new Map<string, { ring: number; ang: number }>([['root', { ring: 0, ang: 0 }]]);
   const nodes: TreeNode[] = [];
@@ -290,14 +290,14 @@ function sector(dir: Direction, specs: readonly Spec[]): TreeNode[] {
     // 2026-11-27 ("스킬들 1.5배"): a second new star on every link, next to the parent (`<id>n`)
     nodes.push(place(`${id}n`, step(1), pAng + (ang - pAng) / 3, near, from));
     nodes.push(place(`${id}m`, step(2), pAng + ((ang - pAng) * 2) / 3, between, `${id}n`));
-    nodes.push(place(id, ring, ang, s, `${id}m`, FINAL_STARS.has(id)));
+    nodes.push(place(id, ring, ang, s, `${id}m`));
     at.set(id, { ring, ang });
   }
   return nodes;
 }
 
 export const TREE: readonly TreeNode[] = [
-  { id: 'root', dir: 'root', x: 0, y: 0, ring: 0, major: true, name: '심장의 모루', desc: '모든 기술은 이 모루에서 뻗어 나간다', cost: 0, from: null, apply: () => {} },
+  { id: 'root', dir: 'root', x: 0, y: 0, ring: 0, major: true, name: '심장의 모루', desc: '모든 기술은 이 모루에서 뻗어 나간다', from: null, apply: () => {} },
 
   // ✦ 확률 — success / destroy / great in 0.5%p steps; 굳은 쇠, 기적의 불꽃, 과열 단조, 명장의 감, 신의 망치
   ...sector('odds', [

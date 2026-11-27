@@ -1,3 +1,5 @@
+import { nodeCost } from '../../src/core/systems/skillTree';
+import { starPrice } from '../../src/config/skillTree';
 // Hard-mode comparison (QA proposal, user request 2026-11-27). Plays whole runs through the real GameCore
 // (morning delivery, free weapons, stamina, selling, overflow) up to the third rent on DAY 22, with two
 // strategies and two rule sets on the SAME random seeds. No night battle and no cards.
@@ -14,7 +16,6 @@
 // awakening's extra wait no longer drains (fixed the same day), so it is not counted.
 import { writeFileSync } from 'node:fs';
 import { ENHANCE_TABLE, type EnhanceRow } from '../../src/config/enhancement';
-import { TREE_BY_ID } from '../../src/config/skillTree';
 import { GameCore } from '../../src/core/game';
 import { MemoryStorage } from '../../src/core/save/save';
 import { Rng } from '../../src/core/rng';
@@ -93,7 +94,7 @@ function playRun(seed: number, mode: Mode, strat: Strategy): RunLog {
       log.leftAfter.push(s().gold);
       // after paying: the next speed star, if it can be afforded (the evening shop, here in the morning)
       const next = ['sp1', 'sp2'][speedStars];
-      const cost = next ? TREE_BY_ID[next].cost : Infinity;
+      const cost = next ? nodeCost(s(), next) : Infinity;
       log.couldBuy.push(s().gold >= cost);
       if (next && s().gold >= cost) {
         core.dispatch({ type: 'BUY_NODE', id: next, evening: true });
@@ -161,7 +162,7 @@ lines.push(`실제 게임 코어로 DAY 1~${LAST_DAY}를 ${RUNS}판씩 진행. �
 lines.push(`타격 1회의 체력 소모 시간 = ${STRIKE_SEC_AT_1}초 ÷ 망치 속도 (브라우저 실측 기반). 월세를 낸 직후 다음 속도 별을 살 수 있으면 산다.`, '');
 lines.push(`- 현재: 표 그대로, 속도 ×${CURRENT.speed.join(' → ×')}, 월세 ${RENT_DAYS.map((d) => `DAY ${d} ${g(CURRENT.rent(d))}`).join(' · ')}`);
 lines.push(`- 하드: +0 성공 50%·대성공 8% (줄인 몫은 유지로, +15까지 점점 0), 속도 ×${HARD.speed.join(' → ×')}, 월세 ${RENT_DAYS.map((d) => `DAY ${d} ${g(HARD.rent(d))}`).join(' · ')}`);
-lines.push(`- 속도 별 가격: sp1 ${g(TREE_BY_ID.sp1.cost)}, sp2 ${g(TREE_BY_ID.sp2.cost)}`, '');
+lines.push(`- 속도 별 가격: first ${g(starPrice(1))}, second ${g(starPrice(2))}`, '');
 lines.push('| 규칙 | 전략 | DAY 1 타수 | 첫 주 타수 | 1차 납부율 | 2차 | 3차 | 1차 후 잔액(중앙) | 2차 후 | 3차 후 | 1차 후 속도 별 구매 가능 | 2차 후 |');
 lines.push('|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|');
 for (const mode of [CURRENT, HARD]) {

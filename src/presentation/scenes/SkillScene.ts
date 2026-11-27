@@ -6,7 +6,7 @@
 import Phaser from 'phaser';
 import type { GameCore } from '../../core/game';
 import { DIRECTION_INFO, RING_PX, SECTOR_DEG, TREE, TREE_BY_ID, type Direction, type TreeNode } from '../../config/skillTree';
-import { checkBuyNode, nodeVisible, ownedCount, ownsNode, type NodeBuyBlock } from '../../core/systems/skillTree';
+import { checkBuyNode, nodeCost, nodeVisible, ownedCount, ownsNode, type NodeBuyBlock } from '../../core/systems/skillTree';
 import { C, H, W, css, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
@@ -93,7 +93,7 @@ export class SkillScene extends Phaser.Scene {
     this.buyable = new Set();
     this.zoom = FIT;
     // start on the cheapest star that can be bought next, else the anvil
-    const open = TREE.filter((n) => n.id !== 'root' && nodeVisible(this.core.state, n) && !ownsNode(this.core.state, n.id)).sort((a, b) => a.cost - b.cost);
+    const open = TREE.filter((n) => n.id !== 'root' && nodeVisible(this.core.state, n) && !ownsNode(this.core.state, n.id)).sort((a, b) => nodeCost(this.core.state, a.id) - nodeCost(this.core.state, b.id));
     this.selected = open[0]?.id ?? 'root';
 
     // night sky behind the disc
@@ -375,7 +375,7 @@ export class SkillScene extends Phaser.Scene {
       y += 24 * big;
     }
     const btnY = PORTRAIT ? Math.min(y + 40, PANEL_H - 120) : y + 44;
-    const btn = new Button(this, PANEL_W / 2, btnY, PANEL_W - pad * 2, 62 * big, owned ? '배웠습니다' : `배우기 · ${n.cost.toLocaleString()}G`, {
+    const btn = new Button(this, PANEL_W / 2, btnY, PANEL_W - pad * 2, 62 * big, owned ? '배웠습니다' : `배우기 · ${nodeCost(this.core.state, n.id).toLocaleString()}G`, {
       variant: block ? 'dark' : 'gold',
       size: 22 * big,
       sub: owned ? undefined : block ? BLOCK_TEXT[block] : PORTRAIT ? undefined : 'Enter',
@@ -409,7 +409,7 @@ export class SkillScene extends Phaser.Scene {
     burst.explode(n.major ? 26 : 12);
     this.time.delayedCall(600, () => burst.destroy());
     // move on to the cheapest star that just opened up, if any
-    const next = TREE.filter((m) => m.from === r.id).sort((a, b) => a.cost - b.cost)[0];
+    const next = TREE.filter((m) => m.from === r.id).sort((a, b) => nodeCost(this.core.state, a.id) - nodeCost(this.core.state, b.id))[0];
     if (next) this.selected = next.id;
     this.refresh();
   }

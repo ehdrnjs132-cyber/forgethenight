@@ -11,6 +11,7 @@ import { C, DISPLAY, FONT, H, W, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
 import { PORTRAIT } from '../layout';
+import { RENT } from '../../config/economy';
 import { drawKing, type KingParts } from '../fx/kingArt';
 
 export interface StoryData {
@@ -273,7 +274,7 @@ export class StoryScene extends Phaser.Scene {
         sg.lineStyle(2, 0xff3a2a, 0.6).strokeRoundedRect(-158, -78, 316, 156, 16);
         const head = label(this, 0, -54, '👑 왕의 수금까지', 20, 0xffb0a0, { weight: 900, origin: [0.5, 0.5] });
         const big = this.add
-          .text(0, 12, '월세 D-7', { fontFamily: DISPLAY, fontSize: '70px', fontStyle: '900', color: '#ff3a2a', stroke: '#000000', strokeThickness: 8, resolution: 2 })
+          .text(0, 12, `월세 D-${RENT.firstAfter}`, { fontFamily: DISPLAY, fontSize: '70px', fontStyle: '900', color: '#ff3a2a', stroke: '#000000', strokeThickness: 8, resolution: 2 })
           .setOrigin(0.5);
         stamp.add([sg, head, big]);
         stamp.setScale(2.4).setAlpha(0);
