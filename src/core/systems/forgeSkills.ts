@@ -101,7 +101,9 @@ export function phoenixLeft(state: GameState): number {
 
 /** Level a weapon destroyed at `level` comes back at, under 불사조. */
 export function phoenixLevel(state: GameState, level: number): number {
-  const mode = treeEffects(state).phoenix.mode;
+  const e = treeEffects(state);
+  // 불멸의 모루: the day's first revivals keep the whole level
+  const mode = daily(state).phoenix < e.phoenixFull ? 'full' : e.phoenix.mode;
   const l = mode === 'full' ? level : mode === 'minus2' ? level - 2 : Math.floor(level / 2);
   return Math.max(0, Math.min(MAX_LEVEL, l));
 }

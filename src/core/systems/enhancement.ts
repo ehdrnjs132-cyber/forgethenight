@@ -12,6 +12,7 @@ import { apprenticeFree, consume, enhanceCostFor, festivalToday, isArmed, sellPr
 import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 import { DIVINE_STEP } from '../../config/forgeSkills';
+import { REFUND_CAP } from '../../config/skillTree';
 import { spendGodHammer } from './godHammer';
 import { logOutcome, logStrike } from './dayLog';
 
@@ -268,7 +269,8 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
   const t = treeEffects(state);
   if (newLevel === null) {
     // 파편 줍기: part of what the weapon would have sold for comes back
-    refund = t.destroyRefund > 0 ? Math.round((sellPrice(state, before.level, before.golden) * t.destroyRefund) / 100) : 0;
+    const share = Math.min(REFUND_CAP, t.destroyRefund);
+    refund = share > 0 ? Math.round((sellPrice(state, before.level, before.golden) * share) / 100) : 0;
     state = removeWeapon(state, before.id);
     state = { ...state, gold: state.gold + refund, stats: { ...state.stats, destroyed: state.stats.destroyed + 1 } };
   } else {

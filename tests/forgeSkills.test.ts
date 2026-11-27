@@ -3,7 +3,7 @@
 import { describe, expect, it } from 'vitest';
 import { ENHANCE_TABLE, OUTCOMES, type EnhanceRow, type Outcome } from '../src/config/enhancement';
 import { DIVINE_STEP, legacyRefund } from '../src/config/forgeSkills';
-import { BASE_SPEED, FINAL_STARS, LEGACY_TREE_COSTS, STAMINA, TREE, TREE_BY_ID, starCost } from '../src/config/skillTree';
+import { BASE_SPEED, FINAL_STARS, LEGACY_TREE_COSTS, REFUND_CAP, STAMINA, TREE, TREE_BY_ID, starCost } from '../src/config/skillTree';
 import { DAILY_WEAPON_LIMIT, RENT } from '../src/config/economy';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager, migrate } from '../src/core/save/save';
@@ -364,11 +364,14 @@ describe('◆ gold', () => {
 });
 
 describe('✚ insurance', () => {
-  it('불사조 brings a destroyed weapon back at half, −2, then the full level', () => {
+  it('불사조 brings a destroyed weapon back at half, −2, then (불멸의 모루) the first one of the day at the full level', () => {
     expect(phoenixLevel(withNodes(pathTo('phoenix')), 15)).toBe(7);
     expect(phoenixLevel(withNodes(pathTo('wings')), 15)).toBe(13);
-    expect(phoenixLevel(withNodes(pathTo('immortal')), 15)).toBe(15);
-    expect(phoenixLeft(withNodes(pathTo('immortal')))).toBe(3);
+    const imm = withNodes(pathTo('immortal'));
+    expect(phoenixLevel(imm, 15)).toBe(15);
+    expect(phoenixLeft(imm)).toBe(2); // 2026-11-27: was 3 full revivals a day
+    const second = { ...imm, daily: { day: imm.day, phoenix: 1, fateSplit: 0, freeWeapons: 0 } };
+    expect(phoenixLevel(second, 15)).toBe(13);
     // only the weapon the player chose to protect is revived (QA 2026-11-27)
     const s = withNodes(pathTo('phoenix'), { level: 12 });
     const unguarded = enhance(s, s.weapons[0].id, { force: 'destroy' });
@@ -382,12 +385,24 @@ describe('✚ insurance', () => {
     expect(again.ok && again.result.phoenix).toBe(null);
   });
 
-  it('파편 줍기 pays 5% of a destroyed weapon back per star', () => {
+  it('불사조의 모루 comes later, behind 운명 분열 (user 2026-11-27)', () => {
+    expect(TREE_BY_ID.phoenix.ring).toBeGreaterThan(TREE_BY_ID.split.ring);
+    expect(pathTo('phoenix')).toContain('split');
+  });
+
+  it('all shard refunds together stop at 40% of the sale price (the whole branch used to give 101%)', () => {
+    const all = withNodes(TREE.filter((n) => n.dir === 'insure').map((n) => n.id), { level: 12 });
+    expect(treeEffects(all).destroyRefund).toBeGreaterThan(REFUND_CAP);
+    const r = enhance(all, all.weapons[0].id, { force: 'destroy' });
+    expect(r.ok && r.result.refund).toBe(Math.round((sellPrice(all, 12) * REFUND_CAP) / 100));
+  });
+
+  it('파편 줍기 pays 3% of a destroyed weapon back per star', () => {
     const s = withNodes(['in1'], { level: 12 });
     const r = enhance(s, s.weapons[0].id, { force: 'destroy' });
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const refund = Math.round(sellPrice(s, 12) * 0.05);
+    const refund = Math.round(sellPrice(s, 12) * 0.03);
     expect(r.result.refund).toBe(refund);
     expect(r.state.gold).toBe(s.gold - enhanceCostFor(s, 12) + refund);
   });

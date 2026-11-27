@@ -48,6 +48,8 @@ export interface TreeEffects {
   destroyRefund: number;
   /** 불사조의 모루: revivals per day and how much of the level comes back. */
   phoenix: { perDay: number; mode: 'none' | 'half' | 'minus2' | 'full' };
+  /** 불멸의 모루: the day's first N revivals keep the whole level. */
+  phoenixFull: number;
   /** 운명 분열 uses per day. */
   fateSplit: number;
   /** Protection stones given every morning. */
@@ -114,6 +116,11 @@ export interface TreeEffects {
 
 export const RHYTHM_SECONDS = 4;
 export const GOLDEN_SELL_MUL = 2;
+/**
+ * Shard refunds (skill tree and rent perks together) stop at this % of the sale price (2026-11-27: the
+ * whole 보험 branch used to give back 101%, so breaking a weapon paid more than selling it).
+ */
+export const REFUND_CAP = 40;
 /** Hammer speed before any skill: 50% slower than the old normal (user decision 2026-11-26). */
 export const BASE_SPEED = 0.5;
 /**
@@ -187,7 +194,8 @@ const SELL: Minor = ['판매가 +5%', '무기 판매가 +5%', (e) => void (e.sel
 const THRIFT: Minor = ['강화비 −5%', '강화 비용 −5%', (e) => void (e.costCut += 0.05)];
 const RENT: Minor = ['월세 −5%', '월세 −5%', (e) => void (e.rentCut += 0.05)];
 const GOLDEN: Minor = ['황금 +5%', '새 무기가 황금 무기일 확률 +5%', (e) => void (e.golden += 5)];
-const REFUND: Minor = ['파편 +5%', '무기가 파괴되면 판매가의 5%를 더 돌려받는다', (e) => void (e.destroyRefund += 5)];
+// 2026-11-27 (보험 too strong): +5 → +3 per star, and all refunds together stop at REFUND_CAP
+const REFUND: Minor = ['파편 +3%', '무기가 파괴되면 판매가의 3%를 더 돌려받는다', (e) => void (e.destroyRefund += 3)];
 /** 최대 체력 stars grow outward (+10 at the anvil … +80 at the edge) so the sector reaches 1000 (user 2026-11-26). */
 const vigor = (n: number): Minor => [`체력 +${n}`, `최대 체력 +${n}`, (e) => void (e.staminaMax += n)];
 const EASE: Minor = ['감소 −5%', '체력이 줄어드는 속도 −5%', (e) => void (e.drainCut += 0.05)];
@@ -212,7 +220,7 @@ const MID: Record<Direction, Minor[]> = {
   // the stamina sector keeps its 1000 maximum: its new stars slow the drain or win stamina back instead
   stamina: [half('감소 −3%', '체력이 줄어드는 속도 −3%', (e) => void (e.drainCut += 0.03)), half('아끼기 +1%', '망치질할 때 1% 확률로 체력을 되찾는다', (e) => void (e.staminaSave += 1))],
   gold: [half('판매가 +3%', '무기 판매가 +3%', (e) => void (e.sell += 0.03)), half('강화비 −3%', '강화 비용 −3%', (e) => void (e.costCut += 0.03))],
-  insure: [half('파편 +3%', '무기가 파괴되면 판매가의 3%를 더 돌려받는다', (e) => void (e.destroyRefund += 3))],
+  insure: [half('파편 +1.5%', '무기가 파괴되면 판매가의 1.5%를 더 돌려받는다', (e) => void (e.destroyRefund += 1.5))],
 };
 type Notable = { name: string; desc: string; apply: Fx };
 const NOTABLES: Record<Direction, Notable[]> = {
@@ -241,7 +249,7 @@ const NOTABLES: Record<Direction, Notable[]> = {
     BIG('금빛 눈', '새 무기가 황금 무기일 확률 +8%', (e) => void (e.golden += 8)),
   ],
   insure: [
-    BIG('파편 수집가', '무기가 파괴되면 판매가의 12%를 더 돌려받는다', (e) => void (e.destroyRefund += 12)),
+    BIG('파편 수집가', '무기가 파괴되면 판매가의 6%를 더 돌려받는다', (e) => void (e.destroyRefund += 6)),
     BIG('보험 증서', '하락의 10%가 유지로 바뀐다', (e) => void (e.downKeep += 10)),
   ],
 };
@@ -411,21 +419,24 @@ export const TREE: readonly TreeNode[] = [
   ...sector('insure', [
     ['in1', 'root', 1, 0, REFUND],
     ['in2', 'in1', 2, 6, REFUND],
-    ['phoenix', 'in2', 3, 0, BIG('불사조의 모루', '하루 1회, 보호로 지정한 무기가 파괴되면 절반 단계로 되살아난다', (e) => void (e.phoenix = { perDay: 1, mode: 'half' }))],
-    ['in4', 'phoenix', 4, -11, REFUND],
+    // 불사조의 모루 moved from ring 3 to ring 7, behind 운명 분열 (user 2026-11-27: "좀 나중에 나와야"); its old
+    // spot is a small star now (it swapped places with in9, so saves keep what they paid for)
+    ['in9', 'in2', 3, 0, REFUND],
+    ['in4', 'in9', 4, -11, REFUND],
     ['stones', 'in4', 5, -18, BIG('아침 보호석', '매일 아침 강화 보호석 1개', (e) => void (e.morningStones += 1))],
-    ['in6', 'phoenix', 4, 10, REFUND],
+    ['in6', 'in9', 4, 10, REFUND],
     ['split', 'in6', 5, 13, BIG('운명 분열', '하루 2회, 강화 결과 둘 중 하나를 고른다', (e) => void (e.fateSplit = Math.max(e.fateSplit, 2)))],
     ['in8', 'split', 6, 8, REFUND],
-    ['in9', 'in8', 7, 3, REFUND],
-    ['wings', 'in9', 8, -3, BIG('불사조의 날개', '불사조 하루 2회 · 2단계만 내려가 되살아난다', (e) => void (e.phoenix = { perDay: 2, mode: 'minus2' }))],
+    ['phoenix', 'in8', 7, 3, BIG('불사조의 모루', '하루 1회, 보호로 지정한 무기가 파괴되면 절반 단계로 되살아난다', (e) => void (e.phoenix = { perDay: 1, mode: 'half' }))],
+    ['wings', 'phoenix', 8, -3, BIG('불사조의 날개', '불사조 하루 2회 · 2단계만 내려가 되살아난다', (e) => void (e.phoenix = { perDay: 2, mode: 'minus2' }))],
     ['in11', 'stones', 6, -24, REFUND],
     ['mercy', 'in11', 7, -26, BIG('왕의 자비', '월세를 못 내도 한 번은 다음 방문까지 미뤄 준다 (한 판에 1회)', (e) => void (e.mercy = true))],
     ['in14', 'wings', 9, 5, REFUND],
-    ['thread', 'in14', 10, 11, BIG('운명의 실', '운명 분열 하루 5회', (e) => void (e.fateSplit = Math.max(e.fateSplit, 5)))],
+    ['thread', 'in14', 10, 11, BIG('운명의 실', '운명 분열 하루 3회', (e) => void (e.fateSplit = Math.max(e.fateSplit, 3)))],
     ['in16', 'wings', 9, -11, REFUND],
     ['in17', 'in16', 10, -8, REFUND],
-    ['immortal', 'in17', 11, -2, BIG('불멸의 모루', '불사조 하루 3회 · 원래 단계 그대로 되살아난다', (e) => void (e.phoenix = { perDay: 3, mode: 'full' }))],
+    // 2026-11-27 (보험 too strong): 3 full revivals a day → 1 full a day, the 2nd one like 불사조의 날개
+    ['immortal', 'in17', 11, -2, BIG('불멸의 모루', '불사조 하루 2회 · 그중 첫 번째는 원래 단계 그대로 되살아난다', (e) => void ((e.phoenix = { perDay: 2, mode: 'minus2' }), (e.phoenixFull = 1)))],
   ]),
 ];
 
@@ -460,6 +471,7 @@ export function baseEffects(): TreeEffects {
     rentCut: 0,
     destroyRefund: 0,
     phoenix: { perDay: 0, mode: 'none' },
+    phoenixFull: 0,
     fateSplit: 0,
     morningStones: 0,
     mercy: false,
