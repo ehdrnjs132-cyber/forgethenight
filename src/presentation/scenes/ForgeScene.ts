@@ -1568,8 +1568,6 @@ export class ForgeScene extends Phaser.Scene {
             this.damagePop(r.weaponBefore, r.weaponAfter);
           }
         },
-        // a deliberate single strike (not the hold-to-repeat run) gets the suspense beat on risky levels
-        suspense: !this.holdStarted,
         // the awakening's extra wait does not cost stamina; the drain resumes when the input unlocks
         onHold: (held) => {
           if (held) this.flushDrain();

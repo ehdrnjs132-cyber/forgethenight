@@ -35,11 +35,6 @@ export interface PlayHooks {
    * when it ends. The forge stops the stamina drain meanwhile (QA 2026-11-27: 40 → 31 during it).
    */
   onHold?: (held: boolean) => void;
-  /**
-   * A single, deliberate strike (not the hold-to-repeat run): risky ones get a moment of suspense before
-   * the hammer falls (user 2026-11-27: "강화 연출 더 멋있게 재밌게").
-   */
-  suspense?: boolean;
 }
 
 export const HAMMER_IDLE = 32;
@@ -252,26 +247,6 @@ export class EnhancementPresentation {
     });
   }
 
-  /**
-   * Before a risky strike: the light closes in, the heart beats, the camera leans towards the anvil and
-   * the weapon trembles. Only for deliberate single strikes (not while holding the button).
-   */
-  private async suspense(result: EnhanceResult) {
-    const cam = this.scene.cameras.main;
-    const { weapon, sfx } = this.p;
-    const big = result.row.destroy >= 8 || result.weaponBefore.level >= 20;
-    const dark = this.scene.add.rectangle(cam.width / 2, cam.height / 2, cam.width, cam.height, 0x000000, 0).setDepth(16).setScrollFactor(0);
-    this.scene.tweens.add({ targets: dark, fillAlpha: big ? 0.45 : 0.3, duration: 220 });
-    sfx.heartbeat();
-    if (!this.reduceMotion) {
-      this.scene.tweens.add({ targets: cam, zoom: big ? 1.07 : 1.04, duration: 320, ease: 'Sine.easeInOut' });
-      const x0 = weapon.x;
-      this.scene.tweens.add({ targets: weapon, x: x0 + 2, duration: 40, yoyo: true, repeat: big ? 7 : 4, onComplete: () => weapon.setX(x0) });
-    }
-    await this.wait(big ? 560 : 360);
-    this.scene.tweens.add({ targets: dark, fillAlpha: 0, duration: 160, onComplete: () => dark.destroy() });
-  }
-
   private crack() {
     const { weapon } = this.p;
     const g = this.scene.add.graphics().setDepth(19);
@@ -308,8 +283,7 @@ export class EnhancementPresentation {
     // 1–2: raise (starts on the click itself), then a fast drop
     sfx.raise();
     await swing.raise();
-    // a risky single strike holds its breath before the drop (+10 and up, or a real chance to break)
-    if (hooks.suspense && (before >= 10 || result.row.destroy >= 3)) await this.suspense(result);
+    // (the slow suspense beat before the drop was removed 2026-11-27 at the user's request)
     await swing.strike();
 
     // 3–7: ONE frame — metal sound, shake, sparks, the new number and the result banner all land together
