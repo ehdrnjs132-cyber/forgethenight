@@ -111,15 +111,15 @@ describe('star disc shape', () => {
     for (const id of FINAL_STARS) expect(TREE.some((n) => n.from === id), id).toBe(false);
   });
 
-  it('each line gets dearer as it is learned: 20, 100, 200, 400, 600, 1000, then on up (user 2026-11-27)', () => {
-    expect([1, 2, 3, 4, 5, 6].map((n) => starPrice(n))).toEqual([20, 100, 200, 400, 600, 1000]);
+  it('each line gets dearer as it is learned: 20, 50, 100, 200, 400, 600, 1000, then on up (user 2026-11-27)', () => {
+    expect([1, 2, 3, 4, 5, 6, 7].map((n) => starPrice(n))).toEqual([20, 50, 100, 200, 400, 600, 1000]);
     for (let n = 1; n < 80; n++) expect(starPrice(n + 1)).toBeGreaterThan(starPrice(n));
     // big stars twice, a sector's final star three times (×2 again for being big)
-    expect(starPrice(10, true) / starPrice(10)).toBeCloseTo(2, 1);
+    expect(Math.abs(starPrice(10, true) / starPrice(10) - 2)).toBeLessThan(0.1); // rounded to 100s
     expect(starPrice(30, true, true)).toBeGreaterThan(starPrice(30, true) * 2.9);
     // the price follows the count of the star's own line: three odds stars make odds dearer, not speed
     const three = withNodes(['od1n', 'od1m', 'od1']);
-    expect(nodeCost(three, 'od2n')).toBe(400);
+    expect(nodeCost(three, 'od2n')).toBe(200);
     expect(nodeCost(three, 'sp1n')).toBe(20);
   });
 

@@ -173,7 +173,8 @@ export const RING_SCALE = 3;
  * 20원으로"), then follows the user's 100 - 200 - 400 - 600 - 1000, then keeps climbing (n^1.6).
  * Big stars cost twice a small one; a line's final star three times more.
  */
-export const STAR_PRICE = { first: [20, 100, 200, 400, 600, 1_000], exp: 1.6, majorMul: 2, finalMul: 3 } as const;
+// 2026-11-27 (user: "20 50 100 이렇게"): 20, 50, 100, then the earlier 200, 400, 600, 1000
+export const STAR_PRICE = { first: [20, 50, 100, 200, 400, 600, 1_000], exp: 1.6, majorMul: 2, finalMul: 3 } as const;
 
 const nice = (v: number) => (v < 1_000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100);
 /** Price of the `nth` star learned in a line (1 = the line's first). */
