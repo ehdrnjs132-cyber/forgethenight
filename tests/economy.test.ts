@@ -65,7 +65,7 @@ describe('selling (QA 6, 7)', () => {
     game.dispatch({ type: 'SELL', weaponId: game.state.weapons[0].id });
     const saved = new SaveManager(storage).loadRun().state!;
     expect(saved.gold).toBe(START_GOLD + sellPrice(saved, 1));
-    expect(saved.weapons).toHaveLength(2);
+    expect(saved.weapons).toHaveLength(1); // 2 delivered, 1 sold
   });
 });
 

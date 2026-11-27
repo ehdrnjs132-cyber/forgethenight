@@ -46,8 +46,9 @@ export const MAX_LEVEL = 100;
  */
 export const DROP_CLASSES: readonly WeaponClass[] = ['sword'];
 
-/** Three weapons a day, element random (was one per class, decision #3). */
-export const DAILY_GRANT: readonly WeaponClass[] = ['sword', 'sword', 'sword'];
+/** The morning delivery, element random (was one per class, decision #3). */
+// 2 since 2026-11-27: with a 4-slot rack a third weapon was mostly auto-sold for 10G.
+export const DAILY_GRANT: readonly WeaponClass[] = ['sword', 'sword'];
 
 /**
  * Weapon rack: 4 slots, 3 open at the start; the merchant's key opens the fourth

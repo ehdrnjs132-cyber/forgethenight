@@ -219,7 +219,9 @@ export class CardScene extends Phaser.Scene {
     this.barG = this.add.graphics();
     ui.add([this.amountText, this.shareText, this.barG]);
     for (const p of [0, 25, 50, 75, 100]) {
-      ui.add(label(this, x0 + (BAR.w * p) / 100, BAR.y + 30, `${p}%`, 12 * big, C.dim, { weight: 700, origin: [0.5, 0.5] }));
+      // marks in shares of the gold: the full bar is CARD_GAME.maxShare of it (half, since 2026-11-27)
+      const ofGold = Math.round(p * CARD_GAME.maxShare * 10) / 10;
+      ui.add(label(this, x0 + (BAR.w * p) / 100, BAR.y + 30, `${ofGold}%`, 12 * big, C.dim, { weight: 700, origin: [0.5, 0.5] }));
     }
     // handle: a gold coin to drag
     this.handle = this.add.container(x0, BAR.y);
@@ -312,7 +314,7 @@ export class CardScene extends Phaser.Scene {
     const bet = this.bet();
     const gold = this.core.state.gold;
     this.amountText.setText(`${bet.toLocaleString()}G`);
-    this.shareText.setText(`가진 돈의 ${gold > 0 ? Math.round((bet / gold) * 100) : 0}%`);
+    this.shareText.setText(`가진 돈의 ${gold > 0 ? Math.round((bet / gold) * 100) : 0}% · 최대 절반`);
     this.confirmBtn.setEnabled(this.pick !== null && bet >= 1 && !this.done);
     this.confirmBtn.setLabel(bet >= 1 ? `베팅 완료 · ${bet.toLocaleString()}G` : '막대를 끌어 베팅하세요');
   }

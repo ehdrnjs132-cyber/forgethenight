@@ -43,7 +43,7 @@ describe('starting a night', () => {
     game.dispatch({ type: 'START_NIGHT' });
     const saved = new SaveManager(storage).loadRun().state!;
     expect(saved.phase).toBe('night');
-    expect(saved.nightSnapshot?.weapons).toHaveLength(3);
+    expect(saved.nightSnapshot?.weapons).toHaveLength(2);
   });
 
   it('refuses to enhance during the night', () => {

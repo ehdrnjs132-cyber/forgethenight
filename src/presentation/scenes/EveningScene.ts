@@ -157,10 +157,10 @@ export class EveningScene extends Phaser.Scene {
     card.add(label(this, -CARD.w / 2 + pad, top + 22, '🃏 운명의 카드', 24 * big, C.goldHi, { weight: 900 }));
     const due = rentDueDay(s);
     const text = !open
-      ? `DAY ${CARD_GAME.unlockDay}부터 열린다 (${CARD_GAME.unlockDay - s.day}일 남음).\n두 장 중 한 장을 고르고 가진 골드를 건다.\nO면 베팅의 ${CARD_GAME.payoutMul}배, X면 베팅을 잃는다.`
+      ? `DAY ${CARD_GAME.unlockDay}부터 열린다 (${CARD_GAME.unlockDay - s.day}일 남음).\n두 장 중 한 장을 고르고 가진 골드의 절반까지 건다.\nO면 베팅의 ${CARD_GAME.payoutMul}배, X면 베팅을 잃는다.`
       : played
         ? '오늘은 이미 카드를 뒤집었다.\n내일 밤 다시 운을 시험할 수 있다.'
-        : `두 장 중 한 장을 고르고, 막대를 끌어 가진 골드 중 얼마를 걸지 정한다.\nO면 베팅의 ${CARD_GAME.payoutMul}배, X면 베팅을 잃는다. 하루 한 번.`;
+        : `두 장 중 한 장을 고르고, 막대를 끌어 얼마를 걸지 정한다 (가진 골드의 절반까지).\nO면 베팅의 ${CARD_GAME.payoutMul}배, X면 베팅을 잃는다. 하루 한 번.`;
     card.add(label(this, -CARD.w / 2 + pad, top + 64 * big, text, 14 * big, C.text, { wrap, lineSpacing: 6 }));
     card.add(label(this, -CARD.w / 2 + pad, h / 2 - 104, `다음 월세: DAY ${due} · ${rentFor(s, due).toLocaleString()}G`, 13 * big, C.mute, { weight: 700, wrap }));
     const can = open && !played && s.gold >= 1;

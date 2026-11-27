@@ -57,10 +57,13 @@ export const WEAPON_BASE_PRICE = 0;
  * days; the amount is base × growth^(day−1), rounded to 10G. Unpaid rent ends the run (2026-11-20).
  */
 // 2026-11-26 (user): the king comes once every 7 days (was every 3–5 days).
-export const RENT = { base: 150, growth: 1.22, firstAfter: 7, minGap: 7, maxGap: 7 };
+// 2026-11-27 (user, problem #2): 22%/day (×4 a week) outran any steady income, so the rent was
+// settled by an all-in coin flip; 16%/day is about ×2.8 a week.
+export const RENT = { base: 150, growth: 1.16, firstAfter: 7, minGap: 7, maxGap: 7 };
 
 /** Weapons per day (user decision 2026-11-19: up to 6): the morning delivery plus free ones from the forge button. */
-export const DAILY_WEAPON_LIMIT = 6;
+// 2026-11-27: 4 with the rack cut to 4 slots (the morning brings 2, the forge button 2 more)
+export const DAILY_WEAPON_LIMIT = 4;
 
 /** Night gamble (user decision 2026-11-19): win → gold × winMul, lose → gold × loseMul. */
 export const NIGHT_STAKE = { winMul: 1.5, loseMul: 0.5 };
@@ -71,13 +74,16 @@ export const NIGHT_UNLOCK_DAY = 20;
  * 운명의 카드 (user request 2026-11-26): from DAY unlockDay, once a day in the evening. Two cards, one O
  * and one X; O pays the bet × payoutMul (stake back plus the same again), X loses the bet.
  */
-export const CARD_GAME = { unlockDay: 10, payoutMul: 2 };
+// maxShare (2026-11-27, problem #2): at most half the gold on one card, so the rent is never one coin flip.
+export const CARD_GAME = { unlockDay: 10, payoutMul: 2, maxShare: 0.5 };
 
 /**
  * 운명의 무기 카드 (user request 2026-11-26): from DAY unlockDay, once a day. Same two cards, but the
  * stake is the weapons the player picks from the rack: O → those +levels, X → those destroyed.
  */
-export const WEAPON_CARD = { unlockDay: 30, levels: 10 };
+// levels 10 → 3 (2026-11-27, problem #1): the sale price triples every 5 levels, so +10 made a 50/50
+// stake worth ~4.5× the weapon and beat enhancing every day. +3 (≈×1.9) keeps the expected value just under 1.
+export const WEAPON_CARD = { unlockDay: 30, levels: 3 };
 
 /** Rack keys at the merchant: each opens one locked slot; price doubles with each key bought. */
 export const KEY_BASE_PRICE = 300;

@@ -1066,7 +1066,7 @@ export class ForgeScene extends Phaser.Scene {
       this.nameText.setText('기본 대장장이 망치').setColor(css(C.text));
       this.nextText.setText('보유한 무기가 없습니다');
     }
-    this.emptyText.setText(none ? '강화·판매 불가 · 무기가 없을 때만 사용합니다\n이 망치로 밤을 버티면 내일 아침 새 무기 3자루가 도착합니다' : '');
+    this.emptyText.setText(none ? '강화·판매 불가 · 무기가 없을 때만 사용합니다\n이 망치로 밤을 버티면 내일 아침 새 무기 2자루가 도착합니다' : '');
     this.starterHammer.setVisible(none);
   }
 

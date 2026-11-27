@@ -23,15 +23,21 @@ export function checkCard(state: GameState, bet: number): CardBlock | null {
   if (state.phase !== 'day') return 'night';
   if (!cardUnlocked(state)) return 'locked';
   if (cardPlayedToday(state)) return 'played';
-  if (!Number.isInteger(bet) || bet < 1 || bet > state.gold) return 'bet';
+  if (!Number.isInteger(bet) || bet < 1 || bet > maxBet(state.gold)) return 'bet';
   return null;
 }
 
-/** Bet from a slider position 0..1: that share of the gold, at least 1G once the handle has moved. */
+/** The most one card can take: half the gold (CARD_GAME.maxShare), at least 1G. */
+export function maxBet(gold: number): number {
+  return gold <= 0 ? 0 : Math.max(1, Math.floor(gold * CARD_GAME.maxShare));
+}
+
+/** Bet from a slider position 0..1: that share of the most you may bet, at least 1G once the handle has moved. */
 export function betFromShare(gold: number, share: number): number {
   const t = Math.max(0, Math.min(1, share));
-  if (t <= 0 || gold <= 0) return 0;
-  return Math.max(1, Math.min(gold, Math.round(gold * t)));
+  const cap = maxBet(gold);
+  if (t <= 0 || cap <= 0) return 0;
+  return Math.max(1, Math.min(cap, Math.round(cap * t)));
 }
 
 // ───────────────────────── 운명의 무기 카드 (DAY 30): the stake is ONE weapon the player picks from the rack

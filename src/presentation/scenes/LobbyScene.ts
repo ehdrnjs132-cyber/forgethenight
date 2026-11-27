@@ -191,7 +191,9 @@ export class LobbyScene extends Phaser.Scene {
       returnTo: 'Lobby',
       onConfirm: () => {
         this.core.dispatch({ type: 'NEW_RUN' });
-        this.scene.restart();
+        // a fresh start replays the first-time story, then DAY 1 (user 2026-11-27)
+        if (needsGoogle()) this.scene.restart();
+        else this.scene.start('Story', { next: 'Forge' });
       },
     });
   }

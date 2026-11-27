@@ -3,9 +3,9 @@
 
 export const SMITH_LINES = {
   /** First morning, before anything (prologue). */
-  prologueArrive: ['…또 아침이군. 망치가 무겁다.', '세계에서 무기 세 자루가 도착했다. 오늘 밤 전에 강화해 둬야 해.'],
+  prologueArrive: ['…또 아침이군. 망치가 무겁다.', '세계에서 무기 두 자루가 도착했다. 오늘 밤 전에 강화해 둬야 해.'],
   /** DAY 1 again, after the scripted defeat. */
-  afterPrologue: ['…살아 있다? 밤이 나를 돌려보냈다.', '새벽에 무기 세 자루가 다시 도착했다.', '이번엔… 제대로 강화한다.'],
+  afterPrologue: ['…살아 있다? 밤이 나를 돌려보냈다.', '새벽에 무기 두 자루가 다시 도착했다.', '이번엔… 제대로 강화한다.'],
   select: ['좋은 쇠다. 이걸로 해 보자.', '이 녀석, 가능성이 보인다.', '손에 착 감기는군.', '흠, 결이 곱다.'],
   enhanceStart: ['흐읍—!', '이번엔 된다!', '집중해라, 손목…', '불꽃아, 버텨 줘!'],
   great: ['이거다! 손이 돌아왔어!', '두 단계?! 오늘 운이 좋은데!'],

@@ -5,9 +5,10 @@ import { nightUnlocked, startNight } from '../src/core/systems/daynight';
 import { PROLOGUE_ENABLED } from '../src/core/systems/prologue';
 import { GameCore } from '../src/core/game';
 import { MemoryStorage, SaveManager } from '../src/core/save/save';
-import { betFromShare, cardPlayedToday, cardUnlocked, checkCard, checkWeaponCard, playCard, playWeaponCard } from '../src/core/systems/cards';
+import { betFromShare, maxBet, cardPlayedToday, cardUnlocked, checkCard, checkWeaponCard, playCard, playWeaponCard } from '../src/core/systems/cards';
 import type { GameState } from '../src/core/state/types';
 import { runWith } from './helpers';
+import { salePrice } from '../src/core/systems/economy';
 
 const at = (day: number, gold = 1_000): GameState => ({ ...runWith([{}]), day, gold });
 
@@ -33,18 +34,22 @@ describe('운명의 카드', () => {
     expect(checkCard(at(10), 100)).toBeNull();
   });
 
-  it('the bar maps left → right onto 0 → all of the gold', () => {
+  it('the bar maps left → right onto 0 → half of the gold (cap since 2026-11-27)', () => {
+    expect(CARD_GAME.maxShare).toBe(0.5);
+    expect(maxBet(1_000)).toBe(500);
+    expect(maxBet(1)).toBe(1);
     expect(betFromShare(1_000, 0)).toBe(0);
     expect(betFromShare(1_000, 0.0001)).toBe(1);
-    expect(betFromShare(1_000, 0.37)).toBe(370);
-    expect(betFromShare(1_000, 1)).toBe(1_000);
-    expect(betFromShare(1_000, 2)).toBe(1_000);
+    expect(betFromShare(1_000, 0.4)).toBe(200);
+    expect(betFromShare(1_000, 1)).toBe(500);
+    expect(betFromShare(1_000, 2)).toBe(500);
     expect(betFromShare(0, 0.5)).toBe(0);
   });
 
   it('only a bet between 1 and the gold you have', () => {
     expect(checkCard(at(10, 500), 0)).toBe('bet');
-    expect(checkCard(at(10, 500), 501)).toBe('bet');
+    expect(checkCard(at(10, 500), 251)).toBe('bet'); // more than half
+    expect(checkCard(at(10, 500), 250)).toBeNull();
     expect(checkCard(at(10, 500), 2.5)).toBe('bet');
     expect(checkCard({ ...at(10), phase: 'night' }, 10)).toBe('night');
   });
@@ -74,9 +79,9 @@ describe('운명의 카드', () => {
     expect(checkCard({ ...r.state, day: 13 }, 100)).toBeNull();
   });
 
-  it('운명의 무기 카드 (DAY 30): one chosen weapon at stake — O +10, X destroyed; the rest safe; once a day', () => {
-    expect(WEAPON_CARD).toEqual({ unlockDay: 30, levels: 10 });
-    const rack = (day: number): GameState => ({ ...runWith([{ level: 3 }, { level: 95 }, { level: 12 }]), day, equippedId: 'w2' });
+  it('운명의 무기 카드 (DAY 30): one chosen weapon at stake — O +3 (was +10 until 2026-11-27), X destroyed; the rest safe; once a day', () => {
+    expect(WEAPON_CARD).toEqual({ unlockDay: 30, levels: 3 });
+    const rack = (day: number): GameState => ({ ...runWith([{ level: 3 }, { level: 98 }, { level: 12 }]), day, equippedId: 'w2' });
     expect(checkWeaponCard(rack(29))).toBe('locked');
     expect(checkWeaponCard({ ...rack(30), weapons: [] })).toBe('no-weapons');
     let sawWin = false;
@@ -97,6 +102,14 @@ describe('운명의 카드', () => {
       expect(checkWeaponCard(r.state)).toBe('played');
     }
     expect(sawWin && sawLoss).toBe(true);
+  });
+
+  it('the weapon card is about a fair gamble, no longer a sure profit (2026-11-27; it was ~4.5× at +10)', () => {
+    // expected value = 50% × (value at +3) ÷ value now. Low levels climb a little faster than ×3 per 5.
+    for (let lv = 1; lv <= 97; lv++) {
+      const ev = (0.5 * salePrice(lv + WEAPON_CARD.levels)) / salePrice(lv);
+      expect(ev).toBeLessThanOrEqual(lv >= 10 ? 1.05 : 1.2);
+    }
   });
 
   it('exactly one weapon from the rack can be staked (user 2026-11-26)', () => {

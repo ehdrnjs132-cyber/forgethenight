@@ -91,9 +91,9 @@ describe('GameCore persistence', () => {
   it('does not hand out the daily weapons again after a reload on the same day (QA 8)', () => {
     const storage = new MemoryStorage();
     const a = new GameCore(storage, 5);
-    expect(a.state.weapons).toHaveLength(3);
+    expect(a.state.weapons).toHaveLength(2);
     const b = new GameCore(storage);
-    expect(b.state.weapons).toHaveLength(3);
+    expect(b.state.weapons).toHaveLength(2);
     expect(b.state.weapons.map((w) => w.id)).toEqual(a.state.weapons.map((w) => w.id));
   });
 
@@ -105,7 +105,7 @@ describe('GameCore persistence', () => {
     game.dispatch({ type: 'NEW_RUN', seed: 9 });
     expect(game.state.tutorials.firstEnhance).toBe(true);
     expect(game.state.equippedId).toBeNull();
-    expect(game.state.weapons).toHaveLength(3);
+    expect(game.state.weapons).toHaveLength(2);
     expect(game.records.runs).toBe(2);
   });
 
