@@ -119,6 +119,8 @@ export function loseNight(prev: GameState, report: NightReport): LoseResult {
   };
   const state: GameState = { ...base, phase: 'day', lives, stats };
   const gameOver: GameOverSummary | null =
-    lives === 0 ? { day: prev.day, bestLevel: stats.bestLevel, kills: stats.kills, bossesKilled: stats.bossesKilled, nightSeconds: stats.nightSeconds } : null;
+    lives === 0
+      ? { day: prev.day, bestLevel: stats.bestLevel, kills: stats.kills, bossesKilled: stats.bossesKilled, nightSeconds: stats.nightSeconds, playSeconds: Math.round(prev.playSeconds ?? 0), goldEarned: stats.goldEarned }
+      : null;
   return { state, livesLeft: lives, gameOver };
 }

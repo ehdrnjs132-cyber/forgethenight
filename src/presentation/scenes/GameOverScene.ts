@@ -2,10 +2,10 @@
 // fresh DAY 1 saved (so quitting here cannot bring the old run back); the button just enters it.
 import Phaser from 'phaser';
 import type { GameOverSummary } from '../../core/state/types';
-import { formatDamage } from '../../combat/rules';
 import { C, H, W, label } from '../theme';
 import { Button } from '../ui/button';
 import { Sfx } from '../audio/sfx';
+import { playTime } from '../format';
 
 export interface GameOverData {
   summary: GameOverSummary;
@@ -41,14 +41,12 @@ export class GameOverScene extends Phaser.Scene {
     const line = label(this, W / 2, 190 + OY, '불꽃은 꺼졌다. 하지만 아버지의 맹세는 사라지지 않는다.', 19, C.text, { weight: 700, origin: [0.5, 0.5], ...wrap });
     const why = label(this, W / 2, 222 + OY + (narrow ? 14 : 0), '왕에게 월세를 내지 못해 대장간을 빼앗겼습니다. 무기와 골드, 스킬트리가 모두 초기화되었습니다.', 14, C.mute, { origin: [0.5, 0.5], ...wrap });
 
-    const m = Math.floor(s.nightSeconds / 60);
-    const sec = String(Math.floor(s.nightSeconds % 60)).padStart(2, '0');
+    // 2026-11-27 (user): no monster / boss counts; the run's real play time and the gold it made
     const rows: [string, string][] = [
       ['최종 도달 날짜', `DAY ${s.day}`],
       ['최고 강화 단계', `+${s.bestLevel}`],
-      ['처치한 몬스터', formatDamage(s.kills)],
-      ['처치한 보스', `${s.bossesKilled}`],
-      ['최종 생존 시간', `${m}:${sec}`],
+      ['최종 획득 금액', `${(s.goldEarned ?? 0).toLocaleString()}G`],
+      ['플레이 시간', playTime(s.playSeconds ?? 0)],
     ];
     const items: Phaser.GameObjects.GameObject[] = [title, line, why];
     const panel = this.add.graphics();

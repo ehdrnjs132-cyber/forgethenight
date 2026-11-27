@@ -374,13 +374,14 @@ export class ForgeScene extends Phaser.Scene {
     g.lineStyle(1, C.edge, 1);
     g.lineBetween(0, 64.5, W, 64.5);
     new Button(this, 90, 32, 150, 42, '🏠 로비', { variant: 'dark', size: 17, onClick: () => this.toLobby() });
-    this.dayText = label(this, 664, 32, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
+    // left to right (2026-11-27, the merchant's button used to cover the day): 로비 · DAY · 스킬 · 랭킹 · 상인 … gold
+    this.dayText = label(this, 236, 32, '', 26, C.text, { display: true, weight: 900, origin: [0.5, 0.5] });
     this.livesG = this.add.graphics();
     this.goldText = label(this, W - 24, 26, '', 20, C.goldHi, { weight: 900, origin: [1, 0.5] });
     this.rentText = label(this, W - 24, 50, '', 11, C.mute, { weight: 700, origin: [1, 0.5] });
-    new Button(this, 540, 32, 120, 40, '🏆 랭킹', { variant: 'gold', size: 16, onClick: () => void openRanking() });
-    this.skillBtn = new Button(this, 340, 32, 170, 42, '강화 스킬', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
-    this.shopBtn = new Button(this, 790, 32, 170, 42,`상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
+    this.skillBtn = new Button(this, 412, 32, 170, 42, '강화 스킬', { variant: 'dark', size: 15, sub: 'K', onClick: () => this.openSkills() });
+    new Button(this, 572, 32, 120, 40, '🏆 랭킹', { variant: 'gold', size: 16, onClick: () => void openRanking() });
+    this.shopBtn = new Button(this, 742, 32, 190, 42, `상인 ${MERCHANT.name}`, { variant: 'gold', size: 15, sub: '오늘 방문 중 · M', onClick: () => this.openShop() });
   }
 
   /** Back to the lobby (the run is saved after every action, so nothing is lost). */
@@ -1322,7 +1323,7 @@ export class ForgeScene extends Phaser.Scene {
       this.openModal({
         kind: 'confirm',
         title: '첫 무기 판매',
-        body: `무기를 팔면 골드를 받고 무기는 보관함에서 영구히 사라집니다.\n골드는 3일마다 찾아오는 상인 ${MERCHANT.name}에게서 강화 보조 아이템을 사는 데, 그리고 스킬트리와 왕의 월세에 씁니다.\n강화 단계가 높을수록 값이 크게 오릅니다.\n\n${name} → ${price.toLocaleString()}G`,
+        body: `무기를 팔면 골드를 받고 무기는 보관함에서 영구히 사라집니다.\n골드는 3일마다 찾아오는 상인 ${MERCHANT.name}에게서 강화 보조 아이템을 사는 데, 그리고 스킬트리와 왕의 월세에 씁니다.\n강화 단계가 높을수록 값이 크게 오릅니다.${price > 0 ? '' : '\n(+0 무기는 값이 붙지 않습니다. +1부터 값이 붙습니다.)'}\n\n${name} → ${price.toLocaleString()}G`,
         confirmLabel: `${price.toLocaleString()}G에 판매`,
         onConfirm: () => {
           this.core.dispatch({ type: 'COMPLETE_TUTORIAL', id: 'firstSale' });
@@ -1333,16 +1334,15 @@ export class ForgeScene extends Phaser.Scene {
     }
     const last = this.core.state.weapons.length === 1;
     if (w.level >= SALE_CONFIRM_LEVEL || last) {
-      const why = [
-        w.level >= SALE_CONFIRM_LEVEL ? `+${w.level}까지 키운 무기입니다.` : '',
-        last ? '마지막 남은 무기입니다. 팔면 기본 망치로 싸워야 합니다.' : '',
-      ].filter(Boolean);
+      // (2026-11-27: no more "fight with the hammer" — there is no night battle unless the player chooses it)
+      const refill = '팔고 나면 「새 무기 받기」나 내일 아침 배달로 다시 채워야 합니다.';
+      const why = [w.level >= SALE_CONFIRM_LEVEL ? `+${w.level}까지 키운 무기입니다.` : '', last ? `마지막 남은 무기입니다. ${refill}` : ''].filter(Boolean);
       this.openModal({
         kind: 'confirm',
-        danger: last,
-        title: `${price.toLocaleString()}G에 판매할까요?`,
-        body: `${name}\n${why.join('\n')}\n판매한 무기는 되돌릴 수 없습니다.`,
-        confirmLabel: '판매',
+        danger: last && price > 0,
+        title: price > 0 ? `${price.toLocaleString()}G에 판매할까요?` : '이 무기를 치울까요?',
+        body: `${name}\n${why.join('\n')}\n${price > 0 ? '판매한 무기는 되돌릴 수 없습니다.' : '+0 무기는 값이 붙지 않습니다 (0G). 걸이 한 칸을 비우는 것뿐입니다.'}`,
+        confirmLabel: price > 0 ? '판매' : '치우기',
         onConfirm: () => this.sell(w.id, name),
       });
       return;
@@ -1354,10 +1354,17 @@ export class ForgeScene extends Phaser.Scene {
     const r = this.core.dispatch({ type: 'SELL', weaponId: id });
     if (r.type !== 'sold') return;
     this.selectedId = null;
-    this.sfx.coin();
-    this.coinBurst(r.price);
-    this.toast(`${name} 판매 · +${r.price.toLocaleString()}G`, C.goldHi);
-    if (!this.coach('coachSell')) this.say(SMITH_LINES.sell);
+    if (r.price > 0) {
+      this.sfx.coin();
+      this.coinBurst(r.price);
+      this.toast(`${name} 판매 · +${r.price.toLocaleString()}G`, C.goldHi);
+      if (!this.coach('coachSell')) this.say(SMITH_LINES.sell);
+    } else {
+      // a +0 weapon: no coins, no "money" line — the hook is simply free again
+      this.sfx.click();
+      this.toast(`${name}을(를) 치웠다 · +0 무기는 0G · 걸이 한 칸이 비었다`, C.mute);
+      this.say(SMITH_LINES.sellZero);
+    }
     this.refresh();
     // enough gold for the first skill: point at the skill tree once
     if (this.core.state.gold >= cheapestOpenNode(this.core.state)) this.time.delayedCall(4500, () => this.coach('coachSkill'));

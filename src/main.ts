@@ -73,6 +73,26 @@ function setupOnline(core: GameCore) {
   catchUp();
 }
 
+/**
+ * The run's play time (user 2026-11-27: the game-over screen shows how long the run was played). Counted
+ * every 10 s while the tab is visible and a run screen is open — not in the lobby, the duel room or on the
+ * game-over and king's-wrath screens.
+ */
+function countPlayTime(core: GameCore, game: Phaser.Game) {
+  const OFF = ['Boot', 'Lobby', 'DuelLobby', 'GameOver', 'KingWrath'];
+  let last = performance.now();
+  window.setInterval(() => {
+    const now = performance.now();
+    const sec = (now - last) / 1000;
+    last = now;
+    if (document.visibilityState !== 'visible') return;
+    // running or paused (a pop-up over the lobby pauses the lobby; it is still the lobby)
+    const open = game.scene.getScenes(false).filter((s) => s.sys.isActive() || s.sys.isPaused()).map((s) => s.sys.settings.key);
+    if (!open.length || open.some((k) => OFF.includes(k))) return;
+    core.dispatch({ type: 'PLAY_TIME', seconds: sec });
+  }, 10_000);
+}
+
 async function boot() {
   // portrait layout: no "turn your phone sideways" cover
   if (PORTRAIT) document.body.classList.add('portrait-mode');
@@ -101,6 +121,7 @@ async function boot() {
   duel.onGold = (delta) => void core.dispatch({ type: 'DUEL_GOLD', delta });
   // invitations to the duel room pop up over any screen (2026-11-27)
   setupInvites(game);
+  countPlayTime(core, game);
   // Debug handle for manual testing in the browser console.
   (window as unknown as { __ftn: unknown }).__ftn = { core, game, duel };
   document.getElementById('boot')?.remove();

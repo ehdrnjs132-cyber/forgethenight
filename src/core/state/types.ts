@@ -162,6 +162,8 @@ export interface GameState {
   phoenixTarget?: string | null;
   /** 신의 망치 as a chosen one-shot (2026-11-27). Absent in older saves = nothing paid yet. */
   godHammer?: GodHammerState;
+  /** Seconds spent playing this run (the game counts it while a run screen is open; 2026-11-27). */
+  playSeconds?: number;
   /** Day the merchant Morr last talked (his visit's dialogue plays once a visit). */
   merchantTalkDay?: number;
   /** Weapons destroyed in the run when he last talked (a later visit notices new breakage). */
@@ -211,6 +213,10 @@ export interface GameOverSummary {
   kills: number;
   bossesKilled: number;
   nightSeconds: number;
+  /** Time actually spent playing the run, in seconds (2026-11-27; absent from older summaries). */
+  playSeconds?: number;
+  /** Gold the run made from selling weapons. */
+  goldEarned?: number;
 }
 
 /** Kept across game overs (§13 보존 대상). */

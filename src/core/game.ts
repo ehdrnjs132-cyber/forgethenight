@@ -45,6 +45,8 @@ export type Action =
   | { type: 'CHOOSE_SPLIT'; index: 0 | 1 }
   /** The merchant's visit dialogue has played today (it plays once a visit). */
   | { type: 'MERCHANT_TALKED' }
+  /** Time spent playing the run (counted by the game while a run screen is open). */
+  | { type: 'PLAY_TIME'; seconds: number }
   /** `evening`: bought from the evening screen. Stars cannot be learned in the forge (user 2026-11-27). */
   | { type: 'BUY_NODE'; id: string; evening?: boolean }
   /** 운명의 카드: the chosen card and the bet (2026-11-26; replaces paying the rent early). */
@@ -170,7 +172,15 @@ export class GameCore {
     if (g.state.lives <= 0) {
       this.gameOverRent = g.rent?.lifeLost ? g.rent : null;
       const s = g.state.stats;
-      const summary: GameOverSummary = { day: g.state.day, bestLevel: s.bestLevel, kills: s.kills, bossesKilled: s.bossesKilled, nightSeconds: s.nightSeconds };
+      const summary: GameOverSummary = {
+        day: g.state.day,
+        bestLevel: s.bestLevel,
+        kills: s.kills,
+        bossesKilled: s.bossesKilled,
+        nightSeconds: s.nightSeconds,
+        playSeconds: Math.round(g.state.playSeconds ?? 0),
+        goldEarned: s.goldEarned,
+      };
       this.save.clearRun();
       this.lastRentNotice = null; // the game-over screen tells it; the new run starts clean
       const fresh = this.beginDay(this.startRun(randomSeed(), g.state.tutorials));
@@ -370,6 +380,12 @@ export class GameCore {
         this.emit('enhanced', r.result);
         this.emit('changed', this.state);
         return { type: 'enhanced', result: r.result };
+      }
+      case 'PLAY_TIME': {
+        // at most a minute per report, so a sleeping tab or a clock jump cannot add hours
+        const sec = Math.max(0, Math.min(60, Number(action.seconds) || 0));
+        if (sec > 0) this.commit({ ...this.state, playSeconds: (this.state.playSeconds ?? 0) + sec });
+        return { type: 'ok' };
       }
       case 'MERCHANT_TALKED': {
         if (!merchantTalkDue(this.state)) return { type: 'ok' };
