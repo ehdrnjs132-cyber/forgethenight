@@ -30,6 +30,19 @@ const HERO_WEAPON = {
 
 export const ASSETS: AssetSpec[] = [
   {
+    // the evening screen (user request 2026-11-27: "드워프 왕국 느낌의 배경, 밤과 아침 넘어가는 느낌")
+    key: 'kingdom_dusk',
+    aspect: '16:9',
+    transparent: false,
+    prompt:
+      'Wide panoramic landscape of a dwarven mountain kingdom at dusk, seen from a high stone balcony. ' +
+      'A great city carved into dark granite mountains: massive square stone gates with glowing amber runes, stacked terraced halls with tiny warm lit windows, ' +
+      'tall forge chimneys breathing orange smoke, stone bridges over a deep valley, a royal hall with a heavy crown-shaped roof high on the right. ' +
+      'The sky shifts from a thin warm orange sunset glow at the horizon to deep violet and indigo night above, the first stars appearing. ' +
+      'The centre of the picture is calm and uncluttered (soft distant valley and sky) so interface panels can sit on top; strong shapes stay near the left and right edges and the bottom. ' +
+      `${STYLE_V2} No characters, no text, no logo.`,
+  },
+  {
     key: 'forge_bg',
     aspect: '16:9',
     transparent: false,
