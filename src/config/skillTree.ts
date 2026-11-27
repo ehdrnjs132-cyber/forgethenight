@@ -130,7 +130,8 @@ export const BASE_SPEED = 0.5;
  * At first that is only ten seconds of work a day — harsh on purpose ("유저를 화나게") — and the 체력 stars
  * make it bearable: more stamina, a slower drain (up to −maxCut), stamina won back on lucky strikes.
  */
-export const STAMINA = { max: 100, drainPerSec: 10, maxCut: 0.6, refundSec: 1 } as const;
+// 2026-11-27 (user: "첫날 체력이 너무 높아"): drain 10 -> 15 a second, so the first stamina stars are felt
+export const STAMINA = { max: 100, drainPerSec: 15, maxCut: 0.6, refundSec: 1 } as const;
 
 export interface TreeNode {
   id: string;

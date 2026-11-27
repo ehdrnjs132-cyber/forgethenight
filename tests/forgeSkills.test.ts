@@ -270,15 +270,15 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
     expect(staminaLeft(s)).toBe(100);
   });
 
-  it('then 10 a second: ten seconds of work on a fresh morning, then the hammer stops', () => {
+  it('then 15 a second (2026-11-27; was 10): under seven seconds of work on a fresh morning, then the hammer stops', () => {
     let s = withNodes([]);
     const r = enhance(s, s.weapons[0].id);
     if (!r.ok) throw new Error('blocked');
     s = r.state;
     expect(drainRate(s)).toBe(STAMINA.drainPerSec);
-    expect(workSecondsLeft(s)).toBeCloseTo(10, 6);
+    expect(workSecondsLeft(s)).toBeCloseTo(100 / 15, 6);
     s = drainStamina(s, 4).state;
-    expect(staminaLeft(s)).toBeCloseTo(60, 6);
+    expect(staminaLeft(s)).toBeCloseTo(40, 6);
     s = drainStamina(s, 100).state;
     expect(staminaLeft(s)).toBe(0);
     const blocked = enhance(s, s.weapons[0].id);
@@ -296,8 +296,8 @@ describe('♥ stamina (2026-11-26: drains slowly from the first strike)', () => 
     const core = new GameCore(storage, 4);
     core.state = { ...core.state, daily: { day: core.state.day, phoenix: 0, fateSplit: 0, freeWeapons: 0, staminaUsed: 0, staminaStarted: true } };
     const r = core.dispatch({ type: 'DRAIN_STAMINA', seconds: 3 });
-    expect(r).toMatchObject({ type: 'drained', left: 70 });
-    expect(staminaLeft(new SaveManager(storage).loadRun().state!)).toBe(70);
+    expect(r).toMatchObject({ type: 'drained', left: 55 });
+    expect(staminaLeft(new SaveManager(storage).loadRun().state!)).toBe(55);
     core.dispatch({ type: 'DRAIN_STAMINA', seconds: 60 });
     expect(staminaLeft(core.state)).toBe(0);
     core.dispatch({ type: 'SLEEP' });
