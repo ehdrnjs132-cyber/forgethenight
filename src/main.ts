@@ -15,6 +15,7 @@ import { StoryScene } from './presentation/scenes/StoryScene';
 import { LobbyScene } from './presentation/scenes/LobbyScene';
 import { DuelLobbyScene } from './presentation/scenes/DuelLobbyScene';
 import { duel } from './online/duel';
+import { setupInvites } from './presentation/ui/invite';
 import { H, W } from './presentation/theme';
 import { setupInstall } from './install';
 import { PORTRAIT } from './presentation/layout';
@@ -98,6 +99,8 @@ async function boot() {
   setupOnline(core);
   // online duels: the bet won or lost goes into the run (also for a duel that ended while away)
   duel.onGold = (delta) => void core.dispatch({ type: 'DUEL_GOLD', delta });
+  // invitations to the duel room pop up over any screen (2026-11-27)
+  setupInvites(game);
   // Debug handle for manual testing in the browser console.
   (window as unknown as { __ftn: unknown }).__ftn = { core, game, duel };
   document.getElementById('boot')?.remove();

@@ -22,7 +22,7 @@ export interface ChatOptions {
   scale?: number;
 }
 
-const WHERE_NAME = { lobby: '로비', duel: '결투장' } as const;
+const WHERE_NAME = { lobby: '로비', duel: '결투장', game: '게임 중' } as const;
 /** Battle lines stay this long before fading. */
 const FEED_MS = 9000;
 

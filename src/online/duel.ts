@@ -35,7 +35,8 @@ export interface LobbyPlayer {
   where?: Where;
 }
 
-export type Where = 'lobby' | 'duel';
+/** main lobby · duel room (challengeable) · playing the game (forge, evening, …) (2026-11-27) */
+export type Where = 'lobby' | 'duel' | 'game';
 
 /** One line of chat (2026-11-27). 'lobby' reaches everyone not fighting; 'match' only the two fighters. */
 export interface ChatLine {
@@ -82,6 +83,12 @@ export type DuelMsg =
   | { t: 'hp'; hp: [number, number]; by: 0 | 1; dmg: number }
   | { t: 'end'; winner: 0 | 1 | null; reason: 'ko' | 'time' | 'leave'; bet: number; hp: [number, number] }
   | { t: 'gold'; delta: number; note: string }
+  // invitations to the duel room (2026-11-27)
+  | { t: 'invited'; id: string; from: LobbyPlayer; seconds: number }
+  | { t: 'inviteSent'; id: string; to: LobbyPlayer }
+  | { t: 'inviteAccepted'; id: string; by: LobbyPlayer }
+  | { t: 'inviteDeclined'; id: string | null; to: string; reason: 'no' | 'busy' | 'timeout' | 'left' }
+  | { t: 'inviteGone'; id: string }
   | ({ t: 'chat' } & ChatLine)
   | { t: 'chatHistory'; messages: ChatLine[] }
   | { t: 'error'; error: string }
@@ -174,6 +181,16 @@ class DuelLink {
 
   send(msg: Record<string, unknown>) {
     if (this.ws?.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+  }
+
+  /** Tell the room where this player is now (stays online while playing: "게임 중"). */
+  setWhere(where: Where) {
+    this.where = where;
+    this.send({ t: 'where', where });
+  }
+
+  get place(): Where {
+    return this.where;
   }
 
   /** Say one line (the server decides who hears it: the lobby, or the other fighter in a duel). */

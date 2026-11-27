@@ -32,6 +32,8 @@ export const DUEL = {
   chatMax: 100,
   chatGapMs: 700,
   chatHistory: 30,
+  /** An invitation to the duel room waits this long for an answer (2026-11-27). */
+  inviteMs: 30_000,
 };
 
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -42,12 +44,21 @@ const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
  */
 export function attachDuels(server, { auth, store }) {
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096 });
-  /** uid → { ws, uid, name, weapon, gold, matchId|null, where: 'lobby'|'duel', lastChat } */
+  /** uid → { ws, uid, name, weapon, gold, matchId|null, where: 'lobby'|'duel'|'game', lastChat } */
   const players = new Map();
   /** id → { id, from, to, bet, timer } */
   const challenges = new Map();
   /** id → match */
   const matches = new Map();
+  /** id → { id, from, to, timer }: "come to the duel room" invitations (2026-11-27) */
+  const invites = new Map();
+
+  function dropInvite(inv, toFrom, toTo) {
+    clearTimeout(inv.timer);
+    invites.delete(inv.id);
+    if (toFrom) toUid(inv.from, toFrom);
+    if (toTo) toUid(inv.to, toTo);
+  }
 
   const send = (ws, msg) => ws && ws.readyState === 1 && ws.send(JSON.stringify(msg));
   const toUid = (uid, msg) => send(players.get(uid)?.ws, msg);
@@ -177,6 +188,29 @@ export function attachDuels(server, { auth, store }) {
           for (const p of players.values()) if (!p.matchId) send(p.ws, { ...line, room: 'lobby' });
           break;
         }
+        case 'invite': {
+          // ask someone who is playing (or in the main lobby) to come to the duel room
+          const target = players.get(String(msg.to));
+          if (!target || target === me) return;
+          if (target.matchId) return send(ws, { t: 'inviteDeclined', id: null, to: target.uid, reason: 'busy' });
+          if ([...invites.values()].some((i) => i.from === me.uid && i.to === target.uid)) return; // already asked
+          const id = crypto.randomBytes(6).toString('hex');
+          const timer = setTimeout(() => {
+            const inv = invites.get(id);
+            if (inv) dropInvite(inv, { t: 'inviteDeclined', id, to: inv.to, reason: 'timeout' }, { t: 'inviteGone', id });
+          }, DUEL.inviteMs);
+          invites.set(id, { id, from: me.uid, to: target.uid, timer });
+          send(target.ws, { t: 'invited', id, from: view(me), seconds: DUEL.inviteMs / 1000 });
+          send(ws, { t: 'inviteSent', id, to: view(target) });
+          break;
+        }
+        case 'inviteAnswer': {
+          const inv = invites.get(String(msg.id));
+          if (!inv || inv.to !== me.uid) return;
+          if (msg.accept && !me.matchId) dropInvite(inv, { t: 'inviteAccepted', id: inv.id, by: view(me) }, null);
+          else dropInvite(inv, { t: 'inviteDeclined', id: inv.id, to: me.uid, reason: msg.accept ? 'busy' : msg.busy ? 'busy' : 'no' }, null);
+          break;
+        }
         case 'challenge': {
           const target = players.get(String(msg.to));
           if (!target || target === me || target.matchId || me.matchId || target.where !== 'duel') return send(ws, { t: 'challengeFailed', reason: 'busy' });
@@ -267,6 +301,10 @@ export function attachDuels(server, { auth, store }) {
         challenges.delete(c.id);
         toUid(c.from === me.uid ? c.to : c.from, c.from === me.uid ? { t: 'challengeGone', id: c.id } : { t: 'declined', id: c.id, reason: 'left' });
       }
+      for (const inv of [...invites.values()]) {
+        if (inv.from === me.uid) dropInvite(inv, null, { t: 'inviteGone', id: inv.id });
+        else if (inv.to === me.uid) dropInvite(inv, { t: 'inviteDeclined', id: inv.id, to: me.uid, reason: 'left' }, null);
+      }
       const m = matches.get(me.matchId);
       if (m) endMatch(m, m.sides[0].uid === me.uid ? 1 : 0, 'leave');
       broadcastLobby();
@@ -296,8 +334,9 @@ function cleanWeapon(w) {
   };
 }
 
+/** Where a player is: the main lobby, the duel room (challengeable), or playing the game (2026-11-27). */
 function cleanWhere(w) {
-  return w === 'lobby' ? 'lobby' : 'duel';
+  return w === 'lobby' || w === 'game' ? w : 'duel';
 }
 
 /** One line of chat: no control characters or angle brackets, trimmed, at most DUEL.chatMax long. */

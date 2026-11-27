@@ -25,7 +25,7 @@ export class LobbyScene extends Phaser.Scene {
   private accountBtn!: Button;
   private soundBtn!: Button;
   private readonly onAccount = () => this.refreshAccount();
-  /** Leaving for the duel lobby keeps the online connection; anywhere else closes it. */
+  /** Leaving for the duel lobby says "duel"; anywhere else says "game" (the connection stays open). */
   private toDuels = false;
 
   constructor() {
@@ -133,8 +133,10 @@ export class LobbyScene extends Phaser.Scene {
   private buildPresence() {
     this.toDuels = false;
     new ChatBox(this, PORTRAIT ? { mode: 'lobby', x: 24, y: 72, w: W - 48, grow: 'down', scale: 1.25 } : { mode: 'lobby', x: 24, y: H - 18, w: 600, grow: 'up' });
+    // leaving the lobby keeps the player online: the room lists them as "게임 중" (user 2026-11-27),
+    // so friends in the duel room can still invite them
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      if (!this.toDuels) duel.disconnect();
+      if (!this.toDuels) duel.setWhere('game');
     });
     if (needsGoogle()) return;
     duel.connect(myDuelInfo(this.core), 'lobby').catch(() => undefined); // offline: the pill says so
