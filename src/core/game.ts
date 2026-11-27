@@ -18,6 +18,7 @@ import { learn, resetSkills, type LearnBlock, type ResetBlock } from './systems/
 import { completeTutorial, type TutorialId } from './systems/tutorial';
 import { loseGamble, sleep, startNight, winGamble, type NightBlock, type NightReport, type NightWeapon } from './systems/daynight';
 import { randomSeed } from './rng';
+import { codexKey } from '../config/swordNames';
 import { NIGHT_ARENA } from '../config/economy';
 import { endPrologue, inPrologue } from './systems/prologue';
 import { tonightsRivals, type Doppelganger } from './systems/doppelganger';
@@ -242,6 +243,7 @@ export class GameCore {
   private commit(next: GameState) {
     this.state = next;
     this.save.saveRun(next);
+    this.noteForged(next);
     if (next.stats.bestLevel > this.records.bestLevel || next.day > this.records.bestDay) {
       this.records = {
         ...this.records,
@@ -250,6 +252,15 @@ export class GameCore {
       };
       this.save.saveRecords(this.records);
     }
+  }
+
+  /** 무기 도감: every sword form held is remembered for good (records survive game over). */
+  private noteForged(s: GameState) {
+    const have = new Set(this.records.forged ?? []);
+    const add = s.weapons.filter((w) => w.cls === 'sword').map((w) => codexKey(w.element, w.level)).filter((k) => !have.has(k));
+    if (!add.length) return;
+    this.records = { ...this.records, forged: [...have, ...new Set(add)] };
+    this.save.saveRecords(this.records);
   }
 
   /** Remember a watched cutscene (records survive game over, like the intro flag). */

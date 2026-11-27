@@ -261,4 +261,6 @@ export interface Records {
   runs: number;
   /** Cutscenes already watched (the intro plays automatically only the first time). */
   seen: string[];
+  /** 무기 도감: sword forms ever held, as `element:form` (config/swordNames.ts; 2026-11-27). */
+  forged?: string[];
 }

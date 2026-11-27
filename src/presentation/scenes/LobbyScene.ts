@@ -106,9 +106,12 @@ export class LobbyScene extends Phaser.Scene {
     const gap = 16;
     const half = (bw - gap) / 2;
     const bh = PORTRAIT ? 76 : 64;
-    new Button(this, menuX - half / 2 - gap / 2, y, half, bh, '🏆 랭킹', { variant: 'dark', size: 22, onClick: () => void openRanking() });
     // (🎬 인트로 was here until 2026-11-27; the intro video is gone)
-    new Button(this, menuX + half / 2 + gap / 2, y, half, bh, '📖 강화 규칙', { variant: 'dark', size: 22, onClick: () => this.openRules() });
+    // 랭킹 · 도감 (user 2026-11-27: 하사품 and 무기 tabs) · 강화 규칙
+    const third = (bw - gap * 2) / 3;
+    new Button(this, menuX - third - gap, y, third, bh, '🏆 랭킹', { variant: 'dark', size: 20, onClick: () => void openRanking() });
+    new Button(this, menuX, y, third, bh, '📚 도감', { variant: 'gold', size: 20, onClick: () => this.openCodex() });
+    new Button(this, menuX + third + gap, y, third, bh, '📖 강화 규칙', { variant: 'dark', size: 20, onClick: () => this.openRules() });
     y += bh + gap;
     const install = canOfferInstall();
     this.soundBtn = new Button(this, install ? menuX - half / 2 - gap / 2 : menuX, y, install ? half : bw, bh, '', { variant: 'dark', size: 22, onClick: () => this.toggleSound() });
@@ -187,6 +190,11 @@ export class LobbyScene extends Phaser.Scene {
 
   private refreshSound() {
     this.soundBtn.setLabel?.(Sfx.globalMuted ? '🔇 소리 꺼짐' : '🔊 소리 켜짐');
+  }
+
+  private openCodex() {
+    this.scene.launch('Codex', { returnTo: 'Lobby' });
+    this.scene.pause();
   }
 
   private openRules() {

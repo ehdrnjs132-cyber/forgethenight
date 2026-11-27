@@ -310,6 +310,11 @@ export const SWORD_FORMS: Record<Element, readonly SwordForm[]> = Object.fromEnt
   ELEMENTS.map((el) => [el, [...BASE_FORMS[el], ...EXTRA_FORMS[el]]]),
 ) as unknown as Record<Element, readonly SwordForm[]>;
 
+/** 무기 도감 key of a sword form (records keep the ones the player has held). */
+export function codexKey(element: Element, level: number): string {
+  return `${element}:${swordFormIndex(level)}`;
+}
+
 /** Index (0..50) of the sword form for an enhancement level. */
 export function swordFormIndex(level: number): number {
   let idx = 0;
