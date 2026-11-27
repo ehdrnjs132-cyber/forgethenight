@@ -168,14 +168,15 @@ export const RING_PX = { first: 110, step: 44 } as const;
 /** Rings per step of the original layout: 3 since 2026-11-27 (two new stars on every link; it was 2, before that 1). */
 export const RING_SCALE = 3;
 /**
- * Price of a star (user 2026-11-27: "찍을수록 더 비싸지게 · 100 - 200 - 400 - 600 - 1000 이런식으로"): it depends on
- * how many stars are already learned, not on where the star is. The first five follow the user's numbers,
- * then the price keeps climbing (n^1.6). Big stars cost twice a small one; a sector's final star three times.
+ * Price of a star (user 2026-11-27): it depends on how many stars are already learned IN THE SAME LINE
+ * ("각자 라인에서만 가격이 오르는 방식"), not on where the star is. Each line starts at 20G ("맨처음 각 스킬가격
+ * 20원으로"), then follows the user's 100 - 200 - 400 - 600 - 1000, then keeps climbing (n^1.6).
+ * Big stars cost twice a small one; a line's final star three times more.
  */
-export const STAR_PRICE = { first: [100, 200, 400, 600, 1_000], exp: 1.6, majorMul: 2, finalMul: 3 } as const;
+export const STAR_PRICE = { first: [20, 100, 200, 400, 600, 1_000], exp: 1.6, majorMul: 2, finalMul: 3 } as const;
 
 const nice = (v: number) => (v < 1_000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100);
-/** Price of the `nth` star learned (1 = the first). */
+/** Price of the `nth` star learned in a line (1 = the line's first). */
 export function starPrice(nth: number, major = false, final = false): number {
   const n = Math.max(1, Math.floor(nth));
   const f = STAR_PRICE.first;

@@ -111,16 +111,16 @@ describe('star disc shape', () => {
     for (const id of FINAL_STARS) expect(TREE.some((n) => n.from === id), id).toBe(false);
   });
 
-  it('every star learned makes the next one dearer: 100, 200, 400, 600, 1000, then on up (user 2026-11-27)', () => {
-    expect([1, 2, 3, 4, 5].map((n) => starPrice(n))).toEqual([100, 200, 400, 600, 1000]);
-    for (let n = 5; n < 324; n++) expect(starPrice(n + 1)).toBeGreaterThan(starPrice(n));
+  it('each line gets dearer as it is learned: 20, 100, 200, 400, 600, 1000, then on up (user 2026-11-27)', () => {
+    expect([1, 2, 3, 4, 5, 6].map((n) => starPrice(n))).toEqual([20, 100, 200, 400, 600, 1000]);
+    for (let n = 1; n < 80; n++) expect(starPrice(n + 1)).toBeGreaterThan(starPrice(n));
     // big stars twice, a sector's final star three times (×2 again for being big)
     expect(starPrice(10, true) / starPrice(10)).toBeCloseTo(2, 1);
     expect(starPrice(30, true, true)).toBeGreaterThan(starPrice(30, true) * 2.9);
-    // the price follows the count, wherever the star is
+    // the price follows the count of the star's own line: three odds stars make odds dearer, not speed
     const three = withNodes(['od1n', 'od1m', 'od1']);
-    expect(nodeCost(three, 'od2n')).toBe(600);
-    expect(nodeCost(three, 'sp1n')).toBe(600);
+    expect(nodeCost(three, 'od2n')).toBe(400);
+    expect(nodeCost(three, 'sp1n')).toBe(20);
   });
 
   it('buyable stars are the ones next to an owned star', () => {
@@ -135,7 +135,7 @@ describe('star disc shape', () => {
     const a = buyNode(s, 'od1n');
     expect(a.ok).toBe(true);
     if (!a.ok) return;
-    expect(a.state.gold).toBe(100); // the first star costs 100
+    expect(a.state.gold).toBe(180); // the first star of a line costs 20
     expect(checkBuyNode(a.state, 'od1n')).toBe('owned');
     expect(checkBuyNode({ ...a.state, gold: 0 }, 'od1m')).toBe('gold');
     expect(checkBuyNode({ ...a.state, phase: 'night' }, 'sp1')).toBe('night');

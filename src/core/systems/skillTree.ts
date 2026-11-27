@@ -8,11 +8,19 @@ export function ownsNode(state: GameState, id: string): boolean {
   return id === 'root' || (state.treeNodes ?? []).includes(id);
 }
 
-/** What star `id` costs right now: the price of the next star learned (more stars learned, higher price). */
+/** Stars owned in one line (확률 · 속도 · 체력 · 골드 · 보험). */
+export function ownedInLine(state: GameState, dir: TreeNode['dir']): number {
+  return (state.treeNodes ?? []).filter((id) => TREE_BY_ID[id]?.dir === dir).length;
+}
+
+/**
+ * What star `id` costs right now: the price of the next star of its own line (user 2026-11-27: each line
+ * gets dearer only as that line is learned).
+ */
 export function nodeCost(state: GameState, id: string): number {
   const n = TREE_BY_ID[id];
   if (!n || id === 'root') return 0;
-  return starPrice(ownedCount(state) + 1, n.major, FINAL_STARS.has(id));
+  return starPrice(ownedInLine(state, n.dir) + 1, n.major, FINAL_STARS.has(id));
 }
 
 /** Owned nodes other than the anvil. */
