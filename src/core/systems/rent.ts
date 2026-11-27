@@ -6,6 +6,21 @@ import { Rng } from '../rng';
 import type { GameState, RentNotice } from '../state/types';
 import { treeEffects } from './skillTree';
 import { countRentPaid } from './godHammer';
+import { offerPerks } from './rentPerks';
+
+/**
+ * A visit was paid: 신의 망치 counts it, then the 왕의 하사품 — the kickback, the stones, and the three
+ * cards to pick from (2026-11-27). `paid` is what actually left the purse for this visit.
+ */
+function rentPaid(state: GameState, day: number, paid: number): GameState {
+  let s = countRentPaid(state, day);
+  const e = treeEffects(s);
+  const back = Math.round(paid * e.rentKickback);
+  if (back > 0) s = { ...s, gold: s.gold + back };
+  if (e.rentProtect > 0 || e.rentLuck > 0)
+    s = { ...s, items: { ...s.items, protect: (s.items.protect ?? 0) + e.rentProtect, luck: (s.items.luck ?? 0) + e.rentLuck } };
+  return offerPerks(s, paid);
+}
 
 /** Base rent the king asks on `day` (before the tree's discount). */
 export function rentAmount(day: number): number {
@@ -38,7 +53,8 @@ export function collectRent(prev: GameState): { state: GameState; notice: RentNo
   if (prev.day < due) return { state: prev.rentDueDay === undefined ? { ...prev, rentDueDay: due } : prev, notice: null };
   const amount = rentFor(prev, prev.day);
   const rng = new Rng(prev.rng);
-  const next = prev.day + RENT.minGap + rng.int(RENT.maxGap - RENT.minGap + 1);
+  // 왕의 총애: every next visit a day later
+  const next = prev.day + RENT.minGap + rng.int(RENT.maxGap - RENT.minGap + 1) + treeEffects(prev).rentDelay;
   if (prev.rentPrepaid) {
     // paid in advance: the king leaves satisfied. The notice tells what was actually paid back then
     // (older saves did not keep it: 0 = unknown, and the notice then names no amount).
@@ -52,11 +68,11 @@ export function collectRent(prev: GameState): { state: GameState; notice: RentNo
     };
     const { rentPrepaidAmount: _a, rentPrepaidDay: _d, ...rest } = prev;
     // a paid visit counts toward 신의 망치 (once per visit day, in the same state as the payment)
-    return { state: countRentPaid({ ...rest, rng: rng.state, rentDueDay: next, lastRent: notice, rentPrepaid: false }, prev.day), notice };
+    return { state: rentPaid({ ...rest, rng: rng.state, rentDueDay: next, lastRent: notice, rentPrepaid: false }, prev.day, notice.paid), notice };
   }
   if (prev.gold >= amount) {
     const notice: RentNotice = { day: prev.day, amount, paid: amount, lifeLost: false };
-    return { state: countRentPaid({ ...prev, gold: prev.gold - amount, rng: rng.state, rentDueDay: next, lastRent: notice }, prev.day), notice };
+    return { state: rentPaid({ ...prev, gold: prev.gold - amount, rng: rng.state, rentDueDay: next, lastRent: notice }, prev.day, amount), notice };
   }
   if (mercyLeft(prev)) {
     const notice: RentNotice = { day: prev.day, amount, paid: 0, lifeLost: false, mercy: true };

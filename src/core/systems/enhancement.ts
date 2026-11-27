@@ -8,7 +8,7 @@ import { candidateScore, daily, fateSplitLeft, phoenixLeft, phoenixLevel, rollCa
 import { treeEffects } from './skillTree';
 import { findWeapon, removeWeapon } from './weapons';
 import { isTutorialDone } from './tutorial';
-import { consume, enhanceCostFor, isArmed, sellPrice } from './economy';
+import { apprenticeFree, consume, enhanceCostFor, festivalToday, isArmed, sellPrice } from './economy';
 import { skillTotals } from './skills';
 import { LUCK_BONUS, MASTER_DESTROY_MUL, type EnhanceItem } from '../../config/economy';
 import { DIVINE_STEP } from '../../config/forgeSkills';
@@ -28,7 +28,10 @@ export function collectEnhanceMods(state: GameState, weapon: Weapon, rhythm = fa
   const sk = skillTotals(state, null);
   const t = treeEffects(state);
   const great = (sk.enhanceGreat ?? 0) + t.great;
-  const success = (sk.enhanceSuccess ?? 0) + t.success + (rhythm ? t.rhythm : 0);
+  const streak = weapon.streak ?? 0;
+  // 왕의 하사품: 대성공의 여운, 연속 타격 (every 3rd success in a row), 연쇄 성공 (per success in a row)
+  const perk = (state.afterGreat ? t.greatEcho : 0) + (streak > 0 && streak % 3 === 0 ? t.comboStrike : 0) + Math.min(streak, 5) * t.chainSuccess;
+  const success = (sk.enhanceSuccess ?? 0) + t.success + (rhythm ? t.rhythm : 0) + perk;
   const destroy = -(sk.enhanceSafety ?? 0) - t.destroy;
   const mods: EnhanceMods = {
     ...(great ? { great } : {}),
@@ -168,6 +171,8 @@ function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}, a
   if (isArmed(prev, 'luck')) used.push('luck');
   if (isArmed(prev, 'master')) used.push('master');
   const cost = enhanceCostFor(prev, before.level);
+  // 견습생: this free strike uses one of the day's (몰아치기 and 대장간 축제 come first and keep it)
+  const apprentice = !prev.freeEnhance && !festivalToday(prev) && apprenticeFree(prev);
   let state: GameState = {
     ...prev,
     freeEnhance: false,
@@ -175,6 +180,7 @@ function prepare(prev: GameState, weaponId: string, opts: EnhanceOptions = {}, a
     stats: { ...prev.stats, enhanceAttempts: prev.stats.enhanceAttempts + 1, goldSpentEnhancing: prev.stats.goldSpentEnhancing + cost },
   };
   for (const item of used) state = consume(state, item);
+  if (apprentice) state = withDaily(state, { freeUsed: (daily(state).freeUsed ?? 0) + 1 });
   state = logStrike(state, cost); // today's record (the evening summary)
   const rng = new Rng(prev.rng);
   // the strike starts the day's stamina drain (the scripted prologue strikes do not)
@@ -218,12 +224,34 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
     outcome = 'great'; // shown like the old 신의 망치: the great-success beat with its own banner
   }
   let phoenix: number | null = null;
+  const perks = treeEffects(state);
+  // 두 번째 기회 (왕의 하사품): a destruction becomes a drop, a few times a day
+  if (newLevel === null && (daily(state).secondChance ?? 0) < perks.secondChance) {
+    outcome = 'down';
+    newLevel = Math.max(0, before.level - 1);
+    state = withDaily(state, { secondChance: (daily(state).secondChance ?? 0) + 1 });
+  }
   // 불사조의 모루 guards only the weapon the player chose to protect (QA 2026-11-27)
   if (newLevel === null && phoenixLeft(state) > 0 && state.phoenixTarget === before.id) {
     // 불사조의 모루: the weapon comes back (same class and element) instead of being lost
     phoenix = phoenixLevel(state, before.level);
     newLevel = phoenix;
     state = withDaily(state, { phoenix: daily(state).phoenix + 1 });
+  }
+  // 불사조 깃털 (왕의 하사품): any destroyed weapon comes back at half its level, a few times a day
+  if (newLevel === null && (daily(state).feather ?? 0) < perks.feather) {
+    phoenix = Math.floor(before.level / 2);
+    newLevel = phoenix;
+    state = withDaily(state, { feather: (daily(state).feather ?? 0) + 1 });
+  }
+  // 근성 (왕의 하사품): sometimes the weapon survives at +0 (drawn only when owned)
+  if (newLevel === null && perks.grit > 0) {
+    const rng = new Rng(state.rng);
+    if (rng.next() * 100 < perks.grit) {
+      phoenix = 0;
+      newLevel = 0;
+    }
+    state = { ...state, rng: rng.state };
   }
   state = {
     ...state,
@@ -258,6 +286,7 @@ function apply(prepared: Prepared, cand: EnhanceCandidate): { state: GameState; 
   // 몰아치기: every third success in a row makes the next attempt free
   const nextFree = t.comboFree && after !== null && upward && phoenix === null && (after.streak ?? 0) > 0 && (after.streak ?? 0) % 3 === 0;
   if (nextFree) state = { ...state, freeEnhance: true };
+  state = { ...state, afterGreat: outcome === 'great' }; // 대성공의 여운
   state = logOutcome(state, outcome, after); // today's record (the evening summary)
   const stageChanged = after !== null && appearanceStage(after.level) !== appearanceStage(before.level);
   const milestone = after && phoenix === null ? milestoneCrossed(before.level, after.level) : null;

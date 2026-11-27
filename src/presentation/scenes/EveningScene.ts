@@ -26,6 +26,8 @@ import { PORTRAIT } from '../layout';
 import { Sfx } from '../audio/sfx';
 import { glowStrength, weaponLookTexture } from '../weaponArt';
 import type { NightData } from './NightScene';
+import type { StoryData } from './StoryScene';
+import { GAMBLER_FIRST, GAMBLER_SEEN_ID } from '../../config/story';
 
 const BIG = PORTRAIT ? 1.2 : 1;
 
@@ -87,7 +89,17 @@ export class EveningScene extends Phaser.Scene {
       this.tweens.add({ targets: [t1, t2, sun], alpha: 0, duration: 450 });
       this.toNight();
       this.time.delayedCall(500, () => this.buildSummary());
+      this.time.delayedCall(1100, () => this.gamblerTalk());
     });
+  }
+
+  /** 도박꾼의 카드 내기 (user 2026-11-27): the first evening the cards open (DAY 10), the gambler explains them. */
+  private gamblerTalk() {
+    if (!cardUnlocked(this.core.state) || this.core.hasSeen(GAMBLER_SEEN_ID)) return;
+    const data: StoryData = { next: 'Evening', lines: GAMBLER_FIRST, overlay: true, seenId: GAMBLER_SEEN_ID };
+    this.scene.launch('Story', data);
+    this.scene.bringToTop('Story');
+    this.scene.pause();
   }
 
   // ───────────────────────── backdrop: dusk picture, then the night picture blurred

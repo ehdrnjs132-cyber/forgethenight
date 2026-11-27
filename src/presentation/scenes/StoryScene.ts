@@ -29,7 +29,7 @@ export interface StoryData {
 }
 
 const BOX = PORTRAIT ? { x: 24, w: W - 48, h: 250, y: H - 280 } : { x: 120, w: W - 240, h: 170, y: H - 196 };
-const NAME_COLOR: Record<string, number> = { king: 0xff5a4a, me: 0x9ad0ff, morr: C.goldHi, narration: C.mute };
+const NAME_COLOR: Record<string, number> = { king: 0xff5a4a, me: 0x9ad0ff, morr: C.goldHi, gambler: 0xb48cff, narration: C.mute };
 
 export class StoryScene extends Phaser.Scene {
   private next = 'Forge';
@@ -65,6 +65,7 @@ export class StoryScene extends Phaser.Scene {
     this.morr = null;
     this.stampObj = null;
     this.switching = false;
+    this.table = [];
 
     // the forge behind everything; night over it first, a warm morning later
     const bgKey = this.textures.exists('art-forge_rack_bg') ? 'art-forge_rack_bg' : 'art-forge_bg';
@@ -238,6 +239,15 @@ export class StoryScene extends Phaser.Scene {
         this.cameras.main.flash(260, 170, 0, 0);
         this.tweens.add({ targets: king, scale: k * 1.12, y: king.y + 26 * k, duration: 1200, ease: 'Sine.easeIn' });
         break;
+      case 'cards':
+        this.layCards();
+        break;
+      case 'cardsFlip':
+        this.flipCards();
+        break;
+      case 'perkCards':
+        this.perkCards();
+        break;
       case 'kingLeaves':
         this.tweens.add({ targets: [king, this.glow], alpha: 0, duration: 900, ease: 'Sine.easeIn' });
         break;
@@ -285,23 +295,89 @@ export class StoryScene extends Phaser.Scene {
   }
 
   private stampObj: Phaser.GameObjects.Container | null = null;
+  private table: Phaser.GameObjects.Container[] = [];
+
+  /** Two face-down cards for the gambler (O and X once they turn). */
+  private layCards() {
+    const cy = H * 0.36;
+    const cw = PORTRAIT ? 150 : 130;
+    const ch = cw * 1.45;
+    [-1, 1].forEach((side, i) => {
+      const c = this.add.container(W / 2 + side * (cw * 0.68), cy).setDepth(15);
+      const g = this.add.graphics();
+      g.fillStyle(0x2a1640, 1).fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 12);
+      g.lineStyle(4, 0xb48cff, 1).strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 12);
+      g.lineStyle(2, 0xb48cff, 0.4).strokeRoundedRect(-cw / 2 + 10, -ch / 2 + 10, cw - 20, ch - 20, 8);
+      g.fillStyle(0xb48cff, 0.5).fillCircle(0, 0, cw * 0.18);
+      const face = label(this, 0, 0, i === 0 ? 'O' : 'X', cw * 0.6, i === 0 ? 0x2bbf6a : 0xd03a3a, { weight: 900, display: true, origin: [0.5, 0.5] }).setVisible(false);
+      c.add([g, face]);
+      c.setData('g', g).setData('face', face).setData('w', cw).setData('h', ch);
+      c.setAlpha(0).setY(cy + 80).setAngle(side * 6);
+      this.tweens.add({ targets: c, alpha: 1, y: cy, duration: 420, delay: i * 140, ease: 'Back.easeOut' });
+      this.table.push(c);
+    });
+    this.sfx.click();
+  }
+
+  private flipCards() {
+    this.table.forEach((c, i) => {
+      this.tweens.add({
+        targets: c,
+        scaleX: 0,
+        duration: 160,
+        delay: i * 220,
+        yoyo: true,
+        onYoyo: () => {
+          const g = c.getData('g') as Phaser.GameObjects.Graphics;
+          const w = c.getData('w') as number;
+          const h = c.getData('h') as number;
+          g.clear().fillStyle(0xf6ecd8, 1).fillRoundedRect(-w / 2, -h / 2, w, h, 12);
+          g.lineStyle(4, i === 0 ? 0x2bbf6a : 0xd03a3a, 1).strokeRoundedRect(-w / 2, -h / 2, w, h, 12);
+          (c.getData('face') as Phaser.GameObjects.Text).setVisible(true);
+          if (i === 0) this.sfx.coin();
+          else this.sfx.denied();
+        },
+      });
+    });
+  }
+
+  /** Three reward cards glow up behind the king (bronze, silver, gold). */
+  private perkCards() {
+    const cols = [0xc98447, 0xc3ccd6, 0xf0bd4f];
+    const cw = PORTRAIT ? 120 : 100;
+    const ch = cw * 1.4;
+    const cy = PORTRAIT ? H * 0.2 : H * 0.22;
+    cols.forEach((col, i) => {
+      const c = this.add.container(W / 2 + (i - 1) * (cw + 24), cy + 60).setDepth(16).setAlpha(0);
+      const g = this.add.graphics();
+      for (let r = 3; r >= 1; r--) g.fillStyle(col, 0.08 * r).fillRoundedRect(-cw / 2 - r * 6, -ch / 2 - r * 6, cw + r * 12, ch + r * 12, 14);
+      g.fillStyle(0x140e0a, 1).fillRoundedRect(-cw / 2, -ch / 2, cw, ch, 10);
+      g.lineStyle(3, col, 1).strokeRoundedRect(-cw / 2, -ch / 2, cw, ch, 10);
+      g.fillStyle(col, 0.85).fillCircle(0, -6, cw * 0.2);
+      c.add([g, label(this, 0, ch / 2 - 22, '?', 22, col, { weight: 900, origin: [0.5, 0.5] })]);
+      this.tweens.add({ targets: c, alpha: 1, y: cy, angle: (i - 1) * 6, duration: 520, delay: i * 160, ease: 'Back.easeOut' });
+      this.tweens.add({ targets: c, y: cy - 8, duration: 1100, delay: 700 + i * 160, yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
+    });
+    this.sfx.gem();
+  }
 
   private finish() {
     if (this.done) return;
     this.done = true;
     const seen = this.opts.seenId ?? (this.opts.lines ? undefined : STORY_SEEN_ID);
     if (seen) (this.registry.get('core') as GameCore).markSeen(seen);
-    this.opts.onDone?.();
     if (this.opts.overlay) {
-      // back to the paused forge
+      // back to the paused scene; onDone after it resumed, so it may open the next screen (왕의 하사품)
       this.tweens.killAll();
       this.cameras.main.fadeOut(250, 0, 0, 0);
       this.cameras.main.once(Phaser.Cameras.Scene2D.Events.FADE_OUT_COMPLETE, () => {
         this.scene.resume(this.next);
         this.scene.stop();
+        this.opts.onDone?.();
       });
       return;
     }
+    this.opts.onDone?.();
     // "DAY 1", then the forge
     const black = this.add.rectangle(W / 2, H / 2, W, H, 0x000000, 0).setDepth(60);
     const day = label(this, W / 2, H / 2, 'DAY 1', PORTRAIT ? 64 : 60, C.goldHi, { display: true, weight: 900, origin: [0.5, 0.5] }).setDepth(61).setAlpha(0);

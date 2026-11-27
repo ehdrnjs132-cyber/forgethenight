@@ -2,7 +2,7 @@
 // Why the king collects rent, then the merchant Morr explains enhancing, selling, the skill tree at
 // night and the rent D-day. Plays once, the first time the player enters the forge.
 
-export type Speaker = 'narration' | 'king' | 'me' | 'morr';
+export type Speaker = 'narration' | 'king' | 'me' | 'morr' | 'gambler';
 
 /** A one-off moment that happens as the line starts. */
 export type Beat =
@@ -10,7 +10,10 @@ export type Beat =
   | 'kingGrins' // he leans in and the grin shows, red flash
   | 'kingLeaves' // he fades into the dark
   | 'morning' // daylight, Morr leans in
-  | 'stamp'; // a big "월세 D-7" stamp hits the screen
+  | 'stamp' // a big "월세 D-7" stamp hits the screen
+  | 'cards' // the gambler lays two face-down cards on the table
+  | 'cardsFlip' // they turn: one O, one X
+  | 'perkCards'; // three glowing reward cards rise behind the king
 
 export interface StoryLine {
   speaker: Speaker;
@@ -25,6 +28,7 @@ export const SPEAKER_NAME: Record<Speaker, string> = {
   king: '왕',
   me: '나',
   morr: '모르',
+  gambler: '도박꾼',
 };
 
 export const STORY_SEEN_ID = 'story';
@@ -120,3 +124,61 @@ export const MERCHANT_GREETINGS: Record<MerchantGreeting, readonly StoryLine[]> 
     { speaker: 'morr', topic: '장인의 강화석', text: '장인의 강화석이 필요할 걸세.' },
   ],
 };
+
+// ───────────────────────── 도박꾼의 카드 내기 (user 2026-11-27): the first evening it opens (DAY 10)
+export const GAMBLER_SEEN_ID = 'gambler-first';
+
+export const GAMBLER_FIRST: readonly StoryLine[] = [
+  { speaker: 'narration', text: '해가 지자, 대장간 문 앞에 낯선 그림자가 앉아 있다.' },
+  { speaker: 'gambler', text: '이봐, 대장장이 양반.' },
+  { speaker: 'gambler', text: '망치질만으로 월세 대기 빠듯하지?' },
+  { speaker: 'me', text: '…누구시오?' },
+  { speaker: 'gambler', text: '떠돌이 도박꾼이지. 오늘부터 저녁마다 여기서 판을 열 거야.' },
+  { speaker: 'gambler', topic: '운명의 카드', text: '카드는 두 장. 하나는 O, 하나는 X.', beat: 'cards' },
+  { speaker: 'gambler', topic: '운명의 카드', text: '둘 중 하나를 고르고, 골드를 걸어.' },
+  { speaker: 'gambler', topic: '운명의 카드', text: 'O가 나오면 건 돈의 두 배를 돌려주지.', beat: 'cardsFlip' },
+  { speaker: 'gambler', topic: '운명의 카드', text: 'X면… 건 돈은 내 거고.' },
+  { speaker: 'gambler', topic: '판돈', text: '한 번에 가진 골드의 절반까지만 걸 수 있어.' },
+  { speaker: 'gambler', topic: '판돈', text: '판은 하루에 한 번. 저녁에 「카드 내기」를 누르면 돼.' },
+  { speaker: 'me', text: '반반이면… 해볼 만한가.' },
+  { speaker: 'gambler', text: '흐흐, 그게 다들 하는 소리지.' },
+  { speaker: 'gambler', text: '월세 낼 돈까지 걸진 말라고.' },
+];
+
+// ───────────────────────── 왕의 하사품 (user 2026-11-27): after a paid rent, before the three cards
+export const KING_PERK_SEEN_ID = 'king-perk-first';
+
+export const KING_PERK_FIRST: readonly StoryLine[] = [
+  { speaker: 'narration', text: '금화를 세던 왕의 손이 멈춘다.', beat: 'kingEnters' },
+  { speaker: 'king', text: '흠. 한 푼도 빠짐없군.' },
+  { speaker: 'king', text: '제때 바치는 자는 드물지.' },
+  { speaker: 'king', text: '그러니 상을 내리겠다.' },
+  { speaker: 'me', text: '상…이요?' },
+  { speaker: 'king', topic: '왕의 하사품', text: '세 장 중 하나를 골라라.', beat: 'perkCards' },
+  { speaker: 'king', topic: '왕의 하사품', text: '고른 힘은 이번 판이 끝날 때까지 네 것이다.' },
+  { speaker: 'king', topic: '왕의 하사품', text: '같은 하사품을 또 고르면 더 강해지지.' },
+  { speaker: 'king', topic: '등급', text: '브론즈, 실버, 골드… 그리고 아주 드물게 무지갯빛.' },
+  { speaker: 'king', topic: '등급', text: '월세를 낼수록 더 귀한 것이 섞여 나올 거다.' },
+  { speaker: 'king', topic: '다시 뽑기', text: '마음에 안 들면 금화를 더 바쳐라. 다시 보여 주마.' },
+  { speaker: 'king', text: '다음 월세도… 기대하지.', beat: 'kingGrins' },
+];
+
+/** A short talk for every later visit, picked by the rent's number. */
+export const KING_PERK_SHORT: readonly (readonly StoryLine[])[] = [
+  [
+    { speaker: 'king', text: '이번에도 냈군.', beat: 'kingEnters' },
+    { speaker: 'king', text: '상을 골라라.', beat: 'perkCards' },
+  ],
+  [
+    { speaker: 'king', text: '흐흐… 아직 버티는가.', beat: 'kingEnters' },
+    { speaker: 'king', text: '하사품이다. 하나만 가져가라.', beat: 'perkCards' },
+  ],
+  [
+    { speaker: 'king', text: '금화 냄새가 좋군.', beat: 'kingEnters' },
+    { speaker: 'king', text: '다음엔 더 비쌀 거다. 골라라.', beat: 'perkCards' },
+  ],
+  [
+    { speaker: 'king', text: '제법이군, 대장장이.', beat: 'kingEnters' },
+    { speaker: 'king', text: '오늘은 무엇이 나올지 보자.', beat: 'perkCards' },
+  ],
+];

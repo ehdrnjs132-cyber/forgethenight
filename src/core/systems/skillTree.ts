@@ -2,6 +2,7 @@
 // Pure functions over GameState.
 import { TREE, TREE_BY_ID, baseEffects, type TreeEffects, type TreeNode } from '../../config/skillTree';
 import type { GameState } from '../state/types';
+import { applyPerks } from '../../config/rentPerks';
 
 export function ownsNode(state: GameState, id: string): boolean {
   return id === 'root' || (state.treeNodes ?? []).includes(id);
@@ -17,6 +18,7 @@ export function ownedCount(state: GameState): number {
 export function treeEffects(state: GameState): TreeEffects {
   const e = baseEffects();
   for (const n of TREE) if (n.id !== 'root' && ownsNode(state, n.id)) n.apply(e);
+  applyPerks(e, state.perks); // 왕의 하사품 add onto the same effects (2026-11-27)
   return e;
 }
 

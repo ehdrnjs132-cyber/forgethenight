@@ -36,8 +36,9 @@ import { StoneChip } from '../ui/stoneChip';
 import { formatDamage, weaponDamage } from '../../combat/rules';
 import { merchantGreeting, merchantTalkDue } from '../../core/systems/merchantTalk';
 import { goldRecovery, goldRecoveryText } from '../../core/systems/recovery';
-import { MERCHANT_FIRST, MERCHANT_FIRST_SEEN_ID, MERCHANT_GREETINGS } from '../../config/story';
+import { KING_PERK_FIRST, KING_PERK_SEEN_ID, KING_PERK_SHORT, MERCHANT_FIRST, MERCHANT_FIRST_SEEN_ID, MERCHANT_GREETINGS } from '../../config/story';
 import type { StoryData } from './StoryScene';
+import type { PerkData } from './PerkScene';
 
 // Portrait (720×1280, phones) stacks everything: top bar → rack strip → smith and anvil → weapon card →
 // odds row → big enhance button → equip / sell / night. Landscape keeps the original 1280×720 layout.
@@ -261,10 +262,16 @@ export class ForgeScene extends Phaser.Scene {
     // the king's rent this morning, and a 운명 분열 pick left waiting (it survives a reload)
     // the merchant's visit talk (2026-11-27): after the rent notice when there is one
     if (merchantTalkDue(this.core.state) && !this.core.state.pendingSplit) {
-      if (this.core.lastRentNotice) this.events.once(Phaser.Scenes.Events.RESUME, () => this.time.delayedCall(200, () => this.merchantTalk()));
+      // after the rent notice, the king's talk and the 하사품 pick: wait for the forge to be free again
+      const later = () =>
+        this.events.once(Phaser.Scenes.Events.RESUME, () =>
+          this.time.delayedCall(250, () => (this.scene.isActive('Story') || this.scene.isActive('Perk') || this.core.state.perkOffer ? later() : this.merchantTalk())),
+        );
+      if (this.core.lastRentNotice || this.core.state.perkOffer) later();
       else this.time.delayedCall(450, () => this.merchantTalk());
     }
-    this.time.delayedCall(400, () => this.announceRent());
+    if (this.core.lastRentNotice) this.time.delayedCall(400, () => this.announceRent());
+    else if (this.core.state.perkOffer) this.time.delayedCall(400, () => this.openPerks()); // a pick left waiting (reload)
     if (this.core.state.pendingSplit) this.time.delayedCall(300, () => this.showSplitChoice());
     this.core.notice = null;
     this.core.recoveredFromCorruption = false;
@@ -1699,7 +1706,38 @@ export class ForgeScene extends Phaser.Scene {
         : `${rentPaidLine(n)}\n못 내는 날엔 대장간을 잃는다.\n다음 방문: DAY ${rentDueDay(this.core.state)} · ${rentFor(this.core.state, rentDueDay(this.core.state)).toLocaleString()}G${this.godHammerNote()}`,
       confirmLabel: '알겠다',
       cancelLabel: '닫기',
-      onConfirm: () => undefined,
+      onConfirm: () => this.time.delayedCall(150, () => this.kingPerkTalk()),
+      onCancel: () => this.time.delayedCall(150, () => this.kingPerkTalk()),
     });
+  }
+
+  /**
+   * 왕의 하사품 (user 2026-11-27): after a paid rent the king talks (the full explanation the first time,
+   * a short line after that), then the three cards come up.
+   */
+  private kingPerkTalk() {
+    const o = this.core.state.perkOffer;
+    if (!o || this.leaving) return;
+    const first = !this.core.hasSeen(KING_PERK_SEEN_ID);
+    const data: StoryData = {
+      next: 'Forge',
+      lines: first ? KING_PERK_FIRST : KING_PERK_SHORT[o.rentNo % KING_PERK_SHORT.length],
+      overlay: true,
+      morning: true,
+      seenId: first ? KING_PERK_SEEN_ID : undefined,
+      onDone: () => this.time.delayedCall(120, () => this.openPerks()),
+    };
+    this.scene.launch('Story', data);
+    this.scene.bringToTop('Story');
+    this.scene.pause();
+  }
+
+  /** The three 하사품 cards over the blurred forge. */
+  private openPerks() {
+    if (!this.core.state.perkOffer || this.leaving || this.scene.isActive('Perk')) return;
+    const data: PerkData = { returnTo: 'Forge', onDone: () => this.refresh() };
+    this.scene.launch('Perk', data);
+    this.scene.bringToTop('Perk');
+    this.scene.pause();
   }
 }

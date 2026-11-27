@@ -7,7 +7,8 @@ import { findWeapon, removeWeapon } from './weapons';
 import { skillTotals } from './skills';
 import { treeEffects } from './skillTree';
 import { GOLDEN_SELL_MUL } from '../../config/skillTree';
-import { logSale } from './dayLog';
+import { dayLog, logSale } from './dayLog';
+import { daily } from './forgeSkills';
 
 /** §14 price, log-interpolated between table rows and rounded to a readable number. */
 export function salePrice(level: number): number {
@@ -31,21 +32,36 @@ function roundPrice(p: number): number {
 
 export type SellBlock = 'no-weapon' | 'night';
 
-export type SellAttempt = { ok: true; state: GameState; price: number } | { ok: false; reason: SellBlock };
+/** `lucky`: 동전 주머니 doubled the price. */
+export type SellAttempt = { ok: true; state: GameState; price: number; lucky?: boolean } | { ok: false; reason: SellBlock };
 
 /** Sell a weapon for gold. It is removed for good; the sale is saved at once like any day action. */
 export function sell(prev: GameState, weaponId: string): SellAttempt {
   if (prev.phase !== 'day') return { ok: false, reason: 'night' };
   const w = findWeapon(prev, weaponId);
   if (!w) return { ok: false, reason: 'no-weapon' };
-  const price = sellPrice(prev, w.level, w.golden);
+  let price = sellPrice(prev, w.level, w.golden);
+  const e = treeEffects(prev);
+  // 첫 손님: the day's first sale pays more
+  if (price > 0 && e.firstSale > 0 && dayLog(prev).sold === 0) price = roundPrice(price * (1 + e.firstSale));
+  // 동전 주머니: sometimes double (drawn only when owned)
+  let rngState = prev.rng;
+  let lucky = false;
+  if (price > 0 && e.saleDouble > 0) {
+    const rng = new Rng(prev.rng);
+    lucky = rng.next() * 100 < e.saleDouble;
+    rngState = rng.state;
+    if (lucky) price *= 2;
+  }
   const state = removeWeapon(prev, weaponId);
   return {
     ok: true,
     price,
+    lucky,
     state: logSale(
       {
         ...state,
+        rng: rngState,
         gold: prev.gold + price,
         // A sold weapon can no longer be brought back by the time stone.
         lastEnhance: null,
@@ -61,13 +77,16 @@ export function sellPrice(state: GameState, level: number, golden = false): numb
   // fresh weapons are free at the forge, so an untouched +0 one is worth nothing (no free-gold loop)
   if (level <= 0) return 0;
   const bonus = skillTotals(state, null).sellBonus + treeEffects(state).sell;
-  const awakened = level >= SALE_AWAKEN.level ? SALE_AWAKEN.mul : 1;
-  return roundPrice(salePrice(level) * SALE_MULTIPLIER * awakened * (1 + bonus) * (golden ? GOLDEN_SELL_MUL : 1));
+  const e = treeEffects(state);
+  const awake = level >= SALE_AWAKEN.level;
+  const awakened = awake ? SALE_AWAKEN.mul : 1;
+  const extra = awake ? e.awakenSell : 0; // 각성 손질 / 각성의 값 / 각성의 불꽃
+  return roundPrice(salePrice(level) * SALE_MULTIPLIER * awakened * (1 + bonus + extra) * e.saleMul * (golden ? GOLDEN_SELL_MUL : 1));
 }
 
 /** What Morr asks today, after 단골 discounts. */
 export function shopPrice(state: GameState, entry: StockEntry): number {
-  const d = Math.min(0.5, skillTotals(state, null).discount);
+  const d = Math.min(0.5, skillTotals(state, null).discount + treeEffects(state).shopCut);
   return d > 0 ? Math.round((entry.price * (1 - d)) / 10) * 10 : entry.price;
 }
 
@@ -78,9 +97,20 @@ export function enhanceCost(level: number): number {
 
 /** What this attempt actually costs: 절약 / 연금술 cuts, and nothing at all after 몰아치기. */
 export function enhanceCostFor(state: GameState, level: number): number {
-  if (state.freeEnhance) return 0;
+  if (state.freeEnhance || festivalToday(state) || apprenticeFree(state)) return 0;
   const cut = Math.min(0.8, treeEffects(state).costCut);
   return Math.max(ENHANCE_COST_MIN, Math.round(enhanceCost(level) * (1 - cut)));
+}
+
+/** 대장간 축제: today the king was paid, so strikes cost nothing all day. */
+export function festivalToday(state: GameState): boolean {
+  const r = state.lastRent;
+  return treeEffects(state).festival > 0 && !!r && r.day === state.day && !r.lifeLost && !r.mercy;
+}
+
+/** 견습생: one of the day's first free strikes is still left. */
+export function apprenticeFree(state: GameState): boolean {
+  return (daily(state).freeUsed ?? 0) < treeEffects(state).freeStrikes;
 }
 
 /** Next rack key: doubles with every key already bought. */

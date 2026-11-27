@@ -62,6 +62,54 @@ export interface TreeEffects {
   staminaSave: number;
   /** 두 번째 바람: once a day, stamina that runs out comes back by this % of the maximum. */
   secondWind: number;
+  // ── 왕의 하사품 (config/rentPerks.ts, 2026-11-27): only the rent perks set these
+  /** Gold every new morning. */
+  morningGold: number;
+  /** % chance a sale pays double. */
+  saleDouble: number;
+  /** Extra sale bonus for weapons at SALE_AWAKEN.level and above (0.1 = +10%). */
+  awakenSell: number;
+  /** All sale prices × this (황금 모루). */
+  saleMul: number;
+  /** The day's first sale gets this extra bonus. */
+  firstSale: number;
+  /** % of KEEP results that become SUCCESS. */
+  keepUp: number;
+  /** The day's first N strikes cost nothing. */
+  freeStrikes: number;
+  /** Merchant price cut (0.05 = −5%). */
+  shopCut: number;
+  /** Share of a lost card bet paid back. */
+  cardRefund: number;
+  /** Extra 운명의 카드 games a day. */
+  cardExtra: number;
+  /** Seconds of work each day before stamina starts to drain. */
+  graceSec: number;
+  /** Stones handed out with every paid rent. */
+  rentProtect: number;
+  rentLuck: number;
+  /** Share of a paid rent given back. */
+  rentKickback: number;
+  /** Days added to every next rent visit. */
+  rentDelay: number;
+  /** %p success on the strike right after a great success. */
+  greatEcho: number;
+  /** %p success on the strike after every 3rd success in a row. */
+  comboStrike: number;
+  /** %p success per success in a row (capped at 5 × this). */
+  chainSuccess: number;
+  /** % chance a destroyed weapon stays, at +0. */
+  grit: number;
+  /** Destructions a day turned into drops. */
+  secondChance: number;
+  /** Destroyed weapons a day that come back at half their level. */
+  feather: number;
+  /** Strikes cost nothing on the day a rent was paid. */
+  festival: number;
+  /** Share taken off the maximum stamina (피의 거래). */
+  staminaPenalty: number;
+  /** Times a day an empty stamina bar refills completely. */
+  refill: number;
 }
 
 export const RHYTHM_SECONDS = 4;
@@ -115,7 +163,7 @@ export const RING_PX = { first: 110, step: 46 } as const;
  * three times more again (2026-11-27: "마지막 단계는 더욱 비싸지겠지"). The growth per ring is √1.62, so a
  * star that moved from ring r to ring 2r keeps the price it had.
  */
-export const COST = { base: 150, growth: Math.sqrt(1.62), majorMul: 3, finalMul: 3 } as const;
+export const COST = { base: 150, growth: Math.sqrt(1.62), majorMul: 3, finalMul: 1.2 } as const;
 
 const nice = (v: number) => (v < 1_000 ? Math.round(v / 10) * 10 : Math.round(v / 100) * 100);
 export function starCost(ring: number, major: boolean, final = false): number {
@@ -419,5 +467,29 @@ export function baseEffects(): TreeEffects {
     drainCut: 0,
     staminaSave: 0,
     secondWind: 0,
+    morningGold: 0,
+    saleDouble: 0,
+    awakenSell: 0,
+    saleMul: 1,
+    firstSale: 0,
+    keepUp: 0,
+    freeStrikes: 0,
+    shopCut: 0,
+    cardRefund: 0,
+    cardExtra: 0,
+    graceSec: 0,
+    rentProtect: 0,
+    rentLuck: 0,
+    rentKickback: 0,
+    rentDelay: 0,
+    greatEcho: 0,
+    comboStrike: 0,
+    chainSuccess: 0,
+    grit: 0,
+    secondChance: 0,
+    feather: 0,
+    festival: 0,
+    staminaPenalty: 0,
+    refill: 0,
   };
 }

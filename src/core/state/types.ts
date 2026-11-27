@@ -60,6 +60,32 @@ export interface DailyCounters {
   staminaStarted?: boolean;
   /** Today's forge record for the end-of-day summary (2026-11-27). Absent = nothing done yet. */
   log?: DayLog;
+  // ── 왕의 하사품 counters (2026-11-27)
+  /** 견습생: free strikes used today. */
+  freeUsed?: number;
+  /** 새벽 기상: seconds of grace already used today. */
+  graceUsed?: number;
+  /** 두 번째 기회 used today. */
+  secondChance?: number;
+  /** 불사조 깃털 used today. */
+  feather?: number;
+  /** 꺼지지 않는 화로 used today. */
+  refill?: number;
+  /** 운명의 카드 games played today. */
+  cardPlays?: number;
+}
+
+/** Three 왕의 하사품 cards waiting for the pick after a paid rent (survives a reload). */
+export interface PerkOffer {
+  /** Day of the rent visit. */
+  day: number;
+  /** Which paid rent this is (1 = the first), for the tier odds. */
+  rentNo: number;
+  /** What the visit cost (the reroll price is a share of it). */
+  rentPaid: number;
+  choices: string[];
+  /** Paid rerolls so far in this visit. */
+  rerolls: number;
 }
 
 /** What happened at the anvil today (the evening's summary). */
@@ -164,6 +190,12 @@ export interface GameState {
   godHammer?: GodHammerState;
   /** Seconds spent playing this run (the game counts it while a run screen is open; 2026-11-27). */
   playSeconds?: number;
+  /** 왕의 하사품 owned: perk id → level (config/rentPerks.ts). */
+  perks?: Record<string, number>;
+  /** Cards waiting for the pick after a paid rent. */
+  perkOffer?: PerkOffer | null;
+  /** The last strike was a great success (대성공의 여운). */
+  afterGreat?: boolean;
   /** Day the merchant Morr last talked (his visit's dialogue plays once a visit). */
   merchantTalkDay?: number;
   /** Weapons destroyed in the run when he last talked (a later visit notices new breakage). */

@@ -26,7 +26,9 @@ export function daily(state: GameState): DailyCounters {
 // forge is open) until the next morning refills it. Faster hammering therefore means more strikes out of
 // the same stamina, which is what the speed stars are for. At 0 the hammer stops for the day.
 export function staminaMax(state: GameState): number {
-  return STAMINA.max + treeEffects(state).staminaMax;
+  const e = treeEffects(state);
+  // 피의 거래 (왕의 하사품) takes a share off, never more than 60%
+  return Math.round((STAMINA.max + e.staminaMax) * (1 - Math.min(0.6, e.staminaPenalty)));
 }
 
 /** Stamina lost per second once the day's work has started. */
@@ -67,15 +69,26 @@ export function drainStamina(state: GameState, seconds: number): { state: GameSt
   if (!staminaStarted(state) || staminaLeft(state) <= 0 || seconds <= 0) return { state, drained: 0, secondWind: 0 };
   const max = staminaMax(state);
   const d = daily(state);
+  const e = treeEffects(state);
+  // 새벽 기상 (왕의 하사품): the day's first seconds of work are free
+  const grace = Math.min(seconds, Math.max(0, e.graceSec - (d.graceUsed ?? 0)));
+  const graceUsed = (d.graceUsed ?? 0) + grace;
+  seconds -= grace;
   const before = d.staminaUsed ?? 0;
   let used = Math.min(max, before + drainRate(state) * seconds);
   let wind = 0;
-  const e = treeEffects(state);
+  let refill = d.refill ?? 0;
   if (used >= max && e.secondWind > 0 && !d.secondWind) {
     wind = Math.round((max * e.secondWind) / 100);
     used = max - wind;
+  } else if (used >= max && refill < e.refill) {
+    // 꺼지지 않는 화로 (왕의 하사품): once a day the bar fills up again
+    wind = max;
+    used = 0;
+    refill += 1;
   }
-  return { state: withDaily(state, { staminaUsed: used, ...(wind ? { secondWind: 1 } : {}) }), drained: used - before + wind, secondWind: wind };
+  const patch = { staminaUsed: used, ...(grace ? { graceUsed } : {}), ...(wind && used > 0 ? { secondWind: 1 } : {}), ...(refill !== (d.refill ?? 0) ? { refill } : {}) };
+  return { state: withDaily(state, patch), drained: used - before + wind, secondWind: wind };
 }
 
 export function withDaily(state: GameState, patch: Partial<Omit<DailyCounters, 'day'>>): GameState {
@@ -133,6 +146,11 @@ export function rollCandidate(state: GameState, weapon: Weapon, row: EnhanceRow,
       outcome = 'great';
       level = levelAfter(weapon.level, 'great');
     }
+  }
+  // 끈기 (왕의 하사품): a keep sometimes becomes a success (drawn only when owned)
+  if (!force && rolled === 'keep' && e.keepUp > 0 && rng.next() * 100 < e.keepUp) {
+    outcome = 'success';
+    level = levelAfter(weapon.level, 'success');
   }
   if (!force && rolled === 'down' && e.downKeep > 0 && rng.next() * 100 < e.downKeep) {
     outcome = 'keep';

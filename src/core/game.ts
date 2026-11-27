@@ -8,6 +8,7 @@ import { buyWeapon, equip, grantDaily, type GrantResult, type WeaponBuyBlock } f
 import { drainStamina, fateSplitLeft, staminaLeft } from './systems/forgeSkills';
 import { buyNode, treeEffects, type NodeBuyBlock } from './systems/skillTree';
 import { collectRent } from './systems/rent';
+import { pickPerk, rerollPerks, type PerkBlock } from './systems/rentPerks';
 import { markMerchantTalk, merchantTalkDue } from './systems/merchantTalk';
 import { toggleGodHammer, type GodHammerBlock } from './systems/godHammer';
 import { playCard, playWeaponCard, type CardBlock, type CardFace, type WeaponCardBlock } from './systems/cards';
@@ -55,6 +56,9 @@ export type Action =
   | { type: 'WEAPON_CARD'; pick: 0 | 1; weaponIds: string[] }
   /** Work time passed at the forge: stamina drains (sent about once a second while the forge is open). */
   | { type: 'DRAIN_STAMINA'; seconds: number }
+  /** 왕의 하사품: keep card `index` of the offer, or pay for three new ones. */
+  | { type: 'PICK_PERK'; index: number }
+  | { type: 'REROLL_PERKS' }
   /** Online duel settled by the server: the bet won (+) or lost (−). */
   | { type: 'DUEL_GOLD'; delta: number };
 
@@ -90,6 +94,9 @@ export type ActionResult =
   | { type: 'godHammerBlocked'; reason: GodHammerBlock }
   | { type: 'skillsReset'; refunded: number }
   | { type: 'resetBlocked'; reason: ResetBlock }
+  | { type: 'perkPicked'; id: string; level: number }
+  | { type: 'perksRerolled'; cost: number }
+  | { type: 'perkBlocked'; reason: PerkBlock }
   | { type: 'ok' };
 
 export interface GameEvents {
@@ -147,6 +154,9 @@ export class GameCore {
     // 아침 보호석 (skill tree): stones every new morning
     const stones = newDay ? treeEffects(grant.state).morningStones : 0;
     if (stones > 0) grant.state = { ...grant.state, items: { ...grant.state.items, protect: (grant.state.items.protect ?? 0) + stones } };
+    // 이웃의 덤 (왕의 하사품): gold every new morning
+    const gift = newDay ? treeEffects(grant.state).morningGold : 0;
+    if (gift > 0) grant.state = { ...grant.state, gold: grant.state.gold + gift };
     const rent = collectRent(openMerchant(grant.state));
     return { ...grant, state: rent.state, rent: rent.notice };
   }
@@ -330,7 +340,7 @@ export class GameCore {
         if (this.state.phase !== 'day') return { type: 'drained', left: staminaLeft(this.state), secondWind: 0 };
         const d = drainStamina(this.state, action.seconds);
         // saved, but no 'changed': the forge animates the bar itself and must not rebuild every second
-        if (d.drained !== 0) this.commit(d.state);
+        if (d.state !== this.state) this.commit(d.state);
         return { type: 'drained', left: staminaLeft(this.state), secondWind: d.secondWind };
       }
       case 'CARD_BET': {
@@ -391,6 +401,20 @@ export class GameCore {
         if (!merchantTalkDue(this.state)) return { type: 'ok' };
         this.commit(markMerchantTalk(this.state));
         return { type: 'ok' };
+      }
+      case 'PICK_PERK': {
+        const r = pickPerk(this.state, action.index);
+        if (!r.ok) return { type: 'perkBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'perkPicked', id: r.id, level: r.level };
+      }
+      case 'REROLL_PERKS': {
+        const r = rerollPerks(this.state);
+        if (!r.ok) return { type: 'perkBlocked', reason: r.reason };
+        this.commit(r.state);
+        this.emit('changed', this.state);
+        return { type: 'perksRerolled', cost: r.cost };
       }
       case 'BUY_NODE': {
         const r = buyNode(this.state, action.id, action.evening === true);

@@ -6,6 +6,8 @@ import { CARD_GAME, WEAPON_CARD } from '../../config/economy';
 import { MAX_LEVEL } from '../../config/weapons';
 import { Rng } from '../rng';
 import type { GameState } from '../state/types';
+import { treeEffects } from './skillTree';
+import { daily, withDaily } from './forgeSkills';
 
 export type CardFace = 'O' | 'X';
 export type CardBlock = 'locked' | 'played' | 'night' | 'bet';
@@ -15,8 +17,14 @@ export function cardUnlocked(state: GameState): boolean {
   return state.day >= CARD_GAME.unlockDay;
 }
 
+/** Games played today (older saves kept only the day: 1). */
+export function cardPlays(state: GameState): number {
+  return state.cardDay === state.day ? (daily(state).cardPlays ?? 1) : 0;
+}
+
+/** No game left today (운명 읽기 adds one more). */
 export function cardPlayedToday(state: GameState): boolean {
-  return state.cardDay === state.day;
+  return cardPlays(state) >= 1 + treeEffects(state).cardExtra;
 }
 
 export function checkCard(state: GameState, bet: number): CardBlock | null {
@@ -104,7 +112,9 @@ export function playCard(
   const oAt = rng.int(2) as 0 | 1;
   const faces: [CardFace, CardFace] = oAt === 0 ? ['O', 'X'] : ['X', 'O'];
   const win = pick === oAt;
-  const payout = win ? bet * CARD_GAME.payoutMul : 0;
-  const state: GameState = { ...prev, rng: rng.state, gold: prev.gold - bet + payout, cardDay: prev.day };
+  // 카드 감각 (왕의 하사품): a lost bet comes partly back
+  const payout = win ? bet * CARD_GAME.payoutMul : Math.floor(bet * Math.min(1, treeEffects(prev).cardRefund));
+  const plays = cardPlays(prev) + 1;
+  const state: GameState = withDaily({ ...prev, rng: rng.state, gold: prev.gold - bet + payout, cardDay: prev.day }, { cardPlays: plays });
   return { ok: true, state, win, faces, payout };
 }
