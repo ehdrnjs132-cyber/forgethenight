@@ -50,7 +50,15 @@ const RACK = PORTRAIT ? { x: 14, y: 210, cols: 4, slotW: 165, slotH: 70, gapX: 9
 /** Selected-weapon card (name, level badge, next milestone, damage). */
 // landscape: the rack has only its top two painted rows now (4 slots, 2026-11-27), so the card sits on a
 // plaque over the two lower painted shelves
-const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 48, y: 300, w: 500, h: 226 };
+/**
+ * Portrait (phones), 2026-11-27: the controls are a dock anchored to the bottom with a safe margin (they
+ * used to end 5 px above the edge, in the home-indicator / gesture area). Everything above the dock moved
+ * up by LIFT to make room.
+ */
+const LIFT = PORTRAIT ? 118 : 0;
+/** Clear space under the dock (iPhone home indicator, Android gesture bar). */
+const SAFE_BOTTOM = 44;
+const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA - LIFT, w: 640, h: 160 } : { x: 48, y: 300, w: 500, h: 226 };
 /**
  * The blacksmith behind the anvil (one Higgsfield image or sprite sheet). `fx/fy` locate the anvil face
  * inside each texture (fractions of its width/height), so the weapon lies exactly where the hammer lands.
@@ -60,10 +68,20 @@ const CARD = PORTRAIT ? { x: 40, y: 762 + EXTRA, w: 640, h: 160 } : { x: 48, y: 
 // portrait: the camera sits further back (user feedback 2026-11-19: the smith felt too big for the room)
 /** Portrait top bar height (two rows of thumb-sized buttons). */
 const TOP_BAR_H = 152;
-const STAGE = PORTRAIT ? { x: 340, bottom: 752 + EXTRA, height: 380 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
-/** Portrait bottom area: odds row, stones, enhance button, action row. */
-// 2026-11-19: bigger, starting right under the smith's boots (user: the controls were too small)
-const PB = { oddsY: 934 + EXTRA, stonesY: 1062 + EXTRA, enhanceY: 1132 + EXTRA, rowY: 1236 + EXTRA };
+// (a little smaller than before the dock moved up, so the smith stays clear of the rack strip)
+const STAGE = PORTRAIT ? { x: 340, bottom: 752 + EXTRA - LIFT, height: 344 + EXTRA * 0.25 } : { x: 600, bottom: 702, height: 420 };
+/**
+ * Portrait dock, measured up from the bottom edge: odds, stones / skills, the action row
+ * (판매 · 강화 · 장착) and 다음 날 on its own row so a fast run of 강화 taps never ends the day by mistake.
+ */
+const PB = {
+  oddsY: H - SAFE_BOTTOM - 370,
+  stonesY: H - SAFE_BOTTOM - 216,
+  enhanceY: H - SAFE_BOTTOM - 130,
+  rowY: H - SAFE_BOTTOM - 32,
+};
+/** Portrait action row: side buttons and the gap between them and 강화. */
+const ACT = { side: 150, gap: 10, h: 104, dayH: 64 };
 
 /**
  * Shelf centres and sizes measured on the painted rack in forge_rack_bg (1280×720 screen space),
@@ -100,7 +118,7 @@ const ANVIL_X = 600;
 const SMITH = { x: 838, y: 548, scale: 0.78, strikeOriginX: 0.61 };
 const IMPACT = { x: 672, y: 462 };
 /** Fallback tail tip of the smith's speech bubble, when the stage art has no HEAD entry. */
-const SMITH_BUBBLE = PORTRAIT ? { x: 450, y: 520 + EXTRA * 0.8 } : { x: 720, y: 360 };
+const SMITH_BUBBLE = PORTRAIT ? { x: 450, y: 520 + EXTRA * 0.8 - LIFT } : { x: 720, y: 360 };
 /**
  * Top of the smith's head inside each stage image (fraction of the frame), so the bubble rises from
  * his head (user request 2026-11-19). The box is shifted right so it never covers the raised hammer.
@@ -110,7 +128,7 @@ const SMITH_HEAD: Record<string, { fx: number; fy: number }> = {
 };
 const BUBBLE_SHIFT = PORTRAIT ? 90 : 80;
 /** Toast line position. */
-const TOAST = PORTRAIT ? { x: 360, y: 730 + EXTRA } : { x: 640, y: 676 };
+const TOAST = PORTRAIT ? { x: 360, y: 730 + EXTRA - LIFT } : { x: 640, y: 676 };
 
 const weaponName = (w: Weapon) => `${w.golden ? '황금 ' : ''}${weaponDisplayName(w)}`;
 
@@ -326,9 +344,15 @@ export class ForgeScene extends Phaser.Scene {
     if (PORTRAIT) {
       // darker bands behind the rack strip and the controls so text stays readable on the painting
       const band = this.add.graphics();
-      band.fillStyle(0x000000, 0.42).fillRect(0, TOP_BAR_H, W, 360 - TOP_BAR_H);
-      band.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.85, 0.85).fillRect(0, 716 + EXTRA, W, 60);
-      band.fillStyle(0x000000, 0.85).fillRect(0, 776 + EXTRA, W, H - 776 - EXTRA);
+      // the rack strip and the stamina bar right under it
+      band.fillStyle(0x000000, 0.42).fillRect(0, TOP_BAR_H, W, RACK.y + RACK.slotH + 52 - TOP_BAR_H);
+      band.fillGradientStyle(0x000000, 0x000000, 0x000000, 0x000000, 0, 0, 0.85, 0.85).fillRect(0, 716 + EXTRA - LIFT, W, 60);
+      band.fillStyle(0x000000, 0.85).fillRect(0, 776 + EXTRA - LIFT, W, H - 776 - EXTRA + LIFT);
+      // the control dock: a slightly lighter panel with a gold hairline on top
+      const dockTop = PB.oddsY - 30;
+      band.fillStyle(0x17110c, 0.96).fillRoundedRect(8, dockTop, W - 16, H - dockTop - 10, { tl: 22, tr: 22, bl: 14, br: 14 });
+      band.lineStyle(1.5, 0x6a4a26, 0.9).strokeRoundedRect(8, dockTop, W - 16, H - dockTop - 10, { tl: 22, tr: 22, bl: 14, br: 14 });
+      band.lineStyle(1, 0xffd27a, 0.25).lineBetween(40, dockTop + 1, W - 40, dockTop + 1);
     }
     this.add.particles(0, 0, 'ember', {
       x: PORTRAIT ? { min: 80, max: 640 } : { min: 260, max: 1020 },
@@ -695,12 +719,13 @@ export class ForgeScene extends Phaser.Scene {
       this.stoneChips.push(chip);
     });
     // sub: ' ' so the sub line exists (cost, price, weapon) and can be filled in by renderOdds
-    this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, W - 32, 100, '강화', { variant: 'gold', size: 40, sub: ' ', subSize: 17, onClick: () => this.clickEnhance() });
-    // 장착 · 판매 · [   다음 날   ] — the night gamble is offered in the evening, after "다음 날"
-    const unit = (W - 32 - 16) / 4;
-    this.equipBtn = new Button(this, 16 + unit / 2, PB.rowY, unit, 78, '장착', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.equipSelected() });
-    this.sellBtn = new Button(this, 16 + unit * 1.5 + 8, PB.rowY, unit, 78, '판매', { variant: 'dark', size: 22, sub: ' ', subSize: 13, onClick: () => this.trySell() });
-    this.sleepBtn = new Button(this, W - 16 - unit, PB.rowY, unit * 2, 78, '다음 날 ▶', { variant: 'gold', size: 26, sub: '하루 마치기', subSize: 14, onClick: () => this.openEvening() });
+    // the action row (2026-11-27): 판매 · [ 강화 ] · 장착 — the big button in the middle of the thumb's reach
+    const mid = W - 32 - (ACT.side + ACT.gap) * 2;
+    this.sellBtn = new Button(this, 16 + ACT.side / 2, PB.enhanceY, ACT.side, ACT.h, '판매', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.trySell() });
+    this.enhanceBtn = new Button(this, W / 2, PB.enhanceY, mid, ACT.h, '강화', { variant: 'gold', size: 42, sub: ' ', subSize: 16, onClick: () => this.clickEnhance() });
+    this.equipBtn = new Button(this, W - 16 - ACT.side / 2, PB.enhanceY, ACT.side, ACT.h, '장착', { variant: 'dark', size: 24, sub: ' ', subSize: 14, onClick: () => this.equipSelected() });
+    // 다음 날 on its own row under them: never hit by a fast run of 강화 taps
+    this.sleepBtn = new Button(this, W / 2, PB.rowY, W - 32, ACT.dayH, '다음 날 ▶', { variant: 'dark', size: 22, sub: '하루 마치기 · 저녁으로', subSize: 13, onClick: () => this.openEvening() });
     this.splitBtn = new Button(this, W - 16 - 80 - 168, PB.stonesY, 160, 36, '운명 분열', { variant: 'ghost', size: 14, onClick: () => this.toggleSplit() });
     this.godBtn = new Button(this, W - 16 - 80, PB.stonesY, 160, 36, '신의 망치', { variant: 'ghost', size: 14, onClick: () => this.toggleGodHammer() });
   }
@@ -769,7 +794,8 @@ export class ForgeScene extends Phaser.Scene {
   private drainHold = false;
   // landscape: right of the rack's buy button, left of the odds panel
   // a little bigger on 2026-11-27 ("HP 칸 좀만 더 크게")
-  private static readonly SB = PORTRAIT ? { x: W / 2, y: 384, w: 520, h: 28 } : { x: 722, y: 100, w: 400, h: 26 };
+  // portrait (user 2026-11-27): right under the rack — one row of 4 slots now — instead of over the smith
+  private static readonly SB = PORTRAIT ? { x: W / 2, y: RACK.y + RACK.slotH + 26, w: 560, h: 28 } : { x: 722, y: 100, w: 400, h: 26 };
 
   private buildStamina() {
     const b = ForgeScene.SB;
